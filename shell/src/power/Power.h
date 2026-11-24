@@ -8,7 +8,7 @@
 #include <memory>
 
 // QML face of suspend / restart / power off. Which transport it uses follows RUYA_SERVICES
-// like Profiles (mock, or D-Bus to systemd-logind).
+// (ServicesChoice.h): the mock, or D-Bus to systemd-logind.
 class Power : public QObject
 {
     Q_OBJECT

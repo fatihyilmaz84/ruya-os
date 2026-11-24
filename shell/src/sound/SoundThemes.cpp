@@ -1,4 +1,5 @@
 #include "SoundThemes.h"
+#include "ServicesChoice.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -21,16 +22,6 @@ namespace {
 const QString UserPrefix = QStringLiteral("user:");
 
 enum class CopyFail { None, Io, TooManyFiles, TooLarge };
-
-bool useMock()
-{
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    return choice == QLatin1String("mock");
-#else
-    return choice != QLatin1String("dbus");
-#endif
-}
 
 bool isFolderName(const QString &name)
 {
@@ -106,7 +97,7 @@ bool renameTheme(const QString &folder, const QString &name)
 
 SoundThemes::SoundThemes(QObject *parent)
     : QObject(parent)
-    , m_mock(useMock())
+    , m_mock(ruya::useMockServices())
 {
     const QString fixed = qEnvironmentVariable("RUYA_SOUND_DIR");
     if (!fixed.isEmpty()) {

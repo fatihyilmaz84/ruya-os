@@ -1,4 +1,5 @@
 #include "DeviceSettings.h"
+#include "ServicesChoice.h"
 
 #include <cstdlib>
 
@@ -314,6 +315,35 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     return dir.path();
 }
 
+// ruya::useMockServices() (RUY-919): the choice for "mock", "dbus" and an unset RUYA_SERVICES on this
+// OS. On Linux only "mock" is the mock (the Linux branch cannot run on the Windows host; the image's
+// VM run covers it); elsewhere everything but "dbus" is. Restores the variable the suite runs with.
+// Returns "" or what went wrong; tst_services_choice.qml asserts it (`servicesChoice`).
+static QString checkServicesChoice()
+{
+    const QByteArray before = qgetenv("RUYA_SERVICES");
+    QString problem;
+    auto expect = [&problem](const char *value, bool wantMock) {
+        if (value)
+            qputenv("RUYA_SERVICES", value);
+        else
+            qunsetenv("RUYA_SERVICES");
+        if (ruya::useMockServices() != wantMock)
+            problem += QStringLiteral(" RUYA_SERVICES=%1 chose the wrong backend").arg(QLatin1String(value ? value : "(unset)"));
+    };
+#ifdef Q_OS_LINUX
+    expect("mock", true);
+    expect("dbus", false);
+    expect(nullptr, false);
+#else
+    expect("mock", true);
+    expect("dbus", false);
+    expect(nullptr, true);
+#endif
+    qputenv("RUYA_SERVICES", before);
+    return problem.trimmed();
+}
+
 // DeviceSettings.theme survives a restart (T-209): a second instance on the same store reads what
 // the first wrote, and a stored value that is not a theme falls back to the default. Runs against an
 // ini file in a temporary directory (DeviceSettings(iniPath)), never the developer's real store.
@@ -519,6 +549,8 @@ public slots:
         // Set RUYA_SHOTS_DIR to have the screenshot test save PNGs there.
         static const QString persistence = checkThemePersistence();
         engine->rootContext()->setContextProperty(QStringLiteral("themePersistence"), persistence);
+        static const QString servicesChoice = checkServicesChoice();
+        engine->rootContext()->setContextProperty(QStringLiteral("servicesChoice"), servicesChoice);
         static const QString wallpaperCheck = checkWallpaperPersistence();
         engine->rootContext()->setContextProperty(QStringLiteral("wallpaperPersistence"), wallpaperCheck);
         static const QString pauseCheck = checkPausePersistence();

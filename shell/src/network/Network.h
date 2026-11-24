@@ -10,8 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Devices1.Network: connectivity, the primary connection and the Wi-Fi
-// networks. Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices,
-// T-132) and the mock elsewhere, like Audio and Profiles.
+// networks. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Network : public QObject
 {
     Q_OBJECT

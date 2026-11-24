@@ -11,8 +11,7 @@
 // QML face of org.ruyaos.Devices1.Display (T-198): the connected screen's modes, the safe switch
 // ("Keep this resolution?") and the size of the UI. Registered as `Display`; the class is not
 // called that because Xlib's `Display` typedef would clash on Linux.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices) and the mock
-// elsewhere, like Network and Batteries.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // Only the first connected output is used (several screens at once are out of scope).
 //

@@ -6,7 +6,9 @@ use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
 use crate::accounts::Accounts;
-use crate::service::{create_guest_changed, lock_line, switch_line, verify_line, ProfileService};
+use crate::service::{
+    create_guest_changed, delete_line, lock_line, switch_line, verify_line, ProfileService,
+};
 
 /// Chosen at runtime: real Unix users on the system bus, none in `--session` dev mode.
 pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
@@ -208,6 +210,7 @@ impl ProfilesIface {
         let outcome = self
             .svc
             .delete_profile(admin_id, admin_pin, id, Instant::now());
+        eprintln!("{}", delete_line(id, &outcome));
         if outcome.status == crate::Status::Ok {
             let _ = Self::profiles_changed(&emitter).await;
         }

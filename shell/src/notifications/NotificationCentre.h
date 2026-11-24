@@ -12,8 +12,8 @@
 // QML face of org.ruyaos.Notifications1 (api/dbus/org.ruyaos.Notifications1.xml, RUY-413): the
 // signed-in profile's notification history (the bell's badge, the centre sheet) and the quiet
 // settings the toasts obey. `Notifications.show` (QML) posts every toast here, so the centre is the
-// one list (T-245 scope 4). Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the
-// mock elsewhere. Until RUY-88 builds the service the image has no Notifications1 on the bus: the
+// one list (T-245 scope 4). Backend: RUYA_SERVICES picks it (ServicesChoice.h).
+// Until RUY-88 builds the service the image has no Notifications1 on the bus: the
 // list stays empty there and the calls fail (logged), the toasts still show.
 class NotificationCentre : public QObject
 {

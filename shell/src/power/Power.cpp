@@ -1,4 +1,5 @@
 #include "Power.h"
+#include "ServicesChoice.h"
 
 #include "DBusPowerBackend.h"
 #include "MockPowerBackend.h"
@@ -33,12 +34,7 @@ Power::~Power() = default;
 
 Power *Power::create(QQmlEngine *, QJSEngine *)
 {
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     std::unique_ptr<PowerBackend> backend;
     if (mock)
         backend = std::make_unique<MockPowerBackend>();

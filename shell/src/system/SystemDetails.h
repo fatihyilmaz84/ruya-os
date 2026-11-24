@@ -15,8 +15,7 @@ class QQuickWindow;
 // a value that could not be read is absent, never 0) plus what only this session knows (the mode
 // the display runs in, the graphics API and renderer; see probeLocal). The page puts the other
 // services' numbers next to it (Thermal, Storage, Batteries, Network, Audio) and does not repeat them
-// here. Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices) and the mock
-// elsewhere, like Thermal.
+// here. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class SystemDetails : public QObject
 {
     Q_OBJECT

@@ -12,8 +12,7 @@
 
 class Input;
 
-// QML face of org.ruyaos.Profiles1. Backend: RUYA_SERVICES=mock|dbus; defaults to D-Bus on
-// Linux and the mock elsewhere (Windows development host).
+// QML face of org.ruyaos.Profiles1. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Profiles : public QObject
 {
     Q_OBJECT

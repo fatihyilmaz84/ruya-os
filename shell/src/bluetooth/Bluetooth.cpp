@@ -1,4 +1,5 @@
 #include "Bluetooth.h"
+#include "ServicesChoice.h"
 
 #include "DBusBluetoothBackend.h"
 #include "../battery/Batteries.h"
@@ -84,13 +85,7 @@ Bluetooth::~Bluetooth() = default;
 Bluetooth *Bluetooth::create(QQmlEngine *, QJSEngine *)
 {
     std::unique_ptr<BluetoothBackend> backend;
-    // Like Audio and Network: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     if (mock)
         backend = std::make_unique<MockBluetoothBackend>();
     else
