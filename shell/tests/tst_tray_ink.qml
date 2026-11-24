@@ -367,7 +367,7 @@ Item {
             settledOn(path("bellstrip"))
             const bell = find("bellInk")
             const words = find("navInk")
-            const column = 14.5 / 32                 // the strip's sample column's centre
+            const column = 21.5 / 32                 // the strip's sample column's centre
             verify(bell.span.from < column && bell.span.to > column, "the bell is over the strip " + JSON.stringify(bell.span))
             verify(words.span.to < column, "the words are not " + JSON.stringify(words.span))
             compare(bell.pick.ink, "dark", "the bell over white through the glass " + JSON.stringify(bell.band))
@@ -376,6 +376,22 @@ Item {
             verify(same(find("navLabel_store").color, Theme.inkLight), "the word beside it")
             verify(same(find("bellBadge").border.color, Theme.inkDark), "the badge's outline")
             checkHalos("a strip under the bell", "")
+        }
+
+        // The bell's ink is measured where the bell is drawn, left of the tray (RUY-1170), not where it sat in the nav: white
+        // art under the nav's old last pill leaves the bell on light ink, and the bell's band is the strip's black.
+        function test_the_bell_reads_the_art_under_its_new_place_only() {
+            signIn()
+            showHero(path("oldbellstrip"))
+            settledOn(path("oldbellstrip"))
+            const bell = find("bellInk")
+            const column = 14.5 / 32
+            verify(bell.span.from > column, "the bell is right of the old place " + JSON.stringify(bell.span))
+            compare(bell.pick.ink, "light", "the bell over black through its glass " + JSON.stringify(bell.band))
+            verify(same(find("navIcon_notifications").color, Theme.inkLight), "the bell's glyph")
+            const glass = find("bellGlass")
+            const pos = glass.mapToItem(tc.shell, 0, 0).x / tc.shell.width
+            verify(Math.abs(pos - bell.span.from) < 0.01, "the span is under the bell's own glass: " + pos + " " + bell.span.from)
         }
 
         // Busy art under one item turns the halo on for that item only, in the other ink at trayHaloAlpha.

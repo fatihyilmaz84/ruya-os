@@ -1652,8 +1652,10 @@ FocusScope {
         // The tray is sized from the room between the nav and the right margin (T-223): the
         // profile name elides to what is left (never under about six characters) and the battery
         // chips are as many as fit (the rest collapse into "+N"), so the tray never reaches the
-        // nav (a Theme.spaceM gap stays) however long the name or many the devices.
+        // nav (a Theme.spaceM gap stays) however long the name or many the devices. The bell's pill sits at the tray's
+        // left edge (RUY-1170) and counts on the right: it and a Theme.spaceM gap come off the room.
         readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
+                                     - (sectionNav.bellWidth + Theme.spaceM * root.u)
         // Every device that earns a chip, in the order the slots are given out (T-301): pads and headsets
         // before mice, keyboards and the rest, each group lowest first (the service sorts that way), so
         // three full pads are not pushed out by a mouse at 5 % (that one shows in Settings and in its toast).
@@ -1784,7 +1786,7 @@ FocusScope {
                     devices: batteryStatus.overflow
                     ink: batteryInk.color
                     onActivated: batteryList.open()
-                    onLeftRequested: {           // back to the nav's last pill, the bell
+                    onLeftRequested: {           // back to the bell, the nav's last pill, at the tray's left
                         Sfx.navigate()
                         sectionNav.currentIndex = sectionNav.keys.length - 1
                         sectionNav.forceActiveFocus()
@@ -2538,6 +2540,8 @@ FocusScope {
         visible: root.navShown || opacity > 0     // visible at once, so focus can be given in the same step
         enabled: root.navShown && !systemPanel.open
         light: barLight
+        // The bell's glass pill: Theme.spaceM left of the tray's first item, the one place that decides its x (RUY-1170).
+        bellX: statusTray.x - Theme.spaceM * root.u - bellWidth - x
         notificationCount: NotificationCentre.unreadCount
         quiet: NotificationCentre.quiet
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }

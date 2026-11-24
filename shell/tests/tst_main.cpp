@@ -263,8 +263,11 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     // busy art under the nav's words (navbusy: the top two rows of the band's four, over the left half), RUY-1159.
     blackWith("clockedge", QRect(150, 0, 10, 90));
     blackWith("navbusy", QRect(0, 0, 80, 10));
-    // A strip under the bell tab only (sample column 14 of 32, about 840..900 of a 1080p screen): the nav's words on black.
-    blackWith("bellstrip", QRect(70, 0, 5, 90));
+    // A strip under the bell tab only (sample columns 21 and 22 of 32, about 1260..1380 of a 1080p screen, left of the tray,
+    // RUY-1170; the bell's 1268..1344 touches both, ArtPalette's GlyphShare): the nav's words and the tray on black.
+    blackWith("bellstrip", QRect(105, 0, 10, 90));
+    // A strip where the bell sat before RUY-1170, inside the nav's pill (sample column 14 of 32): the bell is not there now.
+    blackWith("oldbellstrip", QRect(70, 0, 5, 90));
     // One flat grey of relative luminance 0.31 (greyflat): dark ink reads (6.2:1), Daylight's warning brown does not (2.5:1).
     QImage flat(160, 90, QImage::Format_RGB32);
     flat.fill(QColor(150, 150, 150));

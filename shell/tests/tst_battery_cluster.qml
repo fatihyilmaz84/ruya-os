@@ -98,8 +98,14 @@ Item {
             const pill = find("statusTray")
             const u = tc.shell.u
             const navRight = nav.mapToItem(tc.shell, nav.width, 0).x
-            if (navRight + 24 * u > pill.x + 0.5)
-                return what + " at " + size[1] + "p: the cluster starts at " + pill.x + ", the nav ends at " + navRight
+            // The bell's glass pill sits between them (RUY-1170): the nav, a gap, the bell, a gap, the tray.
+            const bell = find("bellGlass")
+            const bellLeft = bell.mapToItem(tc.shell, 0, 0).x
+            const bellRight = bellLeft + bell.width
+            if (navRight + 24 * u > bellLeft + 0.5)
+                return what + " at " + size[1] + "p: the bell starts at " + bellLeft + ", the nav ends at " + navRight
+            if (Math.abs(bellRight + Theme.spaceM * u - pill.x) > 0.5)
+                return what + " at " + size[1] + "p: the bell ends at " + bellRight + ", the cluster starts at " + pill.x
             if (pill.x + pill.width > tc.shell.width - tc.shell.marginX + 1)
                 return what + " at " + size[1] + "p: inside the safe area, right edge " + (pill.x + pill.width)
             if (find("batteryStatus").width > pill.width)
@@ -519,7 +525,6 @@ Item {
             compare(descendants(tray, "glassBlur").length + descendants(tray, "glassFill").length, 0, "no glass in the tray")
             verify(find("statusGlass") === null, "no glass container")
             verify(find("trayShade") === null, "no shade")
-            verify(find("notificationBell") === null, "no bell of its own")
             const clock = find("statusClock")
             const right = clock.mapToItem(tc.shell, clock.width, 0).x
             verify(Math.abs(right - (tc.shell.width - tc.shell.marginX)) < 1, "the clock's right edge is the safe area: " + right)
@@ -530,6 +535,59 @@ Item {
             compare(bell.width, find("navPill_settings").width)
             verify(Math.abs(bell.mapToItem(tc.shell, 0, bell.height / 2).y - navMid) < 1, "the bell is centred on the nav")
             verify(Math.abs(clock.mapToItem(tc.shell, 0, clock.height / 2).y - navMid) < 2, "the clock is on the line")
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // The bell's own glass pill (RUY-1170, 04 §5.5): right of the nav's pill, at the tray's left edge a gap (spaceM)
+        // before its first item, the nav pill's height and line, the bell inside it; it follows the tray as it grows.
+        function test_the_bell_has_its_own_pill_at_the_trays_left() {
+            openShell(1920, 1080)
+            const u = tc.shell.u
+            const nav = find("sectionNav")
+            const glass = find("sectionNavGlass")
+            const bell = find("bellGlass")
+            const tray = find("statusTray")
+            const pos = item => item.mapToItem(tc.shell, 0, 0)
+            compare(bell.height, glass.height, "the nav pill's height")
+            compare(bell.width, bell.height, "icon-only: round")
+            compare(pos(bell).y, pos(glass).y, "on the nav's line")
+            verify(pos(bell).x > pos(glass).x + glass.width, "right of the nav's pill")
+            verify(pos(bell).x + bell.width < pos(tray).x, "left of the tray")
+            compare(pos(bell).x + bell.width + Theme.spaceM * u, pos(tray).x, "a gap before the tray's first item")
+            const pill = find("navPill_notifications")
+            verify(pos(pill).x > pos(bell).x && pos(pill).x + pill.width < pos(bell).x + bell.width, "the bell sits inside its glass")
+            verify(nav.width < pos(bell).x - pos(nav).x, "the nav's own pill does not hold the bell")
+            const before = pos(bell).x
+            const trayBefore = pos(tray).x
+            Batteries.mockPopulate()
+            tryVerify(() => find("batteryStatus").visible, 2000, "the batteries show")
+            tryVerify(() => pos(tray).x < trayBefore, 2000, "the tray grows to the left")
+            tryVerify(() => Math.abs(pos(bell).x + bell.width + Theme.spaceM * u - pos(tray).x) < 0.5, 2000, "the bell follows")
+            verify(pos(bell).x < before)
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // D-pad around the bell (RUY-1170): the nav's order is unchanged, the tray's first item is next to it.
+        function test_dpad_goes_settings_bell_more_and_back() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            const nav = find("sectionNav")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => nav.activeFocus, 2000, "up reaches the nav")
+            nav.currentIndex = nav.keys.indexOf("settings")
+            keyClick(Qt.Key_Right)
+            compare(nav.currentKey, "notifications", "Right from Settings is the bell")
+            keyClick(Qt.Key_Left)
+            compare(nav.currentKey, "settings", "Left from the bell is Settings")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("batteryMore").activeFocus, 2000, "Right from the bell is the tray's first item")
+            keyClick(Qt.Key_Left)
+            tryVerify(() => nav.activeFocus && nav.currentKey === "notifications", 2000, "Left comes back to the bell")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => !nav.activeFocus, 2000, "Down leaves the nav as from any pill")
             tc.shell.destroy()
             wait(50)
         }
@@ -710,6 +768,36 @@ Item {
 
         // T-301: the "N more" chip with its focus ring and the list it opens, in English and Turkish, and
         // the cluster at larger UI sizes.
+        // The bell on its own pill at the tray's left (RUY-1170): focused on Home, then current on its page and focused again
+        // from the page's top stop, English and Turkish, at 1080p and 720p.
+        function test_zz_bell_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Batteries.mockPopulate()
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                for (const size of [[1920, 1080, "1080"], [1280, 720, "720"]]) {
+                    openShell(size[0], size[1])
+                    const nav = find("sectionNav")
+                    keyClick(Qt.Key_Up)
+                    tryVerify(() => nav.activeFocus, 2000)
+                    nav.currentIndex = nav.keys.indexOf("notifications")
+                    wait(300)
+                    grabImage(tc.shell).save(shotsDir + "/bell-place-" + lang + "-" + size[2] + "-focused.png")
+                    keyClick(Qt.Key_Return)                          // its page: the bell is current
+                    tryVerify(() => tc.shell.navSection === "notifications", 2000)
+                    wait(600)
+                    keyClick(Qt.Key_Up)
+                    tryVerify(() => nav.activeFocus, 2000, "Up from the page's top stop reaches the nav")
+                    wait(300)
+                    grabImage(tc.shell).save(shotsDir + "/bell-place-" + lang + "-" + size[2] + "-current.png")
+                    tc.shell.destroy()
+                    wait(50)
+                }
+            }
+            DeviceSettings.language = "en"
+        }
+
         function test_zz_more_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
