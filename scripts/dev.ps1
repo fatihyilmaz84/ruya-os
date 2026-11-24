@@ -828,7 +828,7 @@ function Test-RegexAnchors {
     & (Join-Path $PSScriptRoot "lint-regex-anchors.ps1")
     Record "regex anchor lint" ($LASTEXITCODE -eq 0)
     & (Join-Path $PSScriptRoot "lint-regex-anchors.ps1") -SelfTest
-    Record "regex anchor lint self-test (a hit, an anchoredPattern line, a marked line)" ($LASTEXITCODE -eq 0)
+    Record "regex anchor lint self-test (a hit, a marked line, one-sided anchors)" ($LASTEXITCODE -eq 0)
 }
 
 # The rules live in scripts\lint-app-table.ps1 (shared with CI): per-app launch behaviour is one table (RUY-1050, ADR-043).

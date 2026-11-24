@@ -1,9 +1,9 @@
 # Regex anchor lint (RUY-709): in QRegularExpression "$" also matches before a final line feed, so a
 # whole-string check written "^...$" accepts "x\n". Validate a whole string with
 # QRegularExpression::anchoredPattern(<pattern without ^ and $>) (it anchors at the very end).
-# Fails on a C++ string literal under shell\ that starts with ^ and ends with $ unless the line also
-# uses anchoredPattern or carries `// anchor-ok: <reason>` (a deliberate "accepts a final newline").
-# -SelfTest proves a hit, an anchoredPattern line and a marked line on a temporary tree.
+# Fails on a C++ string literal under shell\ that starts with ^ and ends with $ unless the line
+# carries `// anchor-ok: <reason>` (a deliberate "accepts a final newline").
+# -SelfTest proves a hit, a marked line and one-sided anchors on a temporary tree.
 #
 #   .\scripts\lint-regex-anchors.ps1 [-SelfTest]
 # Exit code 0 = fine, 1 = findings.
@@ -22,7 +22,6 @@ function Find-BareAnchors([string]$shell) {
             for ($i = 0; $i -lt $lines.Count; $i++) {
                 $line = $lines[$i]
                 if ($line -match '//\s*anchor-ok:\s*\S') { continue }
-                if ($line -match 'anchoredPattern') { continue }
                 if ($line -match '"\^(?:[^"\\]|\\.)*\$"') {
                     $rel = $f.FullName.Substring($shell.Length).TrimStart('\', '/') -replace '\\', '/'
                     $hits.Add(("shell/{0}:{1}: {2}" -f $rel, ($i + 1), $line.Trim()))
@@ -51,7 +50,7 @@ if ($SelfTest) {
         $want = @(1, 4)
         $got = @($hits | ForEach-Object { if ($_ -match 'x\.cpp:(\d+):') { [int]$Matches[1] } })
         $ok = (($got -join ",") -eq ($want -join ","))
-        Write-Host ("    self-test hit, anchoredPattern, marker, one-sided anchors: {0} (lines {1}, want {2})" -f $(if ($ok) { "ok" } else { "WRONG" }), ($got -join ","), ($want -join ","))
+        Write-Host ("    self-test hit, marker, one-sided anchors: {0} (lines {1}, want {2})" -f $(if ($ok) { "ok" } else { "WRONG" }), ($got -join ","), ($want -join ","))
         if (-not $ok) { $hits | ForEach-Object { Write-Host "      $_" }; exit 1 }
         exit 0
     } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
