@@ -50,6 +50,7 @@ proc="${PLAT_PROC:-/proc}"
 sock="${PLAT_SOCK:-/run/ruya-platform-identify.sock}"
 # CAP_DAC_READ_SEARCH (bit 2) and CAP_SYS_PTRACE (bit 19), as /proc/<pid>/status shows a set.
 helper_caps=0000000000080004
+helper_exe=/usr/libexec/ruya-platform-identify
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
@@ -105,7 +106,7 @@ cap_of() { awk -v k="$2:" '$1 == k {print $2}' "$proc/$1/status" 2>/dev/null; }
 
 # Items 1 and 2 of RUY-1129: the door holds no capability, the helper exactly its two.
 check_identity() {
-    local dpid hpid v inst n out holder
+    local dpid hpid v inst n out holder exe
     echo "--- the identity helper (ADR-022 decision 4)"
     dpid="$(systemctl show -p MainPID --value ruya-platform.service 2>/dev/null)"
     if [ -n "$dpid" ] && [ "$dpid" != 0 ]; then
@@ -135,11 +136,23 @@ check_identity() {
     done
     hpid=""
     [ -n "$inst" ] && hpid="$(systemctl show -p MainPID --value "$inst" 2>/dev/null)"
+    # A Type=simple unit is active (and has a MainPID) from the fork, before the child drops its capabilities
+    # and execs: read them only once /proc/<pid>/exe is the helper (they are final at exec; RUY-1164).
+    exe=""; n=0
     if [ -n "$hpid" ] && [ "$hpid" != 0 ]; then
+        while [ "$n" -lt 15 ]; do
+            exe="$(readlink "$proc/$hpid/exe" 2>/dev/null)"
+            [ "$exe" = "$helper_exe" ] && break
+            sleep 0.1; n=$((n + 1))
+        done
+    fi
+    if [ "$exe" = "$helper_exe" ]; then
         v="$(cap_of "$hpid" CapBnd)"
         [ "$v" = "$helper_caps" ] && ok "a live helper's CapBnd is exactly the two ($v)" || bad "a live helper's CapBnd is '$v', want $helper_caps"
         v="$(cap_of "$hpid" CapEff)"
         [ "$v" = "$helper_caps" ] && ok "a live helper's CapEff is the two" || bad "a live helper's CapEff is '$v', want $helper_caps"
+    elif [ -n "$hpid" ] && [ "$hpid" != 0 ]; then
+        bad "the helper $inst (pid $hpid) did not exec $helper_exe in 1.5 s (exe is '$exe')"
     else
         bad "no live ruya-platform-identify@ instance while a request was held ('$inst')"
     fi
@@ -202,6 +215,16 @@ scope_of() {
 launch() { as_shell busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$1" "$pid" 2>&1; }
 notify() { busctl --system call "$dest" "$opath" "$manage" NotifyLifecycle ssst "$pid" "$1" "$2" "$3" 2>&1; }
 permit() { busctl --system call "$dest" "$opath" "$manage" SetPermission sssb "$pid" "$1" lifecycle "$2" 2>&1; }
+# Ends app instance $1 the way the product does (Session1 Stop, as the shell) and waits, up to 15 s, until
+# Session1 no longer lists it: a stop behind its back leaves the record and a Launch answers already-running.
+stop_app() {
+    local n=0
+    as_shell busctl --system call "$ssvc" "$spath" "$ssvc" Stop s "$1" >/dev/null 2>&1
+    while as_shell busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -qF "\"$1\""; do
+        [ "$n" -ge 150 ] && return 1
+        sleep 0.1; n=$((n + 1))
+    done
+}
 stop_all() {
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
     for id in "$appa" "$appb"; do
@@ -321,14 +344,23 @@ out="$(systemd-run --machine="$user@.host" --user --wait --pipe --quiet --collec
 permit "$appa" true >/dev/null
 
 echo "--- Session1.Stop sends Stopping and waits for SaveDone"
-stop_all; rm -f "$(log_of "$appa")"
+if [ -n "${inst_a:-}" ]; then
+    stop_app "$inst_a" && ok "A ended through Session1 Stop and left ListRunning" || bad "A ($inst_a) is still in ListRunning 15 s after Stop"
+else
+    bad "Launch named no instance of A to stop"
+fi
+rm -f "$(log_of "$appa")"
 out="$(launch "$appa")"; echo "$out" | grep -q '"ok"' || bad "Launch A again: $out"
-wait_line "$appa" '^listening' 30 || bad "A did not get to listening again"
 inst="$(echo "$out" | inst_of)"
-saves="$(grep -c '^savedone ok' "$(log_of "$appa")")"
-as_shell busctl --system call "$ssvc" "$spath" "$ssvc" Stop s "$inst" >/dev/null 2>&1
-n=0; while [ "$(grep -c '^savedone ok' "$(log_of "$appa")")" -le "$saves" ] && [ "$n" -lt 10 ]; do sleep 1; n=$((n + 1)); done
-[ "$(grep -c '^savedone ok' "$(log_of "$appa")")" -gt "$saves" ] && ok "Stop of A: Stopping arrived, SaveDone ok" || bad "Stop of A: no SaveDone ($(grep '^signal' "$(log_of "$appa")" | tail -2 | tr '\n' ' '))"
+if [ -z "$inst" ]; then
+    bad "Launch A again named no instance: $out"
+else
+    wait_line "$appa" '^listening' 30 || bad "A did not get to listening again"
+    saves="$(grep -c '^savedone ok' "$(log_of "$appa")")"
+    as_shell busctl --system call "$ssvc" "$spath" "$ssvc" Stop s "$inst" >/dev/null 2>&1
+    n=0; while [ "$(grep -c '^savedone ok' "$(log_of "$appa")")" -le "$saves" ] && [ "$n" -lt 10 ]; do sleep 1; n=$((n + 1)); done
+    [ "$(grep -c '^savedone ok' "$(log_of "$appa")")" -gt "$saves" ] && ok "Stop of A: Stopping arrived, SaveDone ok" || bad "Stop of A: no SaveDone ($(grep '^signal' "$(log_of "$appa")" | tail -2 | tr '\n' ' '))"
+fi
 
 stop_all
 drop_apps
