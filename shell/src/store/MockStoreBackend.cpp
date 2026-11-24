@@ -433,6 +433,8 @@ void MockStoreBackend::install(const QString &id)
         reject(id, QStringLiteral("unknown-app"));
     else if (m_apps.at(i).installed)
         reject(id, QStringLiteral("already-installed"));
+    else if (!m_apps.at(i).compatible)
+        reject(id, QStringLiteral("incompatible"));
     else
         startJob(id, Job::Install);
 }
@@ -462,6 +464,8 @@ void MockStoreBackend::update(const QString &id)
         reject(id, QStringLiteral("not-installed"));
     else if (!m_apps.at(i).updateAvailable)
         reject(id, QStringLiteral("no-update"));
+    else if (!m_apps.at(i).compatible)
+        reject(id, QStringLiteral("incompatible"));
     else
         startJob(id, Job::Update);
 }

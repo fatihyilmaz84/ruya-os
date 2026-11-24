@@ -39,7 +39,7 @@ struct AppInfo
     bool installed = false;
     bool updateAvailable = false;
     bool compatible = true; // false: needs a newer API level than this console has (hidden from lists)
-    int minApiLevel = 0; // mock only: what the app asks for; compatible is computed from it
+    int minApiLevel = 0; // the level the app asks for, 0 = none (the mock computes compatible from it)
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -70,6 +70,7 @@ struct AppInfo
             {QStringLiteral("installed"), installed},
             {QStringLiteral("updateAvailable"), updateAvailable},
             {QStringLiteral("compatible"), compatible},
+            {QStringLiteral("minApiLevel"), minApiLevel},
         };
     }
 };

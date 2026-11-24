@@ -61,6 +61,7 @@ AppInfo toApp(const QVariantMap &d)
     a.controller = d.value(QStringLiteral("controller"), a.controller).toString();
     a.ageRating = d.value(QStringLiteral("age_rating"), a.ageRating).toString();
     a.compatible = d.value(QStringLiteral("compatible"), true).toBool(); // an older service: everything fits
+    a.minApiLevel = d.value(QStringLiteral("min_api_level")).toInt();
     const QVariant perms = d.value(QStringLiteral("permissions"));
     if (perms.canConvert<QDBusArgument>())
         a.permissions = qdbus_cast<QStringList>(perms.value<QDBusArgument>());

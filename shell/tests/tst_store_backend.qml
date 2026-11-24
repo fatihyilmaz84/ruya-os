@@ -348,6 +348,21 @@ Item {
             compare(finished.signalArguments[1][1], "unknown-app")
         }
 
+        // RUY-634: the backend, not the button, refuses an app that needs a newer level.
+        function test_install_of_an_incompatible_app_is_refused() {
+            const id = "org.example.Future"
+            compare(Store.app(id).compatible, false)
+            compare(Store.app(id).minApiLevel, 1)
+            Store.install(id)
+            tryCompare(finished, "count", 1)
+            compare(finished.signalArguments[0][1], "incompatible")
+            verify(!isInstalled(id))
+            Store.mockSetApiLevel(1)
+            Store.install(id)
+            tryCompare(finished, "count", 2)
+            compare(finished.signalArguments[1][1], "ok", "the level now fits")
+        }
+
         function test_update() {
             verify(Store.app("org.example.Chess").updateAvailable)
             Store.update("org.example.Chess")

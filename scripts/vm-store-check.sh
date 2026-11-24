@@ -13,6 +13,8 @@ svc=org.ruyaos.Store1
 path=/org/ruyaos/Store1
 ifc=org.ruyaos.Store1
 app=org.ruyaos.TestApp
+# RUY-634: asks for API level 99, far above the console's: Install and Update refuse it, nothing is queued.
+fut=org.ruyaos.TestFuture
 rt=org.ruyaos.TestRuntime
 remote=ruyaos-test
 work=/var/lib/ruya-store-test
@@ -60,7 +62,6 @@ build_repo() {
   <categories><category>Game</category></categories>
   <screenshots><screenshot type="default"><image type="source" width="800" height="450">https://example.org/ruya-store-test.png</image></screenshot></screenshots>
   <releases><release version="1.2.3" date="2024-03-01"><description><p>Check release.</p></description></release></releases>
-  <custom><value key="x-ruya-min-api-level">99</value></custom>
 </component>
 EOF
     # build-update-repo reads the catalogue from files/share/app-info (flatpak-builder composes it;
@@ -72,6 +73,24 @@ EOF
     flatpak build-export --runtime $sign "$work/repo" "$work/rt" stable || return 1
     flatpak build-finish --command=hello --share=network --socket=pulseaudio "$work/app" || return 1
     flatpak build-export $sign "$work/repo" "$work/app" stable || return 1
+    # The future app: metadata and a catalogue entry, one tiny file (it is never installed).
+    mkdir -p "$work/fut/files/bin" "$work/fut/files/share/metainfo" "$work/fut/files/share/app-info/xmls" "$work/fut/var"
+    printf '#!/bin/sh\necho hello\n' > "$work/fut/files/bin/hello"; chmod 755 "$work/fut/files/bin/hello"
+    printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=hello\n' "$fut" "$rt" "$rt" > "$work/fut/metadata"
+    cat > "$work/fut/files/share/metainfo/$fut.metainfo.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>$fut</id>
+  <name>Test Future App</name>
+  <summary>Asks for a newer RuyaOS than this console has</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <custom><value key="x-ruya-min-api-level">99</value></custom>
+</component>
+EOF
+    { echo '<?xml version="1.0" encoding="UTF-8"?>'; echo '<components version="0.16" origin="flatpak">'
+      sed 1d "$work/fut/files/share/metainfo/$fut.metainfo.xml"; echo '</components>'; }         | gzip -9n > "$work/fut/files/share/app-info/xmls/$fut.xml.gz"
+    flatpak build-finish --command=hello "$work/fut" || return 1
+    flatpak build-export $sign "$work/repo" "$work/fut" stable || return 1
     flatpak build-update-repo $sign "$work/repo" || echo "(build-update-repo warned: appstream data may be missing, the store falls back to the id)"
     {
         printf '[Flatpak Repo]\nTitle=Store check\nUrl=file://%s/repo\n' "$work"
@@ -359,17 +378,25 @@ check)
     echo "$got" | grep -q 'ruya-store-test.png' && ok "the screenshot carries its image URL" || bad "GetApp screenshot url: $got"
     lists="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | grep -Ec '"screenshots"|"release_notes"')"
     [ "$lists" = 0 ] && ok "Search records carry no screenshots or release_notes" || bad "Search carries $lists GetApp-only keys"
-    # RUY-156: the test app asks for API level 99 (x-ruya-min-api-level), far above the console's.
-    echo "$got" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible: $got"
-    # Only the test app's own record: the list holds every app of the remotes (Flathub has thousands).
+    # RUY-156: the future app asks for API level 99 (x-ruya-min-api-level), far above the console's;
+    # the test app asks for none (RUY-634: Install refuses an app that does not fit).
+    echo "$got" | grep -q '"compatible" b true' && ok "GetApp reports compatible=true for the test app" || bad "GetApp compatible: $got"
+    echo "$got" | grep -q '"min_api_level" u 0' && ok "GetApp reports min_api_level 0 for the test app" || bad "GetApp min_api_level: $got"
+    fgot="$(busctl --system call "$svc" "$path" "$ifc" GetApp s "$fut")"
+    echo "$fgot" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible of $fut: $fgot"
+    echo "$fgot" | grep -q '"min_api_level" u 99' && ok "GetApp reports min_api_level 99" || bad "GetApp min_api_level of $fut: $fgot"
+    # Only the future app's own record: the list holds every app of the remotes (Flathub has thousands).
     # (the dicts are sorted by key, so "compatible" precedes "id": read the JSON, pick the record by its id)
     rec="$(as_shell busctl --system --json=short call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | python3 -c '
 import json, sys
 for r in json.load(sys.stdin)["data"][0]:
     if r.get("id", {}).get("data") == sys.argv[1]:
         print("compatible=%s" % str(r.get("compatible", {}).get("data")).lower())
-' "$app")"
-    [ "$rec" = "compatible=false" ] && ok "Search carries compatible=false for $app" || bad "Search compatible of $app: '$rec'"
+' "$fut")"
+    [ "$rec" = "compatible=false" ] && ok "Search carries compatible=false for $fut" || bad "Search compatible of $fut: '$rec'"
+    # RUY-634: the service, not the shell's button, refuses it; no job appears.
+    case "$(as_shell busctl --system call "$svc" "$path" "$ifc" Install s "$fut")" in 'ss "incompatible" ""'*) ok "Install of $fut: incompatible";; *) bad "Install of $fut was not refused as incompatible";; esac
+    as_shell busctl --system call "$svc" "$path" "$ifc" ListJobs | grep -q "$fut" && bad "the refused Install left a job" || ok "no job for the refused Install"
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
     echo "--- Install"
@@ -499,7 +526,8 @@ SHIMEOF
     : > "$work/probe2.log"; chmod 666 "$work/probe2.log"
     # The probe's own Store must start the install: the shell's D-Bus backend only tracks jobs it
     # started (an Install by busctl would leave its job list empty and the test vacuous).
-    sed "s/property string installApp: \"\"/property string installApp: \"$app\"/" "$work/probe.qml" > "$work/probe2.qml"
+    sed -e "s/property string installApp: \"\"/property string installApp: \"$app\"/" \
+        -e "s/property string futureApp: \"\"/property string futureApp: \"$fut\"/" "$work/probe.qml" > "$work/probe2.qml"
     chmod 644 "$work/probe2.qml"
     grep -q "installApp: \"$app\"" "$work/probe2.qml" || bad "could not set installApp in the probe copy"
     as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
@@ -509,8 +537,8 @@ SHIMEOF
     n=0
     until grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log" || [ "$n" -ge 120 ]; do sleep 0.2; n=$((n + 1)); done
     grep -a -q "store-probe: install requested $app" "$work/probe2.log" && ok "the shell's Store requested the install" || bad "the probe never requested the install"
-    # RUY-156: the shell's Store, over D-Bus, sees the test app (minimum level 99) as incompatible.
-    grep -a -q "store-probe: compatible $app false" "$work/probe2.log" && ok "the shell's Store reads compatible=false over D-Bus" || bad "the shell's Store did not read compatible=false"
+    # RUY-156: the shell's Store, over D-Bus, sees the future app (minimum level 99) as incompatible.
+    grep -a -q "store-probe: compatible $fut false" "$work/probe2.log" && ok "the shell's Store reads compatible=false over D-Bus" || bad "the shell's Store did not read compatible=false"
     if grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log"; then
         ok "the job is in the shell's Store.jobs"
     else

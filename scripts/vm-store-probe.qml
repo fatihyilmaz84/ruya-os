@@ -11,6 +11,8 @@ QtObject {
     // ignores jobs it didn't start itself).
     property string installApp: ""
     property bool installRequested: false
+    // Set the same way: an app that asks for a newer API level than the console has.
+    property string futureApp: ""
 
     function maybeInstall() {
         if (installApp === "" || installRequested || !Store.available)
@@ -18,8 +20,9 @@ QtObject {
         if (!Store.catalogue.some(a => a.id === installApp))
             return;
         installRequested = true;
-        // RUY-156: the shell's Store reads compatible=false over D-Bus (the test app asks for level 99).
-        console.warn("store-probe: compatible " + installApp + " " + (Store.app(installApp).compatible === false ? "false" : "true"));
+        // RUY-156: the shell's Store reads compatible=false over D-Bus (futureApp asks for level 99).
+        if (futureApp !== "")
+            console.warn("store-probe: compatible " + futureApp + " " + (Store.app(futureApp).compatible === false ? "false" : "true"));
         console.warn("store-probe: install requested " + installApp);
         Store.install(installApp);
     }

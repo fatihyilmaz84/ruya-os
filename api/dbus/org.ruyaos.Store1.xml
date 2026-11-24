@@ -13,6 +13,9 @@
     "already-installed" Install of an installed app
     "not-installed"     Uninstall/Update/Rollback of an app that is not installed
     "no-update"         Update of an app with no update available
+    "incompatible"      Install/Update of an app whose x-ruya-min-api-level is above this console's
+                        RUYA_API_LEVEL (checked after already-installed / not-installed / no-update;
+                        Uninstall and Rollback are not gated)
     "busy"              a job for that app is already queued or running
     "forbidden"         the caller is not allowed (AddRemote and the permission changes need an
                         admin; high-risk permissions need the admin PIN at install, which the shell
@@ -81,7 +84,10 @@
     compatible      b    false when the app's x-ruya-min-api-level is above this console's RUYA_API_LEVEL
                          (os-release): the shell hides it from the lists and its page cannot install
                          it. Absent from an older service: a client reads it as true. Installed apps
-                         that no longer fit stay installed.
+                         that no longer fit stay installed. Install and Update of such an app answer
+                         "incompatible" (the service refuses, whatever the client does).
+    min_api_level   u    the API level the app asks for (x-ruya-min-api-level), 0 = none; always
+                         present from this service, absent from an older one (a client reads 0)
 -->
 <node>
   <interface name="org.ruyaos.Store1">

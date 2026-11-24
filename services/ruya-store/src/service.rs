@@ -449,7 +449,13 @@ impl<F: Flatpak> Store<F> {
         self.queue(
             id,
             emit,
-            |app| app.installed.then_some(Status::AlreadyInstalled),
+            |app| {
+                if app.installed {
+                    Some(Status::AlreadyInstalled)
+                } else {
+                    (!app.compatible).then_some(Status::Incompatible)
+                }
+            },
             |app| Operation::Install {
                 id: app.id.clone(),
                 remote: app.remote.clone(),
@@ -484,7 +490,7 @@ impl<F: Flatpak> Store<F> {
                 } else if !app.update_available {
                     Some(Status::NoUpdate)
                 } else {
-                    None
+                    (!app.compatible).then_some(Status::Incompatible)
                 }
             },
             |app| Operation::Update { id: app.id.clone() },
@@ -1705,6 +1711,56 @@ mod tests {
         let s = build(1);
         assert!(!compatible(&s, "org.ruya.Racer"));
         assert!(compatible(&build(99), "org.ruya.Puzzle"));
+    }
+
+    #[test]
+    fn install_of_an_incompatible_app_is_refused() {
+        let f = FakeFlatpak::default()
+            .with_remote("ruyaos", "RuyaOS", true)
+            .with_app("ruyaos", "org.ruya.Racer", 1)
+            .with_app("ruyaos", "org.ruya.Puzzle", 1)
+            .with_appstream("ruyaos", LEVELS);
+        let s = Store::new(f).with_api_level(2);
+        s.refresh().unwrap();
+        let (status, job) = s.install("org.ruya.Puzzle", &mut |_| {});
+        assert_eq!(status, Status::Incompatible);
+        assert_eq!(status.as_str(), "incompatible");
+        assert_eq!(job, "");
+        assert!(s.list_jobs().is_empty(), "nothing was queued");
+        assert_eq!(
+            s.install("org.ruya.Racer", &mut |_| {}).0,
+            Status::Ok,
+            "a compatible app installs as before"
+        );
+    }
+
+    #[test]
+    fn update_of_an_incompatible_app_is_refused() {
+        let f = FakeFlatpak::default()
+            .with_remote("ruyaos", "RuyaOS", true)
+            .with_app("ruyaos", "org.ruya.Racer", 1)
+            .with_app("ruyaos", "org.ruya.Puzzle", 1)
+            .with_installed("ruyaos", "org.ruya.Racer", 1)
+            .with_installed("ruyaos", "org.ruya.Puzzle", 1)
+            .with_update("org.ruya.Racer")
+            .with_update("org.ruya.Puzzle")
+            .with_appstream("ruyaos", LEVELS);
+        let s = Store::new(f).with_api_level(2);
+        s.refresh().unwrap();
+        let (status, job) = s.update("org.ruya.Puzzle", &mut |_| {});
+        assert_eq!(status, Status::Incompatible);
+        assert_eq!(job, "");
+        assert!(s.list_jobs().is_empty(), "nothing was queued");
+        assert_eq!(
+            s.update("org.ruya.Racer", &mut |_| {}).0,
+            Status::Ok,
+            "a compatible update runs as before"
+        );
+        // Removing an app that no longer fits is not gated.
+        assert_eq!(
+            s.uninstall("org.ruya.Puzzle", false, &mut |_| {}).0,
+            Status::Ok
+        );
     }
     #[test]
     fn the_limit_caps_the_result() {
