@@ -851,7 +851,7 @@ Item {
             joinSpy.clear()
             Input.joinPlayer(host.dualSense, "p2")
             tryCompare(joinSpy, "count", 1, 2000, "the join was answered")
-            tryVerify(() => Input.players.length === 2, 2000, "the guest has a seat")
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).slot === 2, 2000, "the record shows the guest's seat")
             compare(Input.devices.find(d => d.id === host.dualSense).owner, "", "the pad does not remember a guest")
             Input.mockGuest("p2", false)
             Input.joinPlayer(host.dualSense, "p2")                  // the same again, no longer a guest
