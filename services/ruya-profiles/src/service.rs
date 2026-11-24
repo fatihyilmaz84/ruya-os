@@ -511,23 +511,33 @@ impl<A: Accounts> ProfileService<A> {
     }
 }
 
-/// The journal line of one `SwitchTo` call (RUY-547): the profile id and the status the reply
-/// carries. It takes no PIN, so no PIN (nor its length) can reach the log. The id is the
+/// The journal line of one profile call (`method` names it): the profile id and the status the
+/// reply carries. It takes no PIN, so no PIN (nor its length) can reach the log. The id is the
 /// caller's string: control characters are replaced so a call cannot forge a log line.
-pub fn switch_line(id: &str, outcome: &Outcome) -> String {
+pub fn call_line(method: &str, id: &str, outcome: &Outcome) -> String {
     let id: String = id
         .chars()
         .map(|c| if c.is_control() { '?' } else { c })
         .collect();
     format!(
-        "ruya-profiles: SwitchTo {id} -> {}",
+        "ruya-profiles: {method} {id} -> {}",
         outcome.status.as_str()
     )
 }
 
+/// The journal line of one `SwitchTo` call (RUY-547).
+pub fn switch_line(id: &str, outcome: &Outcome) -> String {
+    call_line("SwitchTo", id, outcome)
+}
+
 /// The journal line of one `VerifyPin` call: like `switch_line`, never the PIN.
 pub fn verify_line(id: &str, outcome: &Outcome) -> String {
-    switch_line(id, outcome).replacen("SwitchTo", "VerifyPin", 1)
+    call_line("VerifyPin", id, outcome)
+}
+
+/// The journal line of one `DeleteProfile` call (RUY-717): the deleted profile's id, no PIN.
+pub fn delete_line(id: &str, outcome: &Outcome) -> String {
+    call_line("DeleteProfile", id, outcome)
 }
 
 /// The journal line of one `Lock` call.
@@ -546,6 +556,22 @@ mod tests {
     use super::*;
     use crate::accounts::NoAccounts;
     use crate::lockout::{FIRST_LOCKOUT, FREE_ATTEMPTS};
+
+    #[test]
+    fn delete_line_names_the_profile_and_status_and_cannot_be_forged() {
+        let ok = Outcome::of(Status::Ok);
+        assert_eq!(
+            delete_line("p2", &ok),
+            "ruya-profiles: DeleteProfile p2 -> ok"
+        );
+        let failed = Outcome::of(Status::Failed);
+        assert_eq!(
+            delete_line("p2", &failed),
+            "ruya-profiles: DeleteProfile p2 -> failed"
+        );
+        let forged = delete_line("p2\nruya-profiles: Lock -> ok", &ok);
+        assert!(!forged.contains('\n'));
+    }
 
     #[test]
     fn journal_lines_name_the_profile_and_status_and_never_the_pin() {

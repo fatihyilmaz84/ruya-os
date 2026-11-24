@@ -672,6 +672,8 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
         // Not retried and not shown: the next start's sweep forgets what is left (RUY-468).
         if (status != QLatin1String("ok"))
             qWarning("ruya-shell: Input1 ForgetConsoleProfile for %s answered %s", qPrintable(profile), qPrintable(status));
+        else
+            qInfo("ruya-shell: Input1 ForgetConsoleProfile for %s answered %s", qPrintable(profile), qPrintable(status));
         emit consoleProfileForgotten(profile, status);
     } else if (method == QLatin1String("StoredConsoleProfiles")) {
         if (status != QLatin1String("ok"))
