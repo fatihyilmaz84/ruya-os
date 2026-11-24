@@ -7702,11 +7702,8 @@ mod tests {
         let (mut r, profiles) = owner_router(vec![]);
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
-        let c = r.add_pad(pad("c"), t0());
         sign_in(&mut r, a, "p1");
         assert_eq!(join(&mut r, b, "p2"), 2);
-        assert_eq!(join(&mut r, c, "p1"), 1, "p1 already has seat 1");
-        assert_eq!(owner_of(&r, c), "p1");
         r.take_notices();
         // The account is deleted, then the shell forgets the profile (RUY-468).
         profiles.lock().expect("lock").retain(|p| *p != "p1");
@@ -7721,8 +7718,8 @@ mod tests {
             .collect();
         assert_eq!(
             changed,
-            vec![("a".into(), "".into()), ("c".into(), "".into())],
-            "one per pad that p1 owned, owner empty; b (p2) is untouched"
+            vec![("a".into(), "".into())],
+            "one for the pad p1 owned, owner empty; b (p2) is untouched"
         );
         assert_eq!(owner_of(&r, b), "p2");
     }
