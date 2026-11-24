@@ -101,6 +101,9 @@ public:
     // Hold pair() unanswered until released (false); mockPairCalls() counts the pair() calls
     // since the last reset.
     Q_INVOKABLE void mockHoldPairing(bool hold);
+    // While held, a started scan stays discovering until released (false), which ends a running
+    // scan the normal way; mockReset() clears the hold. Keeps a test off the mock's 300 ms timer.
+    Q_INVOKABLE void mockHoldScan(bool hold);
     Q_INVOKABLE int mockPairCalls() const;
     // Every pair() the mock got, in order, as "<id>:confirmed" or "<id>:plain" (RUY-422).
     Q_INVOKABLE QStringList mockPairLog() const;
