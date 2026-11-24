@@ -320,6 +320,15 @@ function Test-QmlShardRunner {
     $names = "tst_ok1", "tst_ok2", "tst_fail", "tst_crash", "tst_hang"
     foreach ($n in $names) { Set-Content -LiteralPath (Join-Path $fx "$n.qml") -Value "x" }
     $ps = (Get-Command powershell.exe).Source
+    # RUY-928: the hang limit is derived from how long one powershell.exe takes to start and exit right now (a
+    # stand-in file needs about that long), so a loaded machine gets a longer limit: 10x the measurement, never
+    # under 4 s. The hang stand-in sleeps three times the limit, so it is always still running when killed.
+    $probe = [Diagnostics.Stopwatch]::StartNew()
+    & $ps -NoProfile -Command exit | Out-Null
+    $startupSec = $probe.Elapsed.TotalSeconds
+    $hangLimit = [int][Math]::Max(4, [Math]::Ceiling(10 * $startupSec))
+    $hangSleep = 3 * $hangLimit
+    Write-Host ("    shard runner self-check: powershell.exe start-up {0:N2} s, hang limit {1} s" -f $startupSec, $hangLimit)
     $make = {
         param($file, $log)
         $base = [IO.Path]::GetFileNameWithoutExtension($file)
@@ -327,16 +336,16 @@ function Test-QmlShardRunner {
         $body = switch ($base) {
             "tst_fail"  { "Set-Content -LiteralPath '$log' 'FAIL!  : x::test_y() boom'; Add-Content -LiteralPath '$log' 'Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 5ms'; exit 1" }
             "tst_crash" { "Set-Content -LiteralPath '$log' 'Start testing of x'; exit 3" }
-            "tst_hang"  { "Start-Sleep -Seconds 60" }
+            "tst_hang"  { "Start-Sleep -Seconds $hangSleep" }
             default     { "Set-Content -LiteralPath '$log' '$line'; exit 0" }
         }
         @{ Exe = $ps; Args = @("-NoProfile", "-Command", "`"$body`"") }
     }.GetNewClosure()
     $all = @($names | ForEach-Object { Join-Path $fx "$_.qml" })
-    $r = Invoke-QmlShards $all (Join-Path $fx "logs") 2 4 $make
+    $r = Invoke-QmlShards $all (Join-Path $fx "logs") 2 $hangLimit $make
     $bad = $r.Bad -join "`n"
     $ok = ($r.Files -eq 5) -and ($r.Bad.Count -eq 3) -and ($r.Passed -eq 8) -and ($r.Failed -eq 1) -and ($r.Skipped -eq 2) `
-        -and ($bad -match 'tst_fail: failed .*tst_fail\.txt') -and ($bad -match 'tst_crash: crashed .*tst_crash\.txt') -and ($bad -match 'tst_hang: hung .*tst_hang\.txt') `
+        -and ($bad -match 'tst_fail: failed .*tst_fail\.txt') -and ($bad -match 'tst_crash: crashed .*tst_crash\.txt') -and ($bad -match "tst_hang: hung \(killed after $hangLimit s\) .*tst_hang\.txt") `
         -and ($bad -notmatch 'tst_ok')
     if (-not $ok) { Write-Host "    got: files $($r.Files), passed $($r.Passed), failed $($r.Failed), skipped $($r.Skipped), bad:`n$bad" -ForegroundColor Yellow }
     Record "shard runner self-check (a failed, a crashed and a hung file are named by log; the totals add up)" $ok
