@@ -94,7 +94,9 @@ if ($LASTEXITCODE -ne 0) { $lines.Add("FAIL copy helper files to the guest (scp 
 # ---- a signed-in profile for the checks that need one (RUY-473): on a fresh disk nothing has made one
 # vm-runner-check.sh check and sample run a Windows program on an X display of the signed-in profile (RUY-980).
 # vm-library-check.sh steam signs that profile in and makes its second one itself (RUY-1102).
-$needsProfile = @($Checks | Where-Object { $_ -match "^vm-x11-check\.sh" -or $_ -match "^vm-runner-check\.sh (check|sample)" -or $_ -match "^vm-library-check\.sh steam" }).Count -gt 0
+# vm-platform-check.sh check, identity and deputy call the door as the signed-in profile's app (RUY-1129);
+# vm-library-check.sh installations reads that profile's Library (RUY-137).
+$needsProfile = @($Checks | Where-Object { $_ -match "^vm-x11-check\.sh" -or $_ -match "^vm-runner-check\.sh (check|sample)" -or $_ -match "^vm-library-check\.sh (steam|installations)" -or $_ -match "^vm-platform-check\.sh (check|identity|deputy)" }).Count -gt 0
 if ($needsProfile) {
     Write-Host "== vm-goto.ps1 home (a signed-in profile for the x11, runner and steam checks)"
     $gotoOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "vm-goto.ps1") home *>&1 | ForEach-Object { "$_" }
