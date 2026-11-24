@@ -3017,10 +3017,30 @@ SHIMEOF
 chmod +x "$pt/bin/python3"
 printf '#!/bin/sh\nwhile [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done\nshift\nFAKE_AS_USER=1 exec "$@"\n' > "$pt/bin/runuser"; chmod +x "$pt/bin/runuser"
 status() { printf 'Name:\tx\nCapInh:\t0000000000000000\nCapPrm:\t%s\nCapEff:\t%s\nCapBnd:\t%s\nCapAmb:\t0000000000000000\n' "$1" "$2" "$3"; }
+# readlink of a fake /proc/<pid>/exe (a file holding the link's target; MSYS cannot make a dangling symlink).
+cat > "$pt/bin/readlink" <<SHIMEOF
+#!/bin/sh
+case "\$1" in "$pt/proc/"*) cat "\$1" 2>/dev/null ;; *) exec "$(command -v readlink)" "\$@" ;; esac
+SHIMEOF
+chmod +x "$pt/bin/readlink"
 plat() { # <mode>; FAKE_BUG in the environment
+    local rc
     status 0000000000000000 0000000000000000 "${DOOR_BND:-0000000000000000}" > "$pt/proc/100/status"
-    status 0000000000080004 0000000000080004 "${HELPER_BND:-0000000000080004}" > "$pt/proc/200/status"
+    # The helper right after systemd's fork (exe is systemd, caps still systemd's), and at its exec: exe_late
+    # 0.4 s later, no_exec never. Its caps are final only at exec.
+    if [ "${FAKE_BUG:-}" = exe_late ] || [ "${FAKE_BUG:-}" = no_exec ]; then
+        status 000001ffffffffff 000001ffffffffff 000001ffffffffff > "$pt/proc/200/status"
+        echo /usr/lib/systemd/systemd > "$pt/proc/200/exe"
+        if [ "$FAKE_BUG" = exe_late ]; then
+            ( sleep 0.4; status 0000000000080004 0000000000080004 0000000000080004 > "$pt/proc/200/status"
+              echo /usr/libexec/ruya-platform-identify > "$pt/proc/200/exe" ) >/dev/null 2>&1 &
+        fi
+    else
+        status 0000000000080004 0000000000080004 "${HELPER_BND:-0000000000080004}" > "$pt/proc/200/status"
+        echo /usr/libexec/ruya-platform-identify > "$pt/proc/200/exe"
+    fi
     PLAT_PROC="$pt/proc" PLAT_SOCK="$pt/sock" PLAT_WORK="$pt/work" PATH="$pt/bin:$shims:$PATH" bash "$here/vm-platform-check.sh" "$1" 2>&1
+    rc=$?; wait; return $rc
 }
 out="$(plat identity)"
 for want in "the door's CapBnd is 0" "the door's CapEff is 0" "ruya-platform-identify.socket is active" "is 0600 root" \
@@ -3042,6 +3062,13 @@ for case in "socket_down:FAIL: ruya-platform-identify.socket is not active" "soc
     expect_contains "platform identity: ${case%%:*} FAILs" "$out" "${case#*:}"
     expect_contains "platform identity: ${case%%:*} ends failed" "$out" "SOME CHECKS FAILED"
 done
+# RUY-1164: the helper's caps are read once its exe is the helper, not at the fork.
+out="$(FAKE_BUG=exe_late plat identity)"
+expect_contains "platform identity: caps are read after the helper execs (late exec)" "$out" "PASS: a live helper's CapBnd is exactly the two"
+expect_lacks "platform identity: a late exec is no FAIL" "$out" "FAIL"
+out="$(FAKE_BUG=no_exec plat identity)"
+expect_contains "platform identity: a helper that never execs FAILs" "$out" "FAIL: the helper ruya-platform-identify@0-1-9011_41661-0.service (pid 200) did not exec"
+expect_lacks "platform identity: a helper that never execs is not judged on its caps from before the exec" "$out" "a live helper's CapBnd is '"
 out="$(plat deputy)"
 for want in ": not-an-app" "the helper read nothing of it (not-owned)" "the door logged flatpak-info not-owned" "the door was given no bytes of it" "ALL CHECKS PASSED"; do
     expect_contains "platform deputy: $want" "$out" "$want"
