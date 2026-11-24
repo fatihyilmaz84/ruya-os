@@ -121,10 +121,12 @@ Item {
 
         function test_a_hostile_file_always_gets_a_verdict() {
             // WAV, Ogg and FLAC with every length field of the first 128 bytes set to 0, 1, 0x7fffffff,
-            // 0x80000000 and 0xfffffff8, cut and corrupted at every offset: each must come back (bounded: 60 s).
-            const r = SoundThemes.fuzz(60000)
+            // 0x80000000 and 0xfffffff8, cut and corrupted at every offset: each must come back. The whole set always runs; the
+            // bound is per file (5 s, normally a few ms), so a loaded machine cannot end the run early.
+            const r = SoundThemes.fuzz(5000, 600000)
             verify(r.ok, r.problem)
             verify(r.cases > 1500, "cases tried: " + r.cases)
+            verify(r.slowestMs < 5000, "slowest case: " + r.slowestCase + " " + r.slowestMs + " ms")
         }
 
         function test_granule_and_loop_numbers_that_do_not_fit() {

@@ -81,9 +81,16 @@ QList<FixtureCase> fixtureCases();
 bool writeFixtures(const QString &root);
 
 // Hostile-file test: valid WAV, Ogg and FLAC files with their first 128 bytes cut, corrupted and their 4-byte
-// fields set to 0, 1, 0x7fffffff, 0x80000000 and 0xfffffff8, each checked in a worker thread. True when every
-// file got a verdict within `timeoutMs` in total; otherwise `problem` says why (a hung checker is abandoned).
-// `cases` is the number of files tried.
-bool fuzz(QString *problem, int *cases, int timeoutMs = 60000);
+// fields set to 0, 1, 0x7fffffff, 0x80000000 and 0xfffffff8, each checked in a worker thread. The whole fixed
+// set always runs to the end; the proof that nothing loops is a bound per file: true when every file got a
+// verdict in under `perCaseMs`, otherwise `problem` names the slow case (a hung checker is abandoned).
+// `totalMs` is only a generous guard against a runaway of the whole run, not a budget load can exhaust.
+// `cases` is the number of files tried; `report` (optional) says which one was the slowest.
+struct FuzzReport
+{
+    qint64 slowestMs = 0;
+    QString slowestCase;
+};
+bool fuzz(QString *problem, int *cases, FuzzReport *report = nullptr, int perCaseMs = 5000, int totalMs = 600000);
 
 } // namespace SoundTheme
