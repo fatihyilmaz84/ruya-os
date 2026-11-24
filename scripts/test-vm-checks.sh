@@ -3018,29 +3018,39 @@ chmod +x "$pt/bin/python3"
 printf '#!/bin/sh\nwhile [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done\nshift\nFAKE_AS_USER=1 exec "$@"\n' > "$pt/bin/runuser"; chmod +x "$pt/bin/runuser"
 status() { printf 'Name:\tx\nCapInh:\t0000000000000000\nCapPrm:\t%s\nCapEff:\t%s\nCapBnd:\t%s\nCapAmb:\t0000000000000000\n' "$1" "$2" "$3"; }
 # readlink of a fake /proc/<pid>/exe (a file holding the link's target; MSYS cannot make a dangling symlink).
+# A link with a .late file (the exec still to come) becomes right, caps included, on its third read.
 cat > "$pt/bin/readlink" <<SHIMEOF
 #!/bin/sh
-case "\$1" in "$pt/proc/"*) cat "\$1" 2>/dev/null ;; *) exec "$(command -v readlink)" "\$@" ;; esac
+case "\$1" in
+"$pt/proc/"*)
+    if [ -f "\$1.late" ]; then
+        n=\$(( \$(cat "\$1.n" 2>/dev/null || echo 0) + 1 )); echo "\$n" > "\$1.n"
+        if [ "\$n" -ge 3 ]; then cp "\$1.late" "\$1"; cp "\$(dirname "\$1")/status.late" "\$(dirname "\$1")/status"; fi
+    fi
+    cat "\$1" 2>/dev/null ;;
+*) exec "$(command -v readlink)" "\$@" ;;
+esac
 SHIMEOF
 chmod +x "$pt/bin/readlink"
 plat() { # <mode>; FAKE_BUG in the environment
     local rc
     status 0000000000000000 0000000000000000 "${DOOR_BND:-0000000000000000}" > "$pt/proc/100/status"
     # The helper right after systemd's fork (exe is systemd, caps still systemd's), and at its exec: exe_late
-    # 0.4 s later, no_exec never. Its caps are final only at exec.
+    # at the third look at exe, no_exec never. Its caps are final only at exec.
+    rm -f "$pt/proc/200/exe.late" "$pt/proc/200/exe.n"
     if [ "${FAKE_BUG:-}" = exe_late ] || [ "${FAKE_BUG:-}" = no_exec ]; then
         status 000001ffffffffff 000001ffffffffff 000001ffffffffff > "$pt/proc/200/status"
         echo /usr/lib/systemd/systemd > "$pt/proc/200/exe"
         if [ "$FAKE_BUG" = exe_late ]; then
-            ( sleep 0.4; status 0000000000080004 0000000000080004 0000000000080004 > "$pt/proc/200/status"
-              echo /usr/libexec/ruya-platform-identify > "$pt/proc/200/exe" ) >/dev/null 2>&1 &
+            status 0000000000080004 0000000000080004 0000000000080004 > "$pt/proc/200/status.late"
+            echo /usr/libexec/ruya-platform-identify > "$pt/proc/200/exe.late"
         fi
     else
         status 0000000000080004 0000000000080004 "${HELPER_BND:-0000000000080004}" > "$pt/proc/200/status"
         echo /usr/libexec/ruya-platform-identify > "$pt/proc/200/exe"
     fi
     PLAT_PROC="$pt/proc" PLAT_SOCK="$pt/sock" PLAT_WORK="$pt/work" PATH="$pt/bin:$shims:$PATH" bash "$here/vm-platform-check.sh" "$1" 2>&1
-    rc=$?; wait; return $rc
+    return $?
 }
 out="$(plat identity)"
 for want in "the door's CapBnd is 0" "the door's CapEff is 0" "ruya-platform-identify.socket is active" "is 0600 root" \
