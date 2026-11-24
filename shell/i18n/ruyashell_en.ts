@@ -3604,7 +3604,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManagedProfilePage</name>
     <message>
-        <location filename="../qml/ManagedProfilePage.qml" line="+82"/>
+        <location filename="../qml/ManagedProfilePage.qml" line="+83"/>
         <source>Profile renamed.</source>
         <translation>Profile renamed.</translation>
     </message>
@@ -3620,11 +3620,21 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+18"/>
-        <source>PIN</source>
-        <translation>PIN</translation>
+        <source>PIN set</source>
+        <translation>PIN set</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+0"/>
+        <source>No PIN</source>
+        <translation>No PIN</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>The last admin can&apos;t be deleted.</source>
+        <translation>The last admin can&apos;t be deleted.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
@@ -5809,7 +5819,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+46"/>
+        <location filename="../qml/SectionNav.qml" line="+54"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -6271,7 +6281,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+410"/>
+        <location line="+412"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -6379,7 +6389,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+542"/>
+        <location line="+544"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6406,7 +6416,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2070"/>
+        <location line="-2074"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6437,13 +6447,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1058"/>
+        <location line="+1060"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>Same game as the %1 version?</translation>
     </message>
     <message>
-        <location line="+733"/>
+        <location line="+735"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

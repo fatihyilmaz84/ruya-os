@@ -3598,7 +3598,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManagedProfilePage</name>
     <message>
-        <location filename="../qml/ManagedProfilePage.qml" line="+82"/>
+        <location filename="../qml/ManagedProfilePage.qml" line="+83"/>
         <source>Profile renamed.</source>
         <translation>Profil yeniden adlandırıldı.</translation>
     </message>
@@ -3614,11 +3614,21 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+18"/>
-        <source>PIN</source>
-        <translation>PIN</translation>
+        <source>PIN set</source>
+        <translation>PIN ayarlı</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+0"/>
+        <source>No PIN</source>
+        <translation>PIN yok</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>The last admin can&apos;t be deleted.</source>
+        <translation>Son yönetici silinemez.</translation>
+    </message>
+    <message>
+        <location line="-18"/>
         <source>Rename %1</source>
         <translation>%1 profilini yeniden adlandır</translation>
     </message>
@@ -5791,7 +5801,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+46"/>
+        <location filename="../qml/SectionNav.qml" line="+54"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -6251,7 +6261,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+410"/>
+        <location line="+412"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -6359,7 +6369,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+542"/>
+        <location line="+544"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6386,7 +6396,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-2070"/>
+        <location line="-2074"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6417,13 +6427,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1058"/>
+        <location line="+1060"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>%1 sürümüyle aynı oyun mu?</translation>
     </message>
     <message>
-        <location line="+733"/>
+        <location line="+735"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

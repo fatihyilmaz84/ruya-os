@@ -4,7 +4,7 @@ import RuyaShell
 
 // Settings -> Manage profiles -> a profile (RUY-715, 02 §1.2): what an admin can do with one other
 // profile. Opened with params { id } (the profile's id) from ManageProfilesPane. Rows only: the profile's
-// name, role and PIN as a fact, then "Rename <name>" (focus first) and "Delete <name>". Both go through
+// role and PIN state as a fact (the title is the name), then "Rename <name>" (focus first) and "Delete <name>". Both go through
 // the one rename/delete flow of ProfilePaneBase (PIN pad, name keyboard, delete confirmation), so there is
 // no second copy of it; its modals sit on the overlay under the "managedProfile" names. A rename leaves
 // the page open with the new name; a delete closes it (ManageProfilesPane then puts the focus on the next
@@ -45,7 +45,8 @@ Page {
     readonly property int adminCount: Profiles.profiles.filter(p => p.role === "admin").length
     // The same rules as before the page: another profile, an admin signed in, and never the last admin.
     readonly property bool canRename: other && body.isAdmin
-    readonly property bool canDelete: other && body.isAdmin && !(profile.role === "admin" && adminCount <= 1)
+    readonly property bool isLastAdmin: profile !== undefined && profile.role === "admin" && adminCount <= 1
+    readonly property bool canDelete: other && body.isAdmin && !isLastAdmin
 
     // The page closes once (a page that is closing for any reason never asks again: that would close the
     // page below).
@@ -92,15 +93,15 @@ Page {
             }
         }
 
-        // Who it is: name, role and whether a PIN is set. Read-only.
+        // Who it is: the swatch, the role and whether a PIN is set (the title is the name). Read-only.
         SettingRow {
             id: whoRow
             objectName: "rowManagedWho"
             kind: "info"
             u: page.u
             swatch: page.last.avatar ?? "transparent"
-            label: page.last.name
-            value: body.roleText(page.last.role) + (page.last.hasPin ? " · " + qsTr("PIN") : "")
+            label: body.roleText(page.last.role)
+            value: page.last.hasPin ? qsTr("PIN set") : qsTr("No PIN")
         }
         SettingRow {
             id: renameRow
@@ -119,6 +120,14 @@ Page {
             visible: page.canDelete
             label: qsTr("Delete %1").arg(page.last.name)
             onActivated: body.startDelete(page.profileId, page.last.name)
+        }
+
+        // Why Delete is missing (the same rule as canDelete: isLastAdmin).
+        SettingNote {
+            objectName: "noteLastAdmin"
+            u: page.u
+            visible: page.other && body.isAdmin && page.isLastAdmin
+            text: qsTr("The last admin can't be deleted.")
         }
 
         Text {

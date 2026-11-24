@@ -649,8 +649,10 @@ Item {
             signIn("p1", "1234")
             openProfilesPane()
             openProfilePage("p2")
-            compare(findChild(find("rowManagedWho"), "label").text, "Ada", "the page names the profile")
-            compare(findChild(find("rowManagedWho"), "value").text, "Standard")
+            compare(findChild(find("rowManagedWho"), "label").text, "Standard", "the fact row is the role, not the title")
+            compare(findChild(find("rowManagedWho"), "value").text, "No PIN")
+            verify(!find("noteLastAdmin").visible, "Delete is offered, so no reason is given")
+            verify(!find("page_managedProfile").isLastAdmin)
             compare(find("page_managedProfile").title, "Ada")
             compare(find("rowRename").kind, "action")
             compare(find("rowDelete").kind, "action")
@@ -666,6 +668,22 @@ Item {
             tryVerify(() => find("rowRename") === null, 3000, "the page is gone")
         }
 
+        // RUY-722: a PIN shows in the fact row's value; a second admin can be deleted, so no note.
+        function test_profile_page_pin_state_and_second_admin_has_no_last_admin_note() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            const made = create("p1", "1234", "Root", "admin", "4321")
+            compare(made[0], "ok")
+            openProfilePage(made[1])
+            compare(findChild(find("rowManagedWho"), "label").text, "Admin")
+            compare(findChild(find("rowManagedWho"), "value").text, "PIN set")
+            compare(find("page_managedProfile").adminCount, 2)
+            verify(!find("page_managedProfile").isLastAdmin)
+            verify(find("rowDelete").visible)
+            verify(!find("noteLastAdmin").visible)
+        }
+
         // Left leaves the page too, and a profile opened again shows its own name.
         function test_profile_page_left_leaves_and_each_profile_has_its_own() {
             startShell()
@@ -679,8 +697,8 @@ Item {
             tryVerify(() => find("profileRow_p3").activeFocus)
             tryVerify(() => find("rowRename") === null, 3000, "the first page is gone")
             openProfilePage("p3")
-            compare(findChild(find("rowManagedWho"), "label").text, "Sam")
-            compare(findChild(find("rowManagedWho"), "value").text, "Guest")
+            compare(findChild(find("rowManagedWho"), "label").text, "Guest")
+            compare(findChild(find("rowManagedWho"), "value").text, "No PIN")
         }
 
         // Your own profile opens nothing from the list (it says where it is), and a page forced open
@@ -741,7 +759,7 @@ Item {
             tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)
             tryVerify(() => find("rowRename").activeFocus, 2000, "the page stays, focus back on Rename: " + focusName())
             compare(tc.shell.currentPage, "managedProfile")
-            compare(findChild(find("rowManagedWho"), "label").text, "Adam", "the page shows the new name")
+            compare(findChild(find("rowManagedWho"), "label").text, "Standard")
             compare(find("page_managedProfile").title, "Adam")
             compare(findChild(find("rowRename"), "label").text, "Rename Adam")
             tryVerify(() => find("managedProfileMessage").text === "Profile renamed.")
