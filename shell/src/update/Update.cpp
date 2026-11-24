@@ -18,6 +18,12 @@ Update::Update(std::unique_ptr<UpdateBackend> backend, QObject *parent)
         if (becameStaged)
             emit stagedReady(status.staged);
     });
+    connect(m_backend.get(), &UpdateBackend::jobChanged, this, [this](const QVariantMap &job) {
+        if (job == m_job)
+            return;
+        m_job = job;
+        emit jobChanged();
+    });
     connect(m_backend.get(), &UpdateBackend::requestFinished, this, &Update::requestFinished);
     m_backend->refresh();
 }
@@ -49,6 +55,21 @@ void Update::check()
 void Update::download()
 {
     m_backend->download();
+}
+
+void Update::pauseDownload()
+{
+    m_backend->pauseDownload();
+}
+
+void Update::resumeDownload()
+{
+    m_backend->resumeDownload();
+}
+
+void Update::cancelDownload()
+{
+    m_backend->cancelDownload();
 }
 
 void Update::rollback()

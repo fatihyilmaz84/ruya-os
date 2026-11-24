@@ -244,6 +244,115 @@ Item {
             tryCompare(Update, "state", "staged")
         }
 
+        // The image job (RUY-29): the mock follows Update1's job rules, the facade carries the record.
+        function foundUpdate() {
+            compare(request(() => Update.check())[1], "ok")
+            tryCompare(Update, "available", "0.0.19")
+        }
+
+        function test_the_download_is_a_job() {
+            compare(Object.keys(Update.job).length, 0, "no job before the first download")
+            foundUpdate()
+            Update.mockPauseDownloadAt(40)
+            compare(request(() => Update.download())[1], "ok")
+            tryVerify(() => Update.job.percent === 40)
+            compare(Update.progress, 40, "the status record's progress is the job's percent")
+            const j = Update.job
+            compare(j.source, "update")
+            compare(j.kind, "os")
+            compare(j.title, "RuyaOS 0.0.19")
+            compare(j.state, "running")
+            compare(j.phase, "download")
+            verify(j.resumable)
+            verify(j.bytes_done > 0 && j.bytes_done < j.bytes_total, "bytes move")
+            verify(j.rate_bps > 0)
+            verify(j.eta_s > 0)
+            Update.mockResumeDownload()
+            Update.mockPauseDownloadAt(95)
+            tryVerify(() => Update.job.phase === "install")
+            compare(Update.job.percent, 95)
+            compare(Update.job.resumable, false)
+            compare(Update.job.eta_s, 0, "the install's length is not reported")
+            compare(request(() => Update.pauseDownload())[1], "unsupported")
+            compare(request(() => Update.cancelDownload())[1], "unsupported")
+            Update.mockResumeDownload()
+            tryCompare(Update, "state", "staged")
+            tryVerify(() => Update.job.state === "finished")
+            compare(Update.job.status, "ok")
+            compare(Update.job.percent, 100)
+        }
+
+        function test_pause_resume_and_cancel_a_download() {
+            compare(request(() => Update.pauseDownload())[1], "wrong-state", "nothing downloads")
+            compare(request(() => Update.resumeDownload())[1], "wrong-state", "nothing is paused")
+            compare(request(() => Update.cancelDownload())[1], "wrong-state", "no job")
+            foundUpdate()
+            Update.mockPauseDownloadAt(40)
+            compare(request(() => Update.download())[1], "ok")
+            tryVerify(() => Update.job.percent === 40)
+            const id = Update.job.id
+            compare(request(() => Update.pauseDownload())[1], "ok")
+            tryVerify(() => Update.job.state === "paused")
+            compare(Update.state, "idle")
+            compare(Update.available, "0.0.19", "the update still waits")
+            compare(Update.job.percent, 40)
+            compare(Update.job.rate_bps, 0)
+            compare(request(() => Update.pauseDownload())[1], "wrong-state")
+
+            Update.mockResumeDownload()                    // the test hold only
+            Update.mockPauseDownloadAt(60)
+            compare(request(() => Update.resumeDownload())[1], "ok")
+            tryVerify(() => Update.job.state === "running")
+            compare(Update.job.id, id, "the same job")
+            verify(Update.job.percent >= 40, "not back to 0")
+            tryVerify(() => Update.job.percent === 60)
+            compare(request(() => Update.pauseDownload())[1], "ok")
+            tryVerify(() => Update.job.state === "paused")
+            compare(request(() => Update.cancelDownload())[1], "ok", "a paused download can be cancelled")
+            tryVerify(() => Update.job.state === "finished")
+            compare(Update.job.status, "cancelled")
+            compare(Update.staged, "", "nothing staged")
+            compare(request(() => Update.resumeDownload())[1], "wrong-state")
+
+            Update.mockResumeDownload()
+            Update.mockPauseDownloadAt(20)
+            compare(request(() => Update.download())[1], "ok", "a new download")
+            tryVerify(() => Update.job.state === "running")
+            verify(Update.job.id !== id, "a new job")
+            tryVerify(() => Update.job.percent === 20)
+            compare(request(() => Update.cancelDownload())[1], "ok", "a running download too")
+            tryVerify(() => Update.job.status === "cancelled")
+            compare(Update.state, "idle")
+            compare(Update.staged, "")
+        }
+
+        function test_download_continues_a_paused_job() {
+            foundUpdate()
+            Update.mockPauseDownloadAt(30)
+            request(() => Update.download())
+            tryVerify(() => Update.job.percent === 30)
+            const id = Update.job.id
+            request(() => Update.pauseDownload())
+            tryVerify(() => Update.job.state === "paused")
+            Update.mockResumeDownload()
+            compare(request(() => Update.download())[1], "ok")
+            tryVerify(() => Update.job.state === "running")
+            compare(Update.job.id, id)
+            tryCompare(Update, "state", "staged")
+        }
+
+        function test_a_channel_change_cancels_a_paused_download() {
+            foundUpdate()
+            Update.mockPauseDownloadAt(30)
+            request(() => Update.download())
+            tryVerify(() => Update.job.percent === 30)
+            request(() => Update.pauseDownload())
+            tryVerify(() => Update.job.state === "paused")
+            compare(request(() => Update.setChannel("beta"))[1], "ok")
+            tryVerify(() => Update.job.state === "finished")
+            compare(Update.job.status, "cancelled")
+        }
+
         function test_forbidden_for_a_non_admin_caller() {
             Update.mockSetCallerIsAdmin(false)
             compare(request(() => Update.rollback())[1], "forbidden")

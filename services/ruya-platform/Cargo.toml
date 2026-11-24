@@ -12,7 +12,8 @@ ruya-flatpak = { path = "../ruya-flatpak" }  # the app-id grammar and the instan
 ruya-keyfile = { path = "../ruya-keyfile" }  # the one keyfile reader: the caller's .flatpak-info (RUY-1050)
 ruya-users = { path = "../ruya-users" }  # the caller's user name and the ruya-shell uid (RUY-1098)
 ruya-profiles-client = { path = "../ruya-profiles-client" }  # following Profiles1 (RUY-1098)
-ruya-fs = { path = "../ruya-fs" }  # the permission files and the caller's .flatpak-info, never through a link (RUY-911)
+ruya-fs = { path = "../ruya-fs" }  # the permission files, never through a link (RUY-911)
+ruya-platform-identify = { path = "../ruya-platform-identify" }  # the identity helper's wire and the fdinfo rule (ADR-022 decision 4, RUY-1129)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"  # the per-profile permission files (already in the tree)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
@@ -25,6 +26,11 @@ async-channel = "2"  # the answer to a Stopping's wait (one per waiter); already
 # and test with `--features dev-mock`.
 ruya-contract-test = { path = "../ruya-contract-test", optional = true }  # the conformance runner reads the contract's comments with the one XML reader
 libc = { version = "0.2", optional = true }  # the mock removes its state on SIGTERM (sigwait); already in the tree through ruya-users
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The identity helper's SOCK_SEQPACKET socket with the pidfd as SCM_RIGHTS (HelperProcfs), a safe
+# API (linux_raw); already in the tree (ruya-fs, async-io), the net feature adds no crate.
+rustix = { version = "1", default-features = false, features = ["std", "net"] }
 
 [features]
 dev-mock = ["dep:ruya-contract-test", "dep:libc"]

@@ -9,8 +9,8 @@
 #include <memory>
 
 // QML face of org.ruyaos.Update1: the OS image version, the channel, an update that was found
-// or is being staged, and the rollback. Backend: RUYA_SERVICES=mock|dbus like Store and
-// Profiles; there is no service yet, so the default on Linux is D-Bus and nothing answers.
+// or is being staged (with its download job: bytes, rate, pause, resume, cancel), and the
+// rollback. Backend: RUYA_SERVICES=mock|dbus like Store and Profiles; D-Bus by default on Linux.
 class Update : public QObject
 {
     Q_OBJECT
@@ -35,6 +35,10 @@ class Update : public QObject
     Q_PROPERTY(int progress READ progress NOTIFY statusChanged)
     Q_PROPERTY(bool rollbackAvailable READ rollbackAvailable NOTIFY statusChanged)
     Q_PROPERTY(QString error READ error NOTIFY statusChanged)
+    // The image job (Update1's Job record, ADR-026 v2: id, source "update", state, phase,
+    // percent, bytes_done, bytes_total, rate_bps, eta_s, resumable, ...); {} when there has been
+    // none since the service started. For the Downloads page (RUY-30).
+    Q_PROPERTY(QVariantMap job READ job NOTIFY jobChanged)
     // True once the service has answered (always, for the mock).
     Q_PROPERTY(bool ready READ isReady NOTIFY statusChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
@@ -57,12 +61,17 @@ public:
     int progress() const { return m_status.progress; }
     bool rollbackAvailable() const { return m_status.rollbackAvailable; }
     QString error() const { return m_status.error; }
+    QVariantMap job() const { return m_job; }
     bool isReady() const { return m_known; }
     bool isMock() const { return m_backend->isMock(); }
 
     // Results arrive with requestFinished; the state changes arrive with statusChanged.
     Q_INVOKABLE void check();
     Q_INVOKABLE void download();
+    // The download keeps its fetched layers; resume goes on from them; cancel stops it for good.
+    Q_INVOKABLE void pauseDownload();
+    Q_INVOKABLE void resumeDownload();
+    Q_INVOKABLE void cancelDownload();
     Q_INVOKABLE void rollback();
     Q_INVOKABLE void setChannel(const QString &channel);
     Q_INVOKABLE void setAutoRestart(bool enabled);
@@ -80,6 +89,7 @@ public:
     Q_INVOKABLE void mockSetUpdateExists(bool exists);
     Q_INVOKABLE void mockSetRollbackAvailable(bool available);
     Q_INVOKABLE void mockFailNextCheck();
+    // The mock's download stands still at this percent (a test hold, not PauseDownload).
     Q_INVOKABLE void mockPauseDownloadAt(int percent);
     Q_INVOKABLE void mockResumeDownload();
     Q_INVOKABLE int mockRollbackCount() const;
@@ -91,9 +101,11 @@ public:
 
 signals:
     void statusChanged();
+    void jobChanged();
     // restartPending changed: show or remove the notice.
     void restartPendingChanged();
-    // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header.
+    // method: "check" | "download" | "pauseDownload" | "resumeDownload" | "cancelDownload" |
+    // "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header.
     void requestFinished(const QString &method, const QString &status);
     // The state became "staged" (from another state): a restart finishes the update.
     void stagedReady(const QString &version);
@@ -101,6 +113,7 @@ signals:
 private:
     std::unique_ptr<UpdateBackend> m_backend;
     UpdateStatus m_status;
+    QVariantMap m_job;
     bool m_known = false;
     QElapsedTimer m_lastReport;
     bool m_lastAppRunning = false;

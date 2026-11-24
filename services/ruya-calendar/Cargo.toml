@@ -1,0 +1,9 @@
+[package]
+name = "ruya-calendar"
+description = "RuyaOS calendar arithmetic the services share: day numbers and civil dates, YYYY-MM-DD"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No dependencies: pure arithmetic, so every service can link it.

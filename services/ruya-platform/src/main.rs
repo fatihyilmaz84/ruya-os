@@ -30,7 +30,7 @@ fn main() {
 fn readers() -> (Box<dyn Procfs>, Box<dyn Users>) {
     #[cfg(target_os = "linux")]
     return (
-        Box::new(ruya_platform::procfs::LinuxProcfs),
+        Box::new(ruya_platform::procfs::HelperProcfs::default()),
         Box::new(SystemUsers),
     );
     #[cfg(not(target_os = "linux"))]

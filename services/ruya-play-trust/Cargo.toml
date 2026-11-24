@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 ruya-play-format = { path = "../ruya-play-format" }  # the one parser: strict JSON, Problem, Source, validate
+ruya-calendar = { path = "../ruya-calendar" }  # day numbers and civil dates (RUY-29)
 # Ed25519 (BSD-3-Clause, pure Rust); verify_strict refuses malleable signatures and weak keys.
 ed25519-dalek = { version = "2.1", default-features = false, features = ["std", "fast", "zeroize"] }
 getrandom = "0.2"  # the seed of a new key (already in the tree via rand_core)

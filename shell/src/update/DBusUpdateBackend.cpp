@@ -59,29 +59,64 @@ DBusUpdateBackend::DBusUpdateBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("StatusChanged"), this, SLOT(onStatusChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("JobChanged"), this,
+                  SLOT(onJobChanged(QDBusMessage)));
 }
 
 void DBusUpdateBackend::refresh()
 {
-    const quint64 request = beginStatusRequest();
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetStatus"));
+    refreshStatus();
+    refreshJob();
+}
+
+// Calls a Get method of Update1 whose reply holds an a{sv} at argument `index`: `deliver` gets it,
+// or `failed` runs (a failure is an outcome too: an older reply after it is stale).
+void DBusUpdateBackend::getRecord(const QString &method, int index,
+                                  const std::function<void(const QVariantMap &)> &deliver,
+                                  const std::function<void()> &failed)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [method, index, deliver, failed](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusMessage message = w->reply();
-        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().isEmpty()) {
-            qWarning("ruya-shell: Update1 GetStatus failed: %s", qPrintable(w->error().message()));
-            acceptStatus(request); // a failure is an outcome too: an older reply after it is stale
+        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().size() <= index) {
+            qWarning("ruya-shell: Update1 %s failed: %s", qPrintable(method), qPrintable(w->error().message()));
+            failed();
             return;
         }
-        const QDBusArgument arg = message.arguments().at(0).value<QDBusArgument>();
-        deliverStatus(request, toStatus(parseDict(arg)));
+        deliver(parseDict(message.arguments().at(index).value<QDBusArgument>()));
     });
+}
+
+void DBusUpdateBackend::refreshStatus()
+{
+    const quint64 request = beginStatusRequest();
+    getRecord(
+        QStringLiteral("GetStatus"), 0,
+        [this, request](const QVariantMap &d) { deliverStatus(request, toStatus(d)); },
+        [this, request] { acceptStatus(request); });
+}
+
+void DBusUpdateBackend::refreshJob()
+{
+    // GetDownloadJob answers (status, job).
+    const quint64 request = beginJobRequest();
+    getRecord(
+        QStringLiteral("GetDownloadJob"), 1, [this, request](const QVariantMap &d) { deliverJob(request, d); },
+        [this, request] { acceptJob(request); });
+}
+
+void DBusUpdateBackend::onJobChanged(const QDBusMessage &message)
+{
+    if (message.arguments().isEmpty())
+        return;
+    deliverJob(beginJobRequest(), parseDict(message.arguments().at(0).value<QDBusArgument>()));
 }
 
 void DBusUpdateBackend::onStatusChanged()
 {
-    refresh();
+    refreshStatus(); // the job comes with its own signal
 }
 
 void DBusUpdateBackend::call(const QString &method, const QString &reportAs, const QVariantList &args)
@@ -104,6 +139,21 @@ void DBusUpdateBackend::check()
 void DBusUpdateBackend::download()
 {
     call(QStringLiteral("Download"), QStringLiteral("download"));
+}
+
+void DBusUpdateBackend::pauseDownload()
+{
+    call(QStringLiteral("PauseDownload"), QStringLiteral("pauseDownload"));
+}
+
+void DBusUpdateBackend::resumeDownload()
+{
+    call(QStringLiteral("ResumeDownload"), QStringLiteral("resumeDownload"));
+}
+
+void DBusUpdateBackend::cancelDownload()
+{
+    call(QStringLiteral("CancelDownload"), QStringLiteral("cancelDownload"));
 }
 
 void DBusUpdateBackend::rollback()

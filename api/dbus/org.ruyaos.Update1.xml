@@ -1,7 +1,8 @@
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
-  org.ruyaos.Update1 — OS image updates: check, stage, roll back, choose the channel.
+  org.ruyaos.Update1 — OS image updates: check, stage (as a download job that can be paused,
+  resumed and cancelled), roll back, choose the channel.
   Service: ruya-update on the system bus at /org/ruyaos/Update1 (over bootc, T-151); the shell's
   mock backend follows the same rules.
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/01-platform.md §4.
@@ -24,6 +25,10 @@
       the notice.
     - A scheduled download that failed is tried again after an hour (as a failed scheduled check);
       a download the user started with Download is not retried.
+    - A download the download policy paused (the job's reason "playing", RUY-31) runs again by
+      itself at the next look at the schedule once ReportActivity says no app runs; one the user
+      paused waits for ResumeDownload or Download. A scheduled check that finds the update a
+      paused download is for continues it.
 
   Status strings (the reply of every method) are stable API:
     "ok"           success: Check and Download only start the work, progress arrives with
@@ -35,6 +40,10 @@
     "forbidden"    Rollback, SetChannel or SetAutoRestart from a caller that is not an admin
                    (see below)
     "failed"       internal error
+    "wrong-state"  PauseDownload with nothing downloading, ResumeDownload with no download paused,
+                   CancelDownload with no download running or paused
+    "unsupported"  PauseDownload or CancelDownload once the image's import has begun (the job's
+                   resumable is false): a half-imported deployment is never left behind
 
   Admin: Rollback, SetChannel and SetAutoRestart are for an admin. The shell asks for the admin's PIN first and
   checks it with Profiles1.VerifyAdmin; the bus policy lets only ruya-shell and root call this
@@ -42,9 +51,10 @@
   the way ruya-store checks AddRemote (root, or ruya-shell while Profiles1's active profile is an
   admin) and answers "forbidden" otherwise.
 
-  GetStatus returns one a{sv} record, keys:
+  Status record (a{sv}), keys (GetStatus):
     state             s   "idle" | "checking" | "downloading" | "staged" | "up-to-date" | "failed"
-                          idle        nothing running (an update may be waiting: see available)
+                          idle        nothing running (an update may be waiting: see available;
+                                      also while the download is paused)
                           checking    looking for a newer image
                           downloading staging the new image (progress 0..100)
                           staged      the next boot uses `staged`: the shell offers a restart
@@ -60,11 +70,79 @@
     restart_at        x   unix seconds at which the service restarts by itself, 0 = no restart
                           is announced (T-159). Only set while state is "staged" and auto_restart
                           is true; the shell shows a notice while it is non-zero.
-    progress          u   download progress 0..100 (meaningful while downloading)
+    progress          u   the download job's percent, 0..100 (meaningful while downloading or
+                          paused)
     rollback_available b  a previous image exists that Rollback can boot
     error             s   short text of the last failure, "" otherwise
 
   Unknown keys are ignored by clients. The record is re-read after every StatusChanged.
+
+  The download job (ADR-026, RUY-29). Download stages the image as one job, the "image job": the
+  ADR-026 v2 record that Store1 serves for its jobs, with source "update", kind "os", app "",
+  position 0 and title "RuyaOS <version>". There is at most one: GetDownloadJob and JobChanged
+  give the running or paused one, else the last that finished since the service started.
+
+  Byte source: `bootc upgrade|switch` with its progress-fd option (bootc 1.17.1; the fd must be
+  a pipe, a file is refused) writes JSON lines: one "Start", then "ProgressBytes" about ten times a second while layers are
+  fetched (bytes of this run, bytesTotal still to fetch, bytesCached already present, the same in
+  layers as steps), then "ProgressSteps" for the import and the deploy, which carry no bytes.
+  Another event type is ignored, a line that is no event is skipped (the job goes on). Measured
+  on the Dell, 0.0.105 -> 0.0.106: 21 s without an event, 114 s of bytes, about 80 s of import,
+  12 s of deploy.
+
+  Pause and resume: PauseDownload stops bootc (SIGTERM). Layers fully fetched before it stay in
+  the OSTree repository, also over a reboot, and the next run reuses them (more layers cached,
+  fewer to fetch); only the layer in flight is fetched again. ResumeDownload runs the same
+  command again, and Download does the same while the job is paused. A paused job survives a
+  service restart (kept in the state directory): it comes back paused, with `available` set to
+  its version. CancelDownload ends it for good: nothing is staged, the booted and rollback
+  deployments are untouched, and the fetched layers are left to bootc's own cleanup. SetChannel
+  and Rollback end a paused job as cancelled (it was for the other channel, or would stage the
+  newer image over the rollback).
+
+  Job record (a{sv}), keys (GetDownloadJob, JobChanged):
+    id           s   "os-<unix seconds it began>" (a "-2" suffix when the last job had that id);
+                     the same over a pause and resume
+    source       s   "update"
+    kind         s   "os"
+    app          s   "" (the image is no app)
+    title        s   "RuyaOS <version>": the version the check found (or the channel switched to)
+    state        s   "running" | "paused" | "finished"
+    status       s   "" unless finished, then "ok" (staged), "failed" or "cancelled"
+    reason       s   "" | "playing" (paused by the download policy, not by the user;
+                     ResumeDownload clears it)
+    phase        s   "download" (layers arrive: ProgressBytes) | "install" (the import and the
+                     deploy: ProgressSteps); "download" while paused
+    percent      u   bytes_done * 90 / bytes_total while fetching (capped at 90), then 90..95 over
+                     the first install task (the import) and 95..99 over the later ones (the
+                     deploy), 100 when staged; never decreasing within the job, over a pause and
+                     resume too
+    bytes_done   t   bytes fetched over the network for this job, all its runs added up (what
+                     GetDownloadStats counts; after a resume it can exceed bytes_total, because
+                     the layer in flight at the pause is fetched again)
+    bytes_total  t   bytesTotal of the job's first ProgressBytes (what was still to fetch then),
+                     fixed for the job; 0 = unknown (no ProgressBytes yet)
+    rate_bps     t   smoothed rate: byte deltas sampled once a second, exponential smoothing with
+                     a 5 s time constant; 0 after 10 s without a byte, 0 while not running, and
+                     0 = unknown
+    eta_s        u   while running in phase "download": (bytes_total - bytes_done) / rate_bps
+                     rounded up; 0 = unknown (the rate or the total is 0, or the import runs:
+                     its length is not reported)
+    position     u   0 (the image job is never queued)
+    resumable    b   PauseDownload is offered: true while not finished and in phase "download",
+                     false from the import on
+    started      x   unix seconds the job began
+    finished     x   unix seconds it finished, 0 while not finished
+
+  Download stats (GetDownloadStats): the bytes this service fetched, per local day, in a
+  root-only ledger in the state directory, kept for 90 days. A run's bytes count on the day it
+  ends (finished or paused).
+
+  Day record (a{sv}), keys (GetDownloadStats):
+    day      s   "YYYY-MM-DD", local time
+    bytes    t   bytes this service fetched that day
+    jobs     u   image jobs that finished that day, whatever their status
+    failed   u   of those, the failed ones
 -->
 <node>
   <interface name="org.ruyaos.Update1">
@@ -75,9 +153,51 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- Stages the image a check found. state becomes "downloading" (progress), then "staged". -->
+    <!-- Stages the image a check found, as a new image job. state becomes "downloading"
+         (progress), then "staged". With a paused job it continues that job (as ResumeDownload),
+         also when nothing is `available`. -->
     <method name="Download">
       <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The download (job phase "download") stops; the job is paused and the status record's
+         state becomes "idle" with `available` still set. The reply comes at once, the pause
+         when bootc has stopped (JobChanged, StatusChanged). "unsupported" once the import has
+         begun; "wrong-state" when nothing is downloading (or a cancel is under way); "ok" again
+         while a pause is under way. -->
+    <method name="PauseDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The paused download runs again; already fetched layers are not fetched again.
+         "wrong-state" when no download is paused; "busy" while a check runs. -->
+    <method name="ResumeDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A running or paused download stops for good: the job finishes with status "cancelled",
+         nothing is staged; fetched layers are left to bootc's cleanup. A paused job ends at
+         once, a running one when bootc has stopped. During the import: "unsupported" (as
+         PauseDownload). "wrong-state" when no download runs or is paused. -->
+    <method name="CancelDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The image job's Job record (see the header): an empty dictionary when there has been
+         none since the service started, else the current or last finished download. status is
+         always "ok". -->
+    <method name="GetDownloadJob">
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- Day records (see the header), one per local day, newest first, at most `days` (1..90),
+         days without bytes left out. "invalid" for days 0 or above 90, "failed" when the ledger
+         cannot be read (it is then left as it is and nothing more is counted). -->
+    <method name="GetDownloadStats">
+      <arg name="days" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="stats" type="aa{sv}" direction="out"/>
     </method>
 
     <!-- Admin. Makes the previous image the next boot; state becomes "staged" with `staged` set.
@@ -114,5 +234,12 @@
 
     <!-- Any field of the status record changed (also every progress step): read GetStatus. -->
     <signal name="StatusChanged"/>
+
+    <!-- The image job's whole Job record, when it changed: on every state and phase change and
+         at most once a second while it runs. StatusChanged fires with it (its `progress` is the
+         job's percent). -->
+    <signal name="JobChanged">
+      <arg name="job" type="a{sv}"/>
+    </signal>
   </interface>
 </node>

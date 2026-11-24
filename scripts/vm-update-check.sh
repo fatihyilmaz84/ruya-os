@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# modes: check reboot security settings
+# modes: check download parse reboot security settings
 # Checks ruya-update (org.ruyaos.Update1, T-151) inside a running VM, as root. Prepare: the VM
 # tracks <wsl-ip>:5000/ruyaos:stable (bootc switch, then reboot) and the registry holds a NEWER
 # image under that tag (docs/dev-setup.md, "Update check"). Copy and run:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-update-check.sh root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-update-check.sh [check|security|settings|reboot]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-update-check.sh [check|download|security|settings|reboot]
 # Boot the VM without a saved profile (plain smoke-test.ps1 -Keep): "Rollback by the shell is
 # forbidden" assumes no admin profile is active. After "check", restart from Settings (or
 # `systemctl reboot`) and compare the version row.
@@ -28,6 +28,125 @@ wait_state() { # wait_state <not-this-state> <seconds>
     done
     return 1
 }
+
+# The image job (RUY-29): GetDownloadJob's record and ruya-update's journal line for each run.
+# One key of the job record, from `busctl --json=short` on stdin ("" when the key is absent).
+job_key() { python3 -c "import json,sys; d=json.load(sys.stdin)['data']; v=d[1].get('$1',{}).get('data',''); print(str(v).lower() if isinstance(v, bool) else v)"; }
+job() { busctl --system call "$svc" "$path" "$ifc" GetDownloadJob --json=short; }
+jfield() { job | job_key "$1"; }
+# The layers the machine already had at the start of each run of job $1, one line per run, from
+# ruya-update's journal on stdin ("ruya-update: download <id>: <n> layers (<b> bytes) here, ...").
+cached_layers() { sed -nE "s/.*ruya-update: download $1: ([0-9]+) layers \([0-9]+ bytes\) here, .*/\1/p"; }
+wait_job() { # wait_job <key> <value> <seconds>
+    local i=0
+    while [ "$i" -lt "$3" ]; do
+        [ "$(jfield "$1")" = "$2" ] && return 0
+        sleep 1; i=$((i + 1))
+    done
+    return 1
+}
+wait_bytes() { # wait_bytes <more-than> <seconds>: bytes_done grows past the value in phase download
+    local i=0
+    while [ "$i" -lt "$2" ]; do
+        [ "$(jfield phase)" = download ] && [ "$(jfield bytes_done)" -gt "$1" ] 2>/dev/null && return 0
+        sleep 1; i=$((i + 1))
+    done
+    return 1
+}
+deployments() { bootc status --json | python3 -c "import json,sys; s=json.load(sys.stdin)['status']; d=lambda k: (s.get(k) or {}).get('image',{}).get('imageDigest',''); print(d('booted'), d('rollback'), 'staged=' + d('staged'))"; }
+
+if [ "${1:-check}" = parse ]; then
+    # Host fixtures (scripts/test-vm-checks.sh): `parse job <key>` and `parse cached <job id>` read stdin.
+    case "${2:-}" in
+        job) job_key "$3" ;;
+        cached) cached_layers "$3" ;;
+        *) echo "usage: vm-update-check.sh parse job <key> | parse cached <job id>"; exit 2 ;;
+    esac
+    exit $?
+fi
+
+# download (RUY-29): the OS download as a job, with bytes, pause, resume and cancel. Prepare as
+# for `check` (the registry holds a newer image under the tracked tag), or with the oci-archive
+# route of scripts/dell-update.sh (the console tracks an oci-archive path; copy a newer archive
+# over that path). Run 1 is cancelled: nothing staged, the deployments unchanged. Run 2 is paused
+# after some layers, survives a service restart paused, resumes with more layers cached than
+# its first run had, and ends staged. Leaves the update staged, like `check`.
+if [ "${1:-check}" = download ]; then
+    started="$(date '+%Y-%m-%d %H:%M:%S')"
+    systemctl is-active --quiet ruya-update && ok "ruya-update is active" || { bad "ruya-update is not active"; exit 1; }
+    wait_state checking 120; wait_state downloading 900
+    [ "$(field state)" = staged ] && { echo "FAIL: an update is already staged (boot it or roll back first)"; exit 1; }
+    [ "$(call Check)" = ok ] || { echo "FAIL: Check did not start"; exit 1; }
+    wait_state checking 300
+    [ -n "$(field available)" ] && ok "newer image found: $(field available)" || { echo "FAIL: no newer image (state $(field state), error '$(field error)')"; exit 1; }
+    [ "$(call PauseDownload)" = wrong-state ] && ok "PauseDownload with nothing downloading: wrong-state" || bad "PauseDownload with nothing downloading not wrong-state"
+    [ "$(call ResumeDownload)" = wrong-state ] && ok "ResumeDownload with nothing paused: wrong-state" || bad "ResumeDownload with nothing paused not wrong-state"
+    before="$(deployments)"
+
+    # Run 1: cancelled while bytes arrive.
+    [ "$(call Download)" = ok ] && ok "Download started" || { bad "Download did not start"; exit 1; }
+    id1="$(jfield id)"
+    [ "$(jfield source)/$(jfield kind)" = update/os ] && ok "job $id1: source update, kind os" || bad "job source/kind: $(jfield source)/$(jfield kind)"
+    if wait_bytes 0 300; then
+        b1="$(jfield bytes_done)"; ok "bytes move: $b1 of $(jfield bytes_total), $(jfield rate_bps) B/s"
+    else
+        bad "no bytes within 300 s (phase $(jfield phase), state $(field state))"; exit 1
+    fi
+    wait_bytes "$b1" 30 && ok "and keep moving: $(jfield bytes_done)" || bad "bytes_done stood still at $b1"
+    [ "$(call CancelDownload)" = ok ] && ok "CancelDownload: ok" || bad "CancelDownload not ok"
+    wait_job state finished 60 && [ "$(jfield status)" = cancelled ] && ok "job finished: cancelled" || bad "job state $(jfield state), status $(jfield status)"
+    [ "$(field state)" = idle ] && [ -n "$(field available)" ] && ok "state idle, the update still available" || bad "after the cancel: state $(field state), available '$(field available)'"
+    [ "$(deployments)" = "$before" ] && ok "bootc status unchanged: $before" || bad "deployments changed: $before -> $(deployments)"
+    pgrep -x bootc >/dev/null && bad "a bootc still runs after the cancel" || ok "no bootc left running"
+
+    # Run 2: paused, kept over a service restart, resumed to staged.
+    [ "$(call Download)" = ok ] && ok "Download again" || { bad "second Download did not start"; exit 1; }
+    id2="$(jfield id)"
+    [ "$id2" != "$id1" ] && ok "a new job: $id2" || bad "the cancelled job's id again: $id2"
+    wait_bytes 0 300 || { bad "run 2: no bytes within 300 s"; exit 1; }
+    echo "letting layers arrive for 40 s"
+    sleep 40
+    [ "$(jfield phase)" = download ] || { bad "run 2 left the download phase within 40 s: no pause possible"; exit 1; }
+    p1="$(jfield percent)"
+    [ "$(call PauseDownload)" = ok ] && ok "PauseDownload at $p1 %: ok" || bad "PauseDownload not ok"
+    wait_job state paused 60 && ok "job paused" || bad "job state $(jfield state) after the pause"
+    p2="$(jfield percent)"
+    [ "$p2" -ge "$p1" ] && ok "percent kept: $p2" || bad "percent went back: $p1 -> $p2"
+    [ "$(jfield resumable)" = true ] && ok "still resumable" || bad "a paused job is not resumable"
+    [ "$(field state)" = idle ] && ok "state idle while paused" || bad "state $(field state) while paused"
+    [ "$(deployments)" = "$before" ] && ok "nothing staged while paused" || bad "deployments changed while paused: $(deployments)"
+    systemctl restart ruya-update && sleep 3
+    [ "$(jfield id)" = "$id2" ] && [ "$(jfield state)" = paused ] && ok "a service restart keeps the job paused" || bad "after a restart: job $(jfield id) $(jfield state)"
+    [ "$(call ResumeDownload)" = ok ] && ok "ResumeDownload: ok" || bad "ResumeDownload not ok"
+    wait_job state running 30 || bad "job not running after the resume"
+    runs=""; i=0
+    while [ "$i" -lt 300 ]; do  # the resumed run's first ProgressBytes (after bootc opens the image)
+        runs="$(journalctl -u ruya-update --since "$started" --no-pager -o cat | cached_layers "$id2")"
+        [ "$(echo "$runs" | grep -c .)" -ge 2 ] && break
+        sleep 1; i=$((i + 1))
+    done
+    [ "$(jfield percent)" -ge "$p2" ] && ok "percent did not go back on resume: $(jfield percent)" || bad "percent went back on resume: $p2 -> $(jfield percent)"
+    first="$(echo "$runs" | head -1)"; last="$(echo "$runs" | tail -1)"
+    if [ "$(echo "$runs" | grep -c .)" -ge 2 ] && [ "$last" -gt "$first" ]; then
+        ok "the resumed run had more layers cached: $first -> $last"
+    else
+        bad "cached layers per run of $id2: $(echo "$runs" | tr '\n' ' ')"
+    fi
+    if wait_job phase install 900; then
+        [ "$(call PauseDownload)" = unsupported ] && ok "PauseDownload during the install: unsupported" || bad "PauseDownload during the install not unsupported"
+        [ "$(call CancelDownload)" = unsupported ] && ok "CancelDownload during the install: unsupported" || bad "CancelDownload during the install not unsupported"
+    else
+        bad "no install phase within 900 s"
+    fi
+    wait_state downloading 900 && [ "$(field state)" = staged ] && ok "staged: $(field staged)" || bad "state $(field state), error '$(field error)'"
+    [ "$(jfield status)" = ok ] && [ "$(jfield percent)" = 100 ] && ok "job finished ok at 100 %" || bad "job status $(jfield status), percent $(jfield percent)"
+    deployments | grep -q 'staged=sha256' && ok "bootc status has the staged deployment" || bad "bootc status has no staged deployment"
+    stats="$(busctl --system call "$svc" "$path" "$ifc" GetDownloadStats u 1 --json=short)"
+    echo "$stats" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; sys.exit(0 if d[0]=='ok' and d[1] and d[1][0]['bytes']['data']>0 else 1)" \
+        && ok "GetDownloadStats counts today's bytes" || bad "GetDownloadStats: $stats"
+    [ "$fail" = 0 ] && echo "ALL PASSED" || echo "SOME FAILED"
+    exit "$fail"
+fi
 
 settings_checks() {
     # T-154: the automatic-restart setting and the activity report.
