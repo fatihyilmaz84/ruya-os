@@ -142,6 +142,7 @@ FocusScope {
             Text {
                 objectName: "controlsImportNote"
                 width: parent.width
+                topPadding: Theme.spaceXs * picker.u
                 text: qsTr("Importing replaces your controls in games.")
                 color: Theme.text                // on the sheet's glass: text, never textDim (04 §2)
                 font.pixelSize: Theme.typeCaption * picker.u

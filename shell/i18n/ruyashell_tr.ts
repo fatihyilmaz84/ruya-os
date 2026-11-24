@@ -5601,8 +5601,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+59"/>
-        <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
-        <translation>%1 üzerindeki herhangi bir düğme. 5 saniye basmazsan iptal olur.</translation>
+        <source>Any button on the %1.</source>
+        <translation>%1 üzerindeki herhangi bir düğme.</translation>
     </message>
 </context>
 <context>

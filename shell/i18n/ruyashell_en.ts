@@ -5619,8 +5619,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+59"/>
-        <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
-        <translation>Any button on the %1. Nothing for 5 seconds cancels.</translation>
+        <source>Any button on the %1.</source>
+        <translation>Any button on the %1.</translation>
     </message>
 </context>
 <context>

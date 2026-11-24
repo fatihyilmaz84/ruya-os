@@ -866,7 +866,7 @@ Item {
             openCapture("south")
             const dialog = find("remapCapture")
             compare(findChild(dialog, "remapCaptureTitle").text, "Press the new button for Cross")
-            compare(findChild(dialog, "remapCaptureDetail").text, "Any button on the DualSense. Nothing for 5 seconds cancels.")
+            compare(findChild(dialog, "remapCaptureDetail").text, "Any button on the DualSense.")
             compare(findChild(dialog, "remapCaptureSource").height, 80, "the source glyph at 80 u")
             compare(hintVerbs(), "back Cancel")
             compare(tc.shell.hintList[0].family, "keyboard", "the keyboard's Esc: every pad button is captured")
@@ -1403,6 +1403,21 @@ Item {
             tryVerify(() => calls("DeleteProfile").length === 1, 3000, "the reset ran after the refusal")
             tryVerify(() => !GameControls.busy, 3000)
             compare(GameControls.pendingReset, "")
+        }
+
+        // RUY-480: a reset queued on one pad is not lost when the page moved to another: the toast says so.
+        function test_a_reset_queued_on_another_pad_says_so() {
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.resetAll()
+            verify(GameControls.pendingReset !== "")
+            GameControls.show(pro)
+            Input.mockHoldSaves(false)
+            tryVerify(() => hasToast("Could not save the change for DualSense / Try again."), 3000, toastTexts().join("; "))
+            compare(GameControls.pendingReset, "")
+            compare(calls("DeleteProfile").length, 0, "not run on the other pad")
         }
 
         // RUY-480: an owner change takes the old owner's waiting export and reset with it.

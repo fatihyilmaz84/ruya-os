@@ -5,7 +5,7 @@ import RuyaShell
 // Remap buttons -> the capture dialog (RUY-465, 06 §7): "Press the new button for <name>". A dialog
 // card (04 §5) with the source's glyph at 80 u (`glyphSize` × 2, a literal of this dialog), an
 // arrow and an 80 u empty slot ringed in `focusRing` with "?", a 480 u ProgressBar draining over
-// 5 s, and "Any button on the <pad>. Nothing for 5 seconds cancels.".
+// 5 s, and "Any button on the <pad>.".
 //
 // It reads the pad's live test stream (Input.startTest when it opens, stopTest when it closes), not
 // the navigation keys: the first press of a remappable input (a trigger past a quarter) is the new
@@ -261,7 +261,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             width: Math.min(implicitWidth, 1100 * dialog.u)
             textFormat: Text.PlainText          // a pad's own name
-            text: qsTr("Any button on the %1. Nothing for 5 seconds cancels.").arg(dialog.padName)
+            text: qsTr("Any button on the %1.").arg(dialog.padName)
             color: Theme.textDim
             font.pixelSize: Theme.typeBody * dialog.u
             wrapMode: Text.Wrap

@@ -489,12 +489,28 @@ QtObject {
         }
     }
 
-    // The reset that waited for the save that just ended (resetAll): on the pad it was asked on only.
+    // The reset that waited for the save that just ended (resetAll). resetAll works on the pad the page
+    // shows, so one asked on another pad (the page moved on meanwhile) is not run on the wrong one: it
+    // says so, naming that pad, like a refused save.
     function runPendingReset() {
         const asked = pendingReset
         pendingReset = ""
-        if (asked !== "" && asked === padKey)
+        if (asked === "")
+            return
+        if (asked === padKey)
             resetAll()
+        else
+            showRefusedToast(asked)
+    }
+
+    // "Could not save the change", naming the pad when it is not the shown one (RUY-586).
+    function showRefusedToast(forPadKey) {
+        const id = String(forPadKey).split("/")[0]
+        const other = forPadKey !== padKey ? ControllerPads.controllers().find(p => p.id === id) : null
+        if (other)
+            Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.nameBase, other.nameTail)), "error", "", "", qsTr("Try again."))
+        else
+            Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
     }
 
     // After the save and the assignment: the next slot to empty, else done.
@@ -524,13 +540,7 @@ QtObject {
             exportVolume = ""
             Notifications.show(qsTr("Could not save to the USB drive"), "error", "", "", qsTr("Try again."))
         } else {
-            // A refusal of another pad than the shown one names that pad (RUY-586).
-            const failedId = String(failedPad).split("/")[0]
-            const other = failedPad !== padKey ? ControllerPads.controllers().find(p => p.id === failedId) : null
-            if (other)
-                Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.nameBase, other.nameTail)), "error", "", "", qsTr("Try again."))
-            else
-                Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
+            showRefusedToast(failedPad)
         }
         failed(tag)
         refresh()
