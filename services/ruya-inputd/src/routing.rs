@@ -7678,13 +7678,19 @@ mod tests {
         assert_eq!(r.owners.get("a").map(str::to_owned), before);
     }
 
-    #[test]
-    fn an_owner_whose_account_is_gone_reads_empty_and_is_dropped_at_the_next_write() {
+    /// Pad a was signed in as p1 and pad b joined as p2: each remembers its player.
+    fn two_owned_pads() -> (Router<Fake>, Profiles, PadKey, PadKey) {
         let (mut r, profiles) = owner_router(vec![]);
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         sign_in(&mut r, a, "p1");
         assert_eq!(join(&mut r, b, "p2"), 2);
+        (r, profiles, a, b)
+    }
+
+    #[test]
+    fn an_owner_whose_account_is_gone_reads_empty_and_is_dropped_at_the_next_write() {
+        let (mut r, profiles, a, b) = two_owned_pads();
         profiles.lock().expect("lock").retain(|p| *p != "p2");
         assert_eq!(owner_of(&r, b), "", "p2 was deleted");
         assert_eq!(
@@ -7699,11 +7705,7 @@ mod tests {
 
     #[test]
     fn forgetting_a_profile_announces_each_pad_that_remembered_it() {
-        let (mut r, profiles) = owner_router(vec![]);
-        let a = r.add_pad(pad("a"), t0());
-        let b = r.add_pad(pad("b"), t0());
-        sign_in(&mut r, a, "p1");
-        assert_eq!(join(&mut r, b, "p2"), 2);
+        let (mut r, profiles, _, b) = two_owned_pads();
         r.take_notices();
         // The account is deleted, then the shell forgets the profile (RUY-468).
         profiles.lock().expect("lock").retain(|p| *p != "p1");
