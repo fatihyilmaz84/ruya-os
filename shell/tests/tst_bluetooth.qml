@@ -98,9 +98,11 @@ Item {
 
         function scan() {
             goTo("rowBtAdd")
+            Bluetooth.mockHoldScan(true)                 // the scan stays up, however slow the machine
             keyClick(Qt.Key_Return)
             tryCompare(Bluetooth, "discovering", true)
             tryCompare(find("rowBtAdd"), "value", "Scanning…")
+            Bluetooth.mockHoldScan(false)
             tryCompare(Bluetooth, "discovering", false, 3000)
             tryVerify(() => find("rowBtAdd").activeFocus, 2000, "focus stays on the scan row")
         }
@@ -198,7 +200,8 @@ Item {
             verify(!find("rowBtOff").visible)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowBtAdd").activeFocus)
-            keyClick(Qt.Key_Return)                      // start a scan ...
+            Bluetooth.mockHoldScan(true)                 // a scan that surely runs ...
+            keyClick(Qt.Key_Return)                      // start it ...
             tryCompare(Bluetooth, "discovering", true)
             keyClick(Qt.Key_Up)
             tryVerify(() => find("rowBtPower").activeFocus)

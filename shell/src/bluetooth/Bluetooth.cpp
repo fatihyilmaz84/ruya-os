@@ -299,6 +299,12 @@ void Bluetooth::mockHoldPairing(bool hold)
         mock->holdPairing(hold);
 }
 
+void Bluetooth::mockHoldScan(bool hold)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->holdScan(hold);
+}
+
 int Bluetooth::mockRefreshCalls() const
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))

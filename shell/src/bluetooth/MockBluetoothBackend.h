@@ -73,6 +73,8 @@ public:
     void reset();
     // While held, pair() is counted but unanswered (a pairing that takes a while) until released.
     void holdPairing(bool hold);
+    // While held, a started scan does not end by itself; releasing ends a running one.
+    void holdScan(bool hold);
     int pairCalls() const { return m_pairCalls; }
     QStringList pairLog() const { return m_pairLog; }
     int refreshCalls() const { return m_refreshCalls; } // refresh() calls since the start (tests)
@@ -105,6 +107,7 @@ private:
     bool m_powered = true;
     bool m_discovering = false;
     bool m_holdPairing = false;
+    bool m_holdScan = false;
     QList<QPair<QString, bool>> m_heldPairs; // id, keyboardConfirmed
     QStringList m_pairLog;
     int m_pairCalls = 0;

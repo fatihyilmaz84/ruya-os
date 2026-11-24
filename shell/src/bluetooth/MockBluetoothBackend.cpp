@@ -62,7 +62,8 @@ void MockBluetoothBackend::startScan()
             e.listed = true;
     }
     m_discovering = true;
-    m_scanTimer.start();
+    if (!m_holdScan)
+        m_scanTimer.start();
     publish();
     answer(QStringLiteral("scan"), QString(), QStringLiteral("ok"));
 }
@@ -73,6 +74,13 @@ void MockBluetoothBackend::stopScan()
     if (m_discovering)
         endScan();
     answer(QStringLiteral("scan"), QString(), QStringLiteral("ok"));
+}
+
+void MockBluetoothBackend::holdScan(bool hold)
+{
+    m_holdScan = hold;
+    if (!hold && m_discovering)
+        endScan();
 }
 
 void MockBluetoothBackend::endScan()
@@ -439,6 +447,7 @@ void MockBluetoothBackend::reset()
 void MockBluetoothBackend::initState()
 {
     m_holdPairing = false;
+    m_holdScan = false;
     m_gamepads.clear();
     m_heldPairs.clear();
     m_pairCalls = 0;
