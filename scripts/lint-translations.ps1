@@ -12,11 +12,54 @@
 # Used by dev.ps1 (shell, test) and by the CI workflow. Works on Windows PowerShell 5.1 and on
 # pwsh (Linux). Exit code 0 = clean, 1 = findings.
 #
-#   .\scripts\lint-translations.ps1 [-I18nDir <dir>] [-LUpdateProject <lupdate_project.json>]
+# RUY-1165: a pad button's name is the word printed on the pad, the same in every language
+# (04 section 6). The names below must keep their source as the translation in the contexts that
+# name a button; Nintendo's + and - are symbols read as words and stay translated.
+#
+# -SelfCheck plants a translated name in a temporary file and expects the lint to reject it.
+#
+#   .\scripts\lint-translations.ps1 [-I18nDir <dir>] [-LUpdateProject <lupdate_project.json>] [-SelfCheck]
 param(
     [string]$I18nDir,
-    [string]$LUpdateProject
+    [string]$LUpdateProject,
+    [switch]$SelfCheck
 )
+
+# The printed pad names, once, and the contexts whose entries for them are button names.
+$PrintedPadNames = @("Create", "Menu", "View", "Options")
+$PadNameContexts = @("Glyphs", "ButtonTestPage", "GameControls", "PadDiagram")
+
+# Findings (strings) for every translated printed pad name under $Dir.
+function Get-PadNameFindings([string]$Dir) {
+    foreach ($f in Get-ChildItem $Dir -Filter *.ts) {
+        $doc = New-Object System.Xml.XmlDocument
+        $doc.Load($f.FullName)
+        foreach ($ctx in $doc.TS.context) {
+            if ($PadNameContexts -notcontains $ctx.name) { continue }
+            foreach ($m in $ctx.message) {
+                if ($PrintedPadNames -notcontains $m.source) { continue }
+                $t = if ($m.translation -is [string]) { $m.translation } else { $m.translation.InnerText }
+                if ($t -and $t -ne $m.source) {
+                    "$($f.Name) $($ctx.name): pad button name '$($m.source)' is translated as '$t' (it stays as printed)"
+                }
+            }
+        }
+    }
+}
+
+if ($SelfCheck) {
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ruya-padnames-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    $ts = '<?xml version="1.0" encoding="utf-8"?><TS version="2.1" language="tr_TR"><context><name>PadDiagram</name><message><source>Options</source><translation>{0}</translation></message><message><source>Home</source><translation>Ana ekran</translation></message></context></TS>'
+    Set-Content -Path (Join-Path $tmp "a.ts") -Value ($ts -f "Se&#231;enekler") -Encoding UTF8
+    $planted = @(Get-PadNameFindings $tmp).Count
+    Set-Content -Path (Join-Path $tmp "a.ts") -Value ($ts -f "Options") -Encoding UTF8
+    $clean = @(Get-PadNameFindings $tmp).Count
+    Remove-Item -Recurse -Force $tmp
+    if ($planted -eq 1 -and $clean -eq 0) { exit 0 }
+    Write-Host "    pad-name self-check failed (planted $planted findings, clean $clean)" -ForegroundColor Red
+    exit 1
+}
 
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $I18nDir) { $I18nDir = Join-Path (Join-Path $Repo "shell") "i18n" }
@@ -54,7 +97,13 @@ foreach ($h in $hits) {
     }
     Write-Host "    $($h.Filename)$source : $what" -ForegroundColor Yellow
 }
+$padFindings = @(Get-PadNameFindings $CheckDir)
+foreach ($p in $padFindings) { Write-Host "    $p" -ForegroundColor Yellow }
 if ($CheckDir -ne $I18nDir) { Remove-Item -Recurse -Force $CheckDir }
+if ($padFindings.Count -gt 0) {
+    Write-Host "    Set the translation of a printed pad button name equal to its source (04 section 6)."
+    exit 1
+}
 if ($hits.Count -gt 0) {
     if ($LUpdateProject) {
         Write-Host "    Refresh the .ts files: cmake --build shell\build-win --config Release --target update_translations"
