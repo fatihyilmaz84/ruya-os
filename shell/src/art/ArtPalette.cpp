@@ -207,7 +207,7 @@ ArtColors ArtPalette::analyse(const QImage &image)
     return out;
 }
 
-ArtBand ArtPalette::band(const ArtColors &colors, qreal viewAspect)
+ArtBand ArtPalette::band(const ArtColors &colors, qreal viewAspect, qreal from, qreal to)
 {
     const int w = colors.lumWidth;
     const int h = colors.lumHeight;
@@ -230,8 +230,15 @@ ArtBand ArtPalette::band(const ArtColors &colors, qreal viewAspect)
     const qreal bandEnd = y0 + (y1 - y0) * BandShare;
     const int rowFrom = std::clamp(int(std::floor(y0)), 0, h - 1);
     const int rowTo = std::clamp(int(std::ceil(bandEnd)), rowFrom + 1, h);
-    const int colFrom = std::clamp(int(std::floor(x0)), 0, w - 1);
-    const int colTo = std::clamp(int(std::ceil(x1)), colFrom + 1, w);
+    // The columns under the x range: those whose centres lie in it, at least the one under its middle.
+    const qreal left = x0 + (x1 - x0) * std::clamp(std::min(from, to), qreal(0), qreal(1));
+    const qreal right = x0 + (x1 - x0) * std::clamp(std::max(from, to), qreal(0), qreal(1));
+    int colFrom = std::clamp(int(std::ceil(left - 0.5)), 0, w - 1);
+    int colTo = std::clamp(int(std::floor(right - 0.5)) + 1, 0, w);
+    if (colTo <= colFrom) {
+        colFrom = std::clamp(int(std::floor((left + right) / 2)), 0, w - 1);
+        colTo = colFrom + 1;
+    }
     std::vector<double> values;
     values.reserve(size_t(rowTo - rowFrom) * (colTo - colFrom));
     for (int y = rowFrom; y < rowTo; ++y) {
@@ -283,12 +290,12 @@ QVariantMap ArtPalette::colorsOf(const QString &source)
             {QStringLiteral("neutral"), c->neutral}};
 }
 
-QVariantMap ArtPalette::bandOf(const QString &source, qreal viewAspect)
+QVariantMap ArtPalette::bandOf(const QString &source, qreal viewAspect, qreal from, qreal to)
 {
     const ArtColors *c = lookup(source);
     if (!c || !c->ok)
         return {};
-    const ArtBand b = band(*c, viewAspect);
+    const ArtBand b = band(*c, viewAspect, from, to);
     return {{QStringLiteral("ok"), true},
             {QStringLiteral("high"), b.high},
             {QStringLiteral("low"), b.low}};

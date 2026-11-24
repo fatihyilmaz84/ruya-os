@@ -52,15 +52,6 @@ QtObject {
         }
     }
 
-    // The light of the Backdrop for a theme snapshot `t` and a tint (RUY-1117): the relative luminance of its
-    // brightest (`high`) and darkest (`low`) colour, from the samples the gate measures (both gradient ends,
-    // each blob over the brighter end, the three blobs overlapping).
-    function backdropBand(t, tint) {
-        const s = backdropSamples(t, tint)
-        const lums = s.strict.concat([s.overlap]).map(c => luminance(c))
-        return { high: Math.max.apply(null, lums), low: Math.min.apply(null, lums) }
-    }
-
     // --- Distinctness (T-271) ---
 
     // CIE L*a*b* (D65) of an opaque colour, and the distance between two colours (CIE76 delta E:
@@ -130,26 +121,42 @@ QtObject {
         return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
     }
 
-    // --- The status tray's shade (RUY-1117, 04 §5.5) ---
+    // --- The top bar's ink (RUY-1136, 04 §5.5) ---
 
-    // The ceiling (also the shade over art not measured yet) and the step the alpha moves in.
-    readonly property real trayShadeAlphaMax: 0.7
-    readonly property real trayShadeStep: 0.05
-    // The smallest alpha in [0, trayShadeAlphaMax], in trayShadeStep steps (no flicker from tiny changes), at which
-    // the theme `t`'s `text` reads at 4.5:1 and its `warningText` at 3:1 on the shade (`background` at that alpha)
-    // over a grey as light as the art's top band (`band`: { high, low } relative luminances). Light text (the dark
-    // themes) is held over the band's bright end, dark text (Daylight) over its dark end. Pure: the gate and the
-    // shell use the same function.
-    function trayShadeAlpha(band, t) {
-        const lum = luminance(t.text) >= luminance(t.background) ? band.high : band.low
-        const ground = grey(lum)
-        const steps = Math.round(trayShadeAlphaMax / trayShadeStep)
-        for (let i = 0; i < steps; ++i) {
-            const a = i * trayShadeStep
-            const shade = over(Qt.rgba(t.background.r, t.background.g, t.background.b, a), ground)
-            if (contrast(t.text, shade) >= 4.5 && contrast(t.warningText, shade) >= 3)
-                return Math.round(a * 100) / 100
+    // The ink of the top bar's text over a band of light (`band`: { high, low } relative luminances of what lies
+    // behind it): "light" (`t.inkLight`) or "dark" (`t.inkDark`), and whether the art is `busy` (the chosen ink is
+    // under 4.5:1 against its worst case: the glyph halo goes on). Light ink when it reads at 4.5:1 over the band's
+    // bright end, else dark ink when it reads at 4.5:1 over its dark end, else the ink whose worst case is higher.
+    // `current` is the ink chosen last ("" for none): the other ink takes over only when its worst case beats the
+    // current one's by `trayInkHysteresis`, so art near the threshold does not flicker. `light` / `dark` in the
+    // result: each ink's worst-case contrast. `warning` true: the item shows its warning ink now (a low battery's
+    // number, large text): the chosen ink's warning pair must also read at 3:1 against the same worst case, else the art
+    // is busy for that item too (the halo carries it); the ink chosen does not change. `warningContrast` in the result:
+    // that pair's contrast. Pure: the gate and the shell use the same function.
+    readonly property real trayInkHysteresis: 0.5
+    function trayInk(band, current, t, warning) {
+        const light = contrast(t.inkLight, grey(band.high))
+        const dark = contrast(t.inkDark, grey(band.low))
+        let ink = light >= 4.5 ? "light" : dark >= 4.5 ? "dark" : light >= dark ? "light" : "dark"
+        if ((current === "light" || current === "dark") && ink !== current) {
+            const mine = current === "light" ? light : dark
+            const other = current === "light" ? dark : light
+            if (other < mine + trayInkHysteresis)
+                ink = current
         }
-        return trayShadeAlphaMax
+        const warn = ink === "light" ? contrast(t.inkLightWarning, grey(band.high)) : contrast(t.inkDarkWarning, grey(band.low))
+        const busy = (ink === "light" ? light : dark) < 4.5 || (warning === true && warn < 3)
+        return { ink: ink, busy: busy, light: light, dark: dark, warningContrast: warn }
+    }
+
+    // How much a glass pill darkens its blurred crop (GlassPill's MultiEffect brightness, 04 §3.6; the liquid pill
+    // lifts it back by `Theme.liquidBrightnessLift`).
+    readonly property real glassPillDarken: 0.08
+    // A band of light seen through a glass pill: its blurred crop, darkened by up to `glassPillDarken`, under `glass`
+    // (`glassStrong`). The bright end is taken undarkened and the dark end darkened, so each end is the worst case for
+    // the ink that is held over it (trayInk).
+    function bandThroughGlass(band, glass) {
+        const dim = Math.max(0, grey(band.low).r - glassPillDarken)
+        return { high: luminance(over(glass, grey(band.high))), low: luminance(over(glass, Qt.rgba(dim, dim, dim, 1))) }
     }
 }

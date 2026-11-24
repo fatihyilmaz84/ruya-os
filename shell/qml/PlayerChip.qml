@@ -5,7 +5,9 @@ import RuyaShell
 // (player 1 and the others) and the Hub's players row. Never focusable. `profileId` is a profile or a
 // temporary guest; the name and colour follow Profiles. The number dot (28 u, `primaryFill`) overhangs
 // the circle by 6 u at the bottom right; it shows only while `showNumber` (two or more players). A held
-// seat draws the avatar at half opacity and a `schedule` glyph in the dot instead of the digit.
+// seat draws the avatar at half opacity and a `schedule` glyph in the dot instead of the digit. `ring` outlines the
+// circle (a hairline): the status tray draws it in its adaptive ink (RUY-1136, 04 §5.5), so the avatar stays apart
+// from the art behind it; none elsewhere.
 Item {
     id: chip
 
@@ -16,6 +18,7 @@ Item {
     // dimmed and the dot shows a waiting glyph in place of the number.
     property bool held: false
     property real u: 1
+    property color ring: "transparent"
 
     readonly property var guest: {
         const guests = Profiles.guests
@@ -52,6 +55,8 @@ Item {
         anchors.fill: parent
         radius: width / 2
         color: chip.tint
+        border.width: chip.ring.a > 0 ? Theme.hairlineAt(chip.u) : 0
+        border.color: chip.ring
         opacity: chip.held ? 0.5 : 1.0 // token-ok: component-local, 04 §5
         Text {
             anchors.centerIn: parent

@@ -27,9 +27,10 @@
 // capped at NeutralStrengthMax.
 //
 // The same pass keeps the light of the sample (RUY-1117, 04 §5.5): the WCAG relative luminance (linearised sRGB,
-// transparent pixels over black) of each of the sample's pixels, `lumWidth` x `lumHeight`, row by row. The status
-// tray's shade reads the top band of what is on screen from it (`band`): the picture is drawn as a centred
-// PreserveAspectCrop, so the band is the top BandShare of the rows the crop for the view's aspect leaves visible.
+// transparent pixels over black) of each of the sample's pixels, `lumWidth` x `lumHeight`, row by row. The top bar's
+// ink (RUY-1136) reads the top band of what is on screen from it (`band`): the picture is drawn as a centred
+// PreserveAspectCrop, so the band is the top BandShare of the rows the crop for the view's aspect leaves visible, and
+// each item of the bar reads the part of it under its own x range.
 struct ArtColors
 {
     bool ok = false;
@@ -85,8 +86,10 @@ public:
     // The pure part, used by the worker and the tests: the colours of an image.
     static ArtColors analyse(const QImage &image);
     // The pure part of bandOf: the top band of `colors`' sample as drawn into a view of `viewAspect` (width / height)
-    // with a centred PreserveAspectCrop; 0 or less: the whole picture is shown (no crop).
-    static ArtBand band(const ArtColors &colors, qreal viewAspect);
+    // with a centred PreserveAspectCrop (0 or less: the whole picture is shown, no crop), under the view's x range
+    // `from`..`to` (fractions of its width, RUY-1136): the sample columns whose centres lie in it, at least the one
+    // under its middle (a column is about 60 px of a 1080p screen: one only touched is mostly the neighbour's art).
+    static ArtBand band(const ArtColors &colors, qreal viewAspect, qreal from = 0, qreal to = 1);
 
     int analysed() const { return m_analysed; }
     qint64 lastAnalyseUs() const { return m_lastUs; }
@@ -97,10 +100,11 @@ public:
     // cannot be read stays empty for good (the card keeps its placeholder colour) and emits nothing.
     Q_INVOKABLE QVariantMap colorsOf(const QString &source);
 
-    // The light of the top band of the picture as drawn into a view of `viewAspect` (RUY-1117, see `band`):
+    // The light of the top band of the picture as drawn into a view of `viewAspect` (RUY-1117, see `band`), under the
+    // view's x range `from`..`to` (fractions of its width; the whole width by default, RUY-1136):
     // { ok: true, high, low } (relative luminances 0..1) once known, else an empty map, loaded and analysed like
     // colorsOf (the same decode, the same cache, the same `sampled(source)`). An unreadable picture stays empty.
-    Q_INVOKABLE QVariantMap bandOf(const QString &source, qreal viewAspect);
+    Q_INVOKABLE QVariantMap bandOf(const QString &source, qreal viewAspect, qreal from = 0, qreal to = 1);
 
     // The worker's result, on the GUI thread (called by the worker's queued hand-over; not for callers).
     static void deliver(ArtPalette *self, const QString &source, const ArtColors &colors, qint64 us)

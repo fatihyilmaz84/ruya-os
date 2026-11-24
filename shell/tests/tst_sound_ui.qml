@@ -251,7 +251,7 @@ Item {
 
         function test_no_effect_samples_a_hidden_layer() {
             const l0 = find("l0")
-            const pill = find("bellGlass")
+            const pill = find("sectionNavGlass")
             verify(pill.visible, "the status glass samples L0 on Home")
             compare(pill.source, l0)
             const app = createTemporaryObject(appComponent, host)

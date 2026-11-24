@@ -1019,7 +1019,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+53"/>
+        <location filename="../qml/BatteryChip.qml" line="+56"/>
         <source>full</source>
         <translation>full</translation>
     </message>
@@ -1087,7 +1087,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BatteryMore</name>
     <message numerus="yes">
-        <location filename="../qml/BatteryMore.qml" line="+35"/>
+        <location filename="../qml/BatteryMore.qml" line="+39"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -3801,52 +3801,15 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
-    <name>NotificationBell</name>
-    <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+39"/>
-        <source>Notifications, %n unread, quiet mode on</source>
-        <translation>
-            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
-            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1"/>
-        <source>Notifications, %n unread</source>
-        <translation>
-            <numerusform>Notifications, %n unread</numerusform>
-            <numerusform>Notifications, %n unread</numerusform>
-        </translation>
-    </message>
-</context>
-<context>
-    <name>NotificationRow</name>
+    <name>NotificationCentreView</name>
     <message>
-        <location filename="../qml/NotificationRow.qml" line="+38"/>
-        <source>Pinned</source>
-        <translation>Pinned</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>New</source>
-        <translation>New</translation>
-    </message>
-</context>
-<context>
-    <name>NotificationSheet</name>
-    <message>
-        <location filename="../qml/NotificationSheet.qml" line="+70"/>
-        <source>Close</source>
-        <translation>Close</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <location line="+318"/>
+        <location filename="../qml/NotificationCentreView.qml" line="+71"/>
+        <location line="+253"/>
         <source>Clear all</source>
         <translation>Clear all</translation>
     </message>
     <message>
-        <location line="-316"/>
+        <location line="-251"/>
         <source>Toggle</source>
         <translation>Toggle</translation>
     </message>
@@ -3871,7 +3834,7 @@ This can&apos;t be undone.</translation>
         <translation>Clear</translation>
     </message>
     <message>
-        <location line="+277"/>
+        <location line="+212"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Notifications</translation>
@@ -3916,6 +3879,27 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>NotificationRow</name>
+    <message>
+        <location filename="../qml/NotificationRow.qml" line="+38"/>
+        <source>Pinned</source>
+        <translation>Pinned</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>New</source>
+        <translation>New</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationSheet</name>
+    <message>
+        <location filename="../qml/NotificationSheet.qml" line="+111"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+</context>
+<context>
     <name>Notifications</name>
     <message>
         <location filename="../qml/Notifications.qml" line="+174"/>
@@ -3947,6 +3931,19 @@ This can&apos;t be undone.</translation>
         <location line="+41"/>
         <source>%1 is in Notifications</source>
         <translation>%1 is in Notifications</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationsPage</name>
+    <message>
+        <location filename="../qml/NotificationsPage.qml" line="+16"/>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Back</source>
+        <translation>Back</translation>
     </message>
 </context>
 <context>
@@ -4772,7 +4769,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="+38"/>
+        <location filename="../qml/PlayerChip.qml" line="+41"/>
         <source>Guest %1</source>
         <translation>Guest %1</translation>
     </message>
@@ -5741,7 +5738,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+35"/>
+        <location filename="../qml/SectionNav.qml" line="+46"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -5764,6 +5761,27 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Settings</source>
         <translation>Settings</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+8"/>
+        <source>Notifications, %n unread, quiet mode on</source>
+        <translation>
+            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
+            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>Notifications, %n unread</source>
+        <translation>
+            <numerusform>Notifications, %n unread</numerusform>
+            <numerusform>Notifications, %n unread</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -6172,28 +6190,28 @@ This can&apos;t be undone.</translation>
         <translation>%1 has no window yet.</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+67"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+461"/>
+        <location line="+409"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+29"/>
+        <location line="+32"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-31"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
@@ -6204,24 +6222,24 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+196"/>
+        <location line="+199"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-197"/>
-        <location line="+199"/>
+        <location line="-200"/>
+        <location line="+202"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-199"/>
+        <location line="-202"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+196"/>
+        <location line="+199"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -6290,7 +6308,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+530"/>
+        <location line="+544"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6317,7 +6335,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2104"/>
+        <location line="-2071"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6348,13 +6366,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+1057"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>Same game as the %1 version?</translation>
     </message>
     <message>
-        <location line="+721"/>
+        <location line="+735"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

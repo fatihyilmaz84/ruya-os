@@ -108,13 +108,15 @@ QtObject {
     readonly property color artCaptionFadeClear: Qt.rgba(artCaptionFade.r, artCaptionFade.g, artCaptionFade.b, 0)
     // The hint shade's middle stop (Shell.qml, 04 "Pages"): the hero scrim at 70 % of its alpha.
     readonly property color hintShadeMid: Qt.rgba(heroScrim.r, heroScrim.g, heroScrim.b, heroScrim.a * 0.7)
-    // The status tray's shade (RUY-955, RUY-1117, 04 §5.5): the ground colour across the top of the page, solid to the
-    // tray's bottom, then fading to its clear end over `spaceXxl`, so `text` and `warningText` read over any art (derived
-    // from `background`, not themeable). Its alpha adapts to the art behind the tray (ThemeMath.trayShadeAlpha, Shell's
-    // `trayShade`), up to `trayShadeAlphaMax`, which is also the alpha over art not measured yet; the contrast gate
-    // measures the ceiling over pure white and pure black.
-    readonly property real trayShadeAlphaMax: ThemeMath.trayShadeAlphaMax
-    function trayShade(alpha) { return Qt.rgba(background.r, background.g, background.b, alpha) }
+    // The top bar's two inks (RUY-1136, 04 §5.5): the nav's and the tray's text has no shade under it and takes light or
+    // dark ink from the art behind it (ThemeMath.trayInk, Shell's `navInk` / `trayInk`). Light ink is the dark default
+    // theme's (Dreamglass) `text` and `warningText`, dark ink Daylight's: derived from those sets, not themeable. Over
+    // busy art (neither ink reads at 4.5:1) the text carries a soft halo in the other ink at `trayHaloAlpha`.
+    readonly property color inkLight: Themes.byKey("dreamglass").text
+    readonly property color inkLightWarning: Themes.byKey("dreamglass").warningText
+    readonly property color inkDark: Themes.byKey("daylight").text
+    readonly property color inkDarkWarning: Themes.byKey("daylight").warningText
+    readonly property real trayHaloAlpha: 0.6
     readonly property color errorText: tok("errorText")
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad, a dimmed row's label)
     readonly property real peekOpacity: 0.7                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)

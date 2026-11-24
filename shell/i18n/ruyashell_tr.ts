@@ -1017,7 +1017,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BatteryChip</name>
     <message>
-        <location filename="../qml/BatteryChip.qml" line="+53"/>
+        <location filename="../qml/BatteryChip.qml" line="+56"/>
         <source>full</source>
         <translation>dolu</translation>
     </message>
@@ -1085,7 +1085,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BatteryMore</name>
     <message numerus="yes">
-        <location filename="../qml/BatteryMore.qml" line="+35"/>
+        <location filename="../qml/BatteryMore.qml" line="+39"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -3794,50 +3794,15 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
-    <name>NotificationBell</name>
-    <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+39"/>
-        <source>Notifications, %n unread, quiet mode on</source>
-        <translation>
-            <numerusform>Bildirimler, %n okunmamış, sessiz mod açık</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1"/>
-        <source>Notifications, %n unread</source>
-        <translation>
-            <numerusform>Bildirimler, %n okunmamış</numerusform>
-        </translation>
-    </message>
-</context>
-<context>
-    <name>NotificationRow</name>
+    <name>NotificationCentreView</name>
     <message>
-        <location filename="../qml/NotificationRow.qml" line="+38"/>
-        <source>Pinned</source>
-        <translation>Sabitlendi</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>New</source>
-        <translation>Yeni</translation>
-    </message>
-</context>
-<context>
-    <name>NotificationSheet</name>
-    <message>
-        <location filename="../qml/NotificationSheet.qml" line="+70"/>
-        <source>Close</source>
-        <translation>Kapat</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <location line="+318"/>
+        <location filename="../qml/NotificationCentreView.qml" line="+71"/>
+        <location line="+253"/>
         <source>Clear all</source>
         <translation>Tümünü temizle</translation>
     </message>
     <message>
-        <location line="-316"/>
+        <location line="-251"/>
         <source>Toggle</source>
         <translation>Aç/Kapat</translation>
     </message>
@@ -3862,7 +3827,7 @@ Bu geri alınamaz.</translation>
         <translation>Temizle</translation>
     </message>
     <message>
-        <location line="+277"/>
+        <location line="+212"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Bildirimler</translation>
@@ -3906,6 +3871,27 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>NotificationRow</name>
+    <message>
+        <location filename="../qml/NotificationRow.qml" line="+38"/>
+        <source>Pinned</source>
+        <translation>Sabitlendi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>New</source>
+        <translation>Yeni</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationSheet</name>
+    <message>
+        <location filename="../qml/NotificationSheet.qml" line="+111"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+</context>
+<context>
     <name>Notifications</name>
     <message>
         <location filename="../qml/Notifications.qml" line="+174"/>
@@ -3935,6 +3921,19 @@ Bu geri alınamaz.</translation>
         <location line="+41"/>
         <source>%1 is in Notifications</source>
         <translation>%1: Bildirimlerde</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationsPage</name>
+    <message>
+        <location filename="../qml/NotificationsPage.qml" line="+16"/>
+        <source>Notifications</source>
+        <translation>Bildirimler</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Back</source>
+        <translation>Geri</translation>
     </message>
 </context>
 <context>
@@ -4758,7 +4757,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="+38"/>
+        <location filename="../qml/PlayerChip.qml" line="+41"/>
         <source>Guest %1</source>
         <translation>Misafir %1</translation>
     </message>
@@ -5721,7 +5720,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SectionNav</name>
     <message>
-        <location filename="../qml/SectionNav.qml" line="+35"/>
+        <location filename="../qml/SectionNav.qml" line="+46"/>
         <source>Home</source>
         <translation>Ana sayfa</translation>
     </message>
@@ -5744,6 +5743,25 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Notifications</source>
+        <translation>Bildirimler</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+8"/>
+        <source>Notifications, %n unread, quiet mode on</source>
+        <translation>
+            <numerusform>Bildirimler, %n okunmamış, sessiz mod açık</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>Notifications, %n unread</source>
+        <translation>
+            <numerusform>Bildirimler, %n okunmamış</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -6152,28 +6170,28 @@ Bu geri alınamaz.</translation>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+67"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+461"/>
+        <location line="+409"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+29"/>
+        <location line="+32"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-31"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
@@ -6184,24 +6202,24 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+196"/>
+        <location line="+199"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="-197"/>
-        <location line="+199"/>
+        <location line="-200"/>
+        <location line="+202"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-199"/>
+        <location line="-202"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+196"/>
+        <location line="+199"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -6270,7 +6288,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+530"/>
+        <location line="+544"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6297,7 +6315,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-2104"/>
+        <location line="-2071"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6328,13 +6346,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1104"/>
+        <location line="+1057"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>%1 sürümüyle aynı oyun mu?</translation>
     </message>
     <message>
-        <location line="+721"/>
+        <location line="+735"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>
