@@ -604,10 +604,20 @@ Item {
             compare(find("detailPrimary").dimmed, false, "Install is on")
         }
 
-        function test_installed_incompatible_app_stays_in_the_installed_row() {
-            const id = "org.example.Future"
+        // The backend refuses an install the console does not fit (RUY-634): install at a level that
+        // fits, then drop it, so the app is installed but incompatible (the console went back a level).
+        function installWhileItFits(id) {
+            Store.mockSetApiLevel(1)
+            tryVerify(() => Store.app(id).compatible === true, 2000)
             Store.install(id)
             tryVerify(() => Store.app(id).installed === true, 10000)
+            Store.mockSetApiLevel(0)
+            tryVerify(() => Store.app(id).compatible === false, 2000)
+        }
+
+        function test_installed_incompatible_app_stays_in_the_installed_row() {
+            const id = "org.example.Future"
+            installWhileItFits(id)
             openStore()
             tryVerify(() => find("storeRow_installed").ids.indexOf(id) >= 0, 2000, "still in Installed")
             compare(find("storeRow_featured").ids.indexOf(id), -1, "but not in Featured")
@@ -642,8 +652,7 @@ Item {
 
         function test_installed_incompatible_app_stays_and_says_so() {
             const id = "org.example.Future"
-            Store.install(id)
-            tryVerify(() => Store.app(id).installed === true, 10000)
+            installWhileItFits(id)
             tc.shell.openPage("appDetail", { appId: id })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryCompare(find("page_appDetail"), "detailsReady", true)

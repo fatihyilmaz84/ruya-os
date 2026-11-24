@@ -306,6 +306,7 @@ Page {
         case "missing-runtime": return qsTr("A part this app needs could not be found.")
         case "disk-full": return qsTr("There is not enough space on this device.")
         case "busy": return qsTr("Another change is running. Try again in a moment.")
+        case "incompatible": return qsTr("Needs a newer RuyaOS")
         }
         return qsTr("Something went wrong. You can try again.")
     }

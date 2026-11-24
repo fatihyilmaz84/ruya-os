@@ -257,6 +257,7 @@ pub fn record(app: &App, detail: bool) -> Dict {
         ("installed", Value::from(app.installed)),
         ("update_available", Value::from(app.update_available)),
         ("compatible", Value::from(app.compatible)),
+        ("min_api_level", Value::from(app.min_api_level)),
     ];
     // An unknown rating is left out: the client keeps its own default.
     if !app.age_rating.is_empty() {

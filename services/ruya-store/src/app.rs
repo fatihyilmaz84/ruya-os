@@ -10,6 +10,8 @@ pub enum Status {
     AlreadyInstalled,
     NotInstalled,
     NoUpdate,
+    /// Install or Update of an app whose minimum API level is above this console's.
+    Incompatible,
     Busy,
     Forbidden,
     Invalid,
@@ -26,6 +28,7 @@ impl Status {
             Status::AlreadyInstalled => "already-installed",
             Status::NotInstalled => "not-installed",
             Status::NoUpdate => "no-update",
+            Status::Incompatible => "incompatible",
             Status::Busy => "busy",
             Status::Forbidden => "forbidden",
             Status::Invalid => "invalid",
