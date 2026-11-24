@@ -360,6 +360,39 @@ Item {
             verify(!find("wallpaperEmpty").visible)
         }
 
+        // RUY-767: the hint bar follows the view: Select only where there is something to pick, and Back
+        // (not Cancel) where the button only returns to the library.
+        function test_hints_follow_the_view() {
+            openPicker()
+            const picker = find("wallpaperPicker")
+            const texts = () => picker.modalHints.map(h => h.action + ":" + h.text).join(",")
+            compare(texts(), "accept:Select,back:Cancel", "library")
+            tc.usbRoot = Wallpapers.mockPrepareUsb()
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            compare(picker.mode, "usb")
+            verify(picker.entries.length > 0)
+            compare(texts(), "accept:Select,back:Back", "drive with pictures")
+            keyClick(Qt.Key_Escape)
+            compare(picker.mode, "library")
+            compare(texts(), "accept:Select,back:Cancel", "back in the library")
+            Storage.mockReset(false)
+            Wallpapers.mockPrepareUsbKind("empty")
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            compare(picker.mode, "usb")
+            compare(picker.entries.length, 0)
+            compare(texts(), "back:Back", "drive without pictures: only Back")
+            keyClick(Qt.Key_Escape)
+            compare(picker.mode, "library", "Back leaves")
+        }
+
         function test_an_empty_drive_shows_the_button_then_why() {
             openPicker()
             const picker = find("wallpaperPicker")

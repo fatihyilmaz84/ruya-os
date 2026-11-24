@@ -5251,7 +5251,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+182"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
@@ -8030,17 +8030,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+28"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+104"/>
         <source>Wallpaper deleted</source>
         <translation>Wallpaper deleted</translation>
     </message>

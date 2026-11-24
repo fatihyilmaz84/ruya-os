@@ -5234,7 +5234,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+182"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
@@ -8006,17 +8006,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+28"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+104"/>
         <source>Wallpaper deleted</source>
         <translation>Duvar kağıdı silindi</translation>
     </message>
