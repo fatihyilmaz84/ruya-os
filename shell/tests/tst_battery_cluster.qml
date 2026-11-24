@@ -220,6 +220,7 @@ Item {
             DeviceSettings.language = "en"
             tryCompare(Theme, "uiScale", 1)
             Bluetooth.mockReset()               // the two pads a test added are listed, connected and have batteries of their own
+            NotificationCentre.mockReset()      // a bell shot's posted row must not reach the next function (RUY-1175)
         }
 
         // T-301: the three slots go to pads and headsets before mice and keyboards, each group lowest first;
