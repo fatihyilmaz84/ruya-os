@@ -519,7 +519,10 @@ pub fn call_line(method: &str, id: &str, outcome: &Outcome) -> String {
         .chars()
         .map(|c| if c.is_control() { '?' } else { c })
         .collect();
-    format!("ruya-profiles: {method} {id} -> {}", outcome.status.as_str())
+    format!(
+        "ruya-profiles: {method} {id} -> {}",
+        outcome.status.as_str()
+    )
 }
 
 /// The journal line of one `SwitchTo` call (RUY-547).
@@ -557,16 +560,17 @@ mod tests {
     #[test]
     fn delete_line_names_the_profile_and_status_and_cannot_be_forged() {
         let ok = Outcome::of(Status::Ok);
-        assert_eq!(delete_line("p2", &ok), "ruya-profiles: DeleteProfile p2 -> ok");
+        assert_eq!(
+            delete_line("p2", &ok),
+            "ruya-profiles: DeleteProfile p2 -> ok"
+        );
         let failed = Outcome::of(Status::Failed);
         assert_eq!(
             delete_line("p2", &failed),
             "ruya-profiles: DeleteProfile p2 -> failed"
         );
-        let forged = delete_line("p2
-ruya-profiles: Lock -> ok", &ok);
-        assert!(!forged.contains('
-'));
+        let forged = delete_line("p2\nruya-profiles: Lock -> ok", &ok);
+        assert!(!forged.contains('\n'));
     }
 
     #[test]
