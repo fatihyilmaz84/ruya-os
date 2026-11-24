@@ -25,7 +25,7 @@ FocusScope {
     property real blurX: 0               // position of this item in `blurSource` coordinates
     property real blurY: 0
     // What lies behind the top bar (Shell's barLight), for the inks of the pills at rest.
-    property Item light: null
+    property TopBarLight light: null
     // The bell's badge and glyph (NotificationCentre): the unread count, and whether quiet mode is on.
     property int notificationCount: 0
     property bool quiet: false

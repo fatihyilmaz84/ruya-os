@@ -285,33 +285,35 @@ Item {
         // worst case, else the halo is on. Over the fixtures and over every band of a 1/40 grid of (low, high), from
         // either ink chosen last. Red without `warning`: the text rule alone leaves bands where the text reads and the
         // warning ink does not (Daylight's dark warning brown needs a dark end of 0.38, its text 0.21).
+        // One band of the warning gate: counts in `tally` the bands checked (not busy: the warning ink reads) and those
+        // where the text rule alone reads but the warning ink does not.
+        function checkWarningInk(where, band, current, tally) {
+            const pick = ThemeMath.trayInk(band, current, Theme, true)
+            const plain = ThemeMath.trayInk(band, current, Theme)
+            const warning = pick.ink === "light" ? Theme.inkLightWarning : Theme.inkDarkWarning
+            const c = ThemeMath.contrast(warning, ThemeMath.grey(pick.ink === "light" ? band.high : band.low))
+            compare(pick.warningContrast.toFixed(3), c.toFixed(3), where + ": the pair's contrast")
+            compare(pick.ink, plain.ink, where + ": the warning does not change the ink")
+            if (!plain.busy && c < 3)
+                ++tally.unflagged
+            if (pick.busy)
+                return
+            verify(c >= 3, where + ": " + pick.ink + " warning ink at " + c.toFixed(2))
+            ++tally.checked
+        }
         function test_the_warning_ink_reads_by_the_same_rule() {
-            let checked = 0
-            let unflagged = 0
-            const check = (where, band, current) => {
-                const pick = ThemeMath.trayInk(band, current, Theme, true)
-                const warning = pick.ink === "light" ? Theme.inkLightWarning : Theme.inkDarkWarning
-                const c = ThemeMath.contrast(warning, ThemeMath.grey(pick.ink === "light" ? band.high : band.low))
-                compare(pick.warningContrast.toFixed(3), c.toFixed(3), where + ": the pair's contrast")
-                compare(pick.ink, ThemeMath.trayInk(band, current, Theme).ink, where + ": the warning does not change the ink")
-                if (!ThemeMath.trayInk(band, current, Theme).busy && c < 3)
-                    ++unflagged
-                if (pick.busy)
-                    return
-                verify(c >= 3, where + ": " + pick.ink + " warning ink at " + c.toFixed(2))
-                ++checked
-            }
+            const tally = { checked: 0, unflagged: 0 }
             for (const f of inkFixtures)
-                check(f.name, f.band, "")
+                checkWarningInk(f.name, f.band, "", tally)
             for (let hi = 0; hi <= 40; ++hi) {
                 for (let lo = 0; lo <= hi; ++lo) {
                     const band = { high: hi / 40, low: lo / 40 }
                     for (const current of ["", "light", "dark"])
-                        check("band " + JSON.stringify(band) + " from \"" + current + "\"", band, current)
+                        checkWarningInk("band " + JSON.stringify(band) + " from \"" + current + "\"", band, current, tally)
                 }
             }
-            verify(checked > 500, "the warning ink reads over many bands: " + checked)
-            verify(unflagged > 0, "without `warning` some band reads in text but not in the warning ink")
+            verify(tally.checked > 500, "the warning ink reads over many bands: " + tally.checked)
+            verify(tally.unflagged > 0, "without `warning` some band reads in text but not in the warning ink")
         }
 
         // Red without the rule: one fixed ink (either one, or the theme's own `text`) fails a fixture that is not busy.

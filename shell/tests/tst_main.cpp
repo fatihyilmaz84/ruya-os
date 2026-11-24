@@ -198,7 +198,7 @@ private:
 // Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no
 // binary is committed. red, blue, green, white and dark are a gentle diagonal gradient of one
 // colour; redblue is red on the left half and blue on the right; grey and pastel exercise the
-// sampler's limits; brighttop, darktop, portraitdarktop, squaredarktop, darkpatch, clockstrip, clockbusy and greyflat exercise the top band. Exposed to the tests as `artFixtures` (a path); the mock library and store take
+// sampler's limits; brighttop, darktop, portraitdarktop, squaredarktop, darkpatch, clockstrip, clockbusy, bellstrip and greyflat exercise the top band. Exposed to the tests as `artFixtures` (a path); the mock library and store take
 // the first six as card art (MockArt.h).
 static QString writeArtFixtures(const QTemporaryDir &dir)
 {
@@ -258,6 +258,8 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     blackWith("darkpatch", QRect(144, 0, 8, 18));
     blackWith("clockstrip", QRect(145, 0, 15, 90));
     blackWith("clockbusy", QRect(145, 0, 15, 10));
+    // A strip under the bell tab only (sample column 14 of 32, about 840..900 of a 1080p screen): the nav's words on black.
+    blackWith("bellstrip", QRect(70, 0, 5, 90));
     // One flat grey of relative luminance 0.31 (greyflat): dark ink reads (6.2:1), Daylight's warning brown does not (2.5:1).
     QImage flat(160, 90, QImage::Format_RGB32);
     flat.fill(QColor(150, 150, 150));

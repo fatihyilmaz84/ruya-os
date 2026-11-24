@@ -238,6 +238,7 @@ qt_add_qml_module(ruyashell
         qml/GlassPill.qml
         qml/GlyphHalo.qml
         qml/TopBarInk.qml
+        qml/TopBarLight.qml
         qml/GlassLayers.qml
         qml/GlassRim.qml
         qml/GlassShadow.qml

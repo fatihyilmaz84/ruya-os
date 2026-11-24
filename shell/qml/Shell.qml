@@ -1602,37 +1602,13 @@ FocusScope {
         return { kind: "backdrop", source: "", aspect: 0 }
     }
 
-    // The light behind the top bar (RUY-1136, 04 §5.5): the top band of the picture behind it as ArtPalette measures it
-    // (its bright and dark 2 %, `bandOf`) under an x range of the screen (`bandAt`, fractions of `frame`'s width: the
-    // hero and the wallpaper fill the shell), the wallpaper under its dim layer; null while it is not measured, for
-    // unreadable art and a placeholder, and on the theme's Backdrop (its ground is known: the theme's `text` reads there).
-    // Each item of the bar takes its ink from the part under it (TopBarInk).
-    Item {
+    // The light behind the top bar (RUY-1136, 04 §5.5): what lies behind it, measured under each item's x range.
+    TopBarLight {
         id: barLight
         objectName: "barLight"
-        visible: false
-
-        readonly property Item frame: root
-        readonly property var behind: root.trayBackground()
-        property int measured: 0          // bumped when ArtPalette has measured the picture behind the bar
-        function bandAt(from, to) {
-            void measured
-            if (behind.kind !== "art" && behind.kind !== "wallpaper")
-                return null
-            const b = ArtPalette.bandOf(behind.source, behind.aspect, from, to)
-            if (b.ok !== true)
-                return null
-            // The wallpaper lies under its dim layer (the theme's ground at its effective dim).
-            return behind.kind === "wallpaper" ? ThemeMath.bandUnder(b, Theme.background, wallpaperLayer.effectiveDim) : b
-        }
-
-        Connections {
-            target: ArtPalette
-            function onSampled(source) {
-                if (source === barLight.behind.source)
-                    ++barLight.measured
-            }
-        }
+        frame: root
+        behind: root.trayBackground()
+        wallpaperDim: wallpaperLayer.effectiveDim
     }
     // The tray's inks (RUY-1136, 04 §5.5): one per item, light or dark from the light under that item, each with its own
     // glyph halo over busy art. The tray lies flat on the art; the nav's words and its bell take theirs in SectionNav.

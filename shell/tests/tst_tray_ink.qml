@@ -49,6 +49,7 @@ Item {
             DeviceSettings.effectsQuality = "balanced"
             Theme.motionFactor = 0.1
             Batteries.mockReset()
+            NotificationCentre.mockReset()
         }
 
         function grey(lum) { return { high: lum, low: lum } }
@@ -351,6 +352,27 @@ Item {
             checkHalos("a white strip behind the clock", "")
             const whole = ThemeMath.trayInk(find("barLight").bandAt(0, 1), "", Theme)
             verify(whole.busy, "one band for the whole bar would be busy here")
+        }
+
+        // The bell tab is an item of its own: a white strip under it only (through the glass) gives the bell dark ink
+        // and the nav's words beside it light ink, the badge's outline in the bell's.
+        function test_the_bell_reads_its_own_art() {
+            signIn()
+            NotificationCentre.post({ title: "Badge", kind: "info", source: "system" })
+            tryVerify(() => find("bellBadge").visible, 2000, "the bell has its badge")
+            showHero(path("bellstrip"))
+            settledOn(path("bellstrip"))
+            const bell = find("bellInk")
+            const words = find("navInk")
+            const column = 14.5 / 32                 // the strip's sample column's centre
+            verify(bell.span.from < column && bell.span.to > column, "the bell is over the strip " + JSON.stringify(bell.span))
+            verify(words.span.to < column, "the words are not " + JSON.stringify(words.span))
+            compare(bell.pick.ink, "dark", "the bell over white through the glass " + JSON.stringify(bell.band))
+            compare(words.pick.ink, "light", "the words over black through the glass " + JSON.stringify(words.band))
+            verify(same(find("navIcon_notifications").color, Theme.inkDark), "the bell's glyph")
+            verify(same(find("navLabel_store").color, Theme.inkLight), "the word beside it")
+            verify(same(find("bellBadge").border.color, Theme.inkDark), "the badge's outline")
+            checkHalos("a strip under the bell", "")
         }
 
         // Busy art under one item turns the halo on for that item only, in the other ink at trayHaloAlpha.

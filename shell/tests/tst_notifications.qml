@@ -706,6 +706,17 @@ Item {
             compare(tc.shell.focusRepairs, 0)
         }
 
+        // The indexes of the list's entries drawn dimmed (opacity under 1), as JSON.
+        function dimmedRows(list) {
+            const out = []
+            for (let i = 0; i < list.count; ++i) {
+                const it = list.itemAtIndex(i)
+                if (it && it.opacity < 1)
+                    out.push(i)
+            }
+            return JSON.stringify(out)
+        }
+
         // A long list on the page has the Settings pane's scroll cue (T-185): while more lies beyond the first / last row
         // in view, that row is at peekOpacity; never the focused row, nothing at an edge with nothing beyond it.
         function test_a_long_list_peeks_at_its_edges() {
@@ -715,19 +726,10 @@ Item {
             tryVerify(() => rowFocused("Item 13"), 2000, "the newest row")
             const list = part("centreList")
             verify(list.contentHeight > list.height + 1, "the list is longer than its place")
-            const dimmed = () => {
-                const out = []
-                for (let i = 0; i < list.count; ++i) {
-                    const it = list.itemAtIndex(i)
-                    if (it && it.opacity < 1)
-                        out.push(i)
-                }
-                return JSON.stringify(out)
-            }
             compare(list.contentY, list.originY, "the list opens at its top, its first caption in view")
             compare(list.peekAbove, -1, "nothing above the top")
             verify(list.peekBelow > 0, "the last row in view peeks")
-            tryVerify(() => dimmed() === JSON.stringify([list.peekBelow]), 2000, "only it: " + dimmed())
+            tryVerify(() => dimmedRows(list) === JSON.stringify([list.peekBelow]), 2000, "only it: " + dimmedRows(list))
             tryCompare(list.itemAtIndex(list.peekBelow), "opacity", Theme.peekOpacity, 2000)
             // Down to the last row: the cue moves to the top, and the focused row is never dimmed.
             for (let i = 12; i >= 0; --i) {
@@ -737,7 +739,7 @@ Item {
             }
             compare(list.peekBelow, -1, "nothing below the last row")
             verify(list.peekAbove >= 0, "the first row in view peeks")
-            tryVerify(() => dimmed() === JSON.stringify([list.peekAbove]), 2000, "only it: " + dimmed())
+            tryVerify(() => dimmedRows(list) === JSON.stringify([list.peekAbove]), 2000, "only it: " + dimmedRows(list))
         }
 
         // The bell is in the nav on the section pages too: Up from Settings reaches the gear, Right the bell, A its page.

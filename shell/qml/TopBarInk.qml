@@ -15,7 +15,7 @@ Item {
     id: ink
 
     // What lies behind the bar (Shell's barLight: `frame`, the item the art fills, and `bandAt(from, to)`).
-    property Item light: null
+    property TopBarLight light: null
     // The item (or group of items) whose ink this is: its x range in `light.frame` picks the art behind it.
     property Item under: null
     // The item lies on the nav's glass pill: the light as seen through `glassStrong`.
