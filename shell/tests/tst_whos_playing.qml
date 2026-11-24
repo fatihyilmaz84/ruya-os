@@ -483,7 +483,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
             compare(prompt().step, "move")
-            compare(joinSpy.count, 1, "only the test's own join")
+            tryCompare(joinSpy, "count", 1, 2000, "only the test's own join (its answer comes a turn after the seat)")
             keyClick(Qt.Key_Escape)
             tryVerify(() => list.activeFocus, 2000)
             keyClick(Qt.Key_Escape)
@@ -787,7 +787,7 @@ Item {
             verify(cemIndex > prompt().cards.findIndex(p => p.id === "p2"), "Cem comes after Ada, the first without a pad")
             compare(list.currentIndex, cemIndex, "the owner's card, not Ada's")
             compare(prompt().step, "pick", "focus only: nothing joined by itself")
-            compare(joinSpy.count, 1, "only the test's own join")
+            tryCompare(joinSpy, "count", 1, 2000, "only the test's own join (its answer comes a turn after the seat)")
         }
 
         function test_an_owner_who_plays_elsewhere_is_focused_and_accept_means_move_and_the_pin_is_asked() {
