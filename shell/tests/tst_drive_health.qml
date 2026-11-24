@@ -199,7 +199,7 @@ Item {
             tryVerify(() => driveToasts().length === 1, 2000)
             const toast = driveToasts()[0]
             compare(toast.kind, "warning")
-            compare(toast.detail, "Fail Disk · Back up your saves")
+            compare(toast.detail, "Back up your saves · Fail Disk")
             // The same drive again, after other changes: not a second time.
             setDrives([drive("Fail Disk", "failing", { power_on_hours: 5 })])
             setDrives([drive("Fail Disk", "ok")])
@@ -209,6 +209,14 @@ Item {
             // Another drive failing is its own news.
             setDrives([drive("Fail Disk", "failing"), drive("Other Disk", "failing", { size_bytes: 1000 })])
             tryVerify(() => driveToasts().length === 2, 2000)
+        }
+
+        function test_the_failing_notice_is_in_the_language_the_shell_runs_in() {
+            DeviceSettings.language = "tr"
+            setDrives([drive("Fail Disk", "failing")])
+            tryVerify(() => Notifications.model.count === 1, 2000)
+            compare(Notifications.model.get(0).text, "Bir sürücü arızalanıyor")
+            compare(Notifications.model.get(0).detail, "Kayıtlarınızı yedekleyin · Fail Disk")
         }
 
         function test_the_failing_notice_offers_settings_system() {
@@ -247,7 +255,8 @@ Item {
             compare(rows.byUid["storage/drive0wear"].value, "4 %")
             compare(rows.byUid["storage/drive1hours"].value, "1 hour")
             compare(rows.byUid["storage/drive1wear"], undefined, "no wear for a drive that does not say")
-            compare(rows.byUid["storage/drive0health"].value, "Healthy")
+            compare(rows.byUid["storage/drive0health"].value, "Good")
+            compare(rows.byUid["storage/drive0health"].value, DriveHealth.stateText("ok"), "one word for a good drive on both surfaces")
             setDrives([drive("Nvme Disk", "warning")])
             tryVerify(() => rows.byUid["storage/drive0health"].value === "Check soon", 2000)
             compare(rows.byUid["storage/drive0hours"], undefined, "unknown stays absent")
@@ -273,8 +282,9 @@ Item {
         function test_zz_screenshots_turkish() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            setDrives([drive("Samsung SSD 860 EVO 500GB", "warning"), drive("WD_BLACK SN770 1TB", "failing", { type: "nvme" })])
+            // The language first, as at boot: the notice is raised in the language the shell runs in.
             DeviceSettings.language = "tr"
+            setDrives([drive("Samsung SSD 860 EVO 500GB", "warning"), drive("WD_BLACK SN770 1TB", "failing", { type: "nvme" })])
             showDrives()
             grabImage(tc.shell).save(shotsDir + "/31-settings-drive-health-tr.png")
         }

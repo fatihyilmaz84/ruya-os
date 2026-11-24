@@ -268,7 +268,7 @@ QtObject {
             const smart = d.smart === "ok" || d.smart === "warning" || d.smart === "failing" ? d.smart : ""
             const state = smart !== "" ? smart : d.health === "ok" ? "ok" : d.health ? "failing" : ""
             if (state !== "") {
-                const word = state === "ok" ? tx(QT_TR_NOOP("Healthy")) : state === "warning" ? tx(QT_TR_NOOP("Check soon")) : tx(QT_TR_NOOP("Failing"))
+                const word = DriveHealth.stateText(state, en)
                 section.rows.push({ uid: "storage/drive" + i + "health", key: "drive" + i + "_health",
                                     label: drives.length > 1 ? (en ? "Drive " + (i + 1) + " health" : qsTr("Drive %1 health").arg(i + 1))
                                                               : tx(QT_TR_NOOP("Drive health")),

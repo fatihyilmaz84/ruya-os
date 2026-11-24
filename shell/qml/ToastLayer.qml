@@ -53,7 +53,7 @@ Item {
         target: DriveHealth
         function onFailing(model) {
             Notifications.show(qsTr("A drive is failing"), "warning", "", "warning",
-                               model !== "" ? qsTr("%1 · Back up your saves").arg(model) : qsTr("Back up your saves"),
+                               model !== "" ? qsTr("Back up your saves · %1").arg(model) : qsTr("Back up your saves"),
                                { source: "devices", actions: [{ id: "settings:system", label: qsTr("Open Settings") }] })
         }
     }
