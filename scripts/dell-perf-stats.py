@@ -36,6 +36,8 @@ STARTING = re.compile(r"^(\d+\.\d+) .*Starting ruya-app-")
 # metric -> (label, unit, better): better is "high" or "low"
 METRICS = {
     "fps": ("FPS", "", "high"),
+    "fps_low1": ("1% low", "", "high"),
+    "fps_low01": ("0.1% low", "", "high"),
     "ft_p50_ms": ("frame p50", "ms", "low"),
     "ft_p99_ms": ("frame p99", "ms", "low"),
     "ft_p999_ms": ("frame p99.9", "ms", "low"),
@@ -50,6 +52,8 @@ METRICS = {
     "relay_p50_ms": ("relay p50", "ms", "low"),
     "relay_p99_ms": ("relay p99", "ms", "low"),
 }
+
+LOWS = ("fps_low1", "fps_low01")
 
 
 def rank(sorted_values, p):
@@ -152,12 +156,14 @@ def summary(doc):
         if "skipped" in item and not item["runs"]:
             lines.append(f"{name}: SKIPPED ({item['skipped'].replace('_', ' ')})")
             continue
-        groups = [("fps", "ft_p50_ms", "ft_p99_ms", "ft_p999_ms", "ft_worst_ms", "stutter"),
+        groups = [("fps", "fps_low1", "fps_low01", "ft_p50_ms", "ft_p99_ms", "ft_p999_ms", "ft_worst_ms", "stutter"),
                   ("cold_start_s", "steady_s", "shell_cpu_pct", "shell_gpu_pct", "power_w", "temp_c"),
                   ("relay_p50_ms", "relay_p99_ms")]
         first = True
         for group in groups:
-            parts = [f"{METRICS[m][0]} {with_unit(m, values(item, m))}" for m in group if values(item, m)]
+            # the lows are absent on an older image: shown as "-" next to a FPS that is there
+            parts = [f"{METRICS[m][0]} {with_unit(m, values(item, m))}" for m in group
+                     if values(item, m) or (m in LOWS and values(item, group[0]))]
             if parts:
                 lines.append(f"{name + ' (' + str(len(item['runs'])) + ' runs)' if first else '':<22}" + ", ".join(parts))
                 first = False
