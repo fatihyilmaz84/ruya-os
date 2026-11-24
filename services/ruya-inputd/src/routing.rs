@@ -359,6 +359,9 @@ struct Virtual {
     /// Held when the route entered `app`: not forwarded until let go.
     masked_buttons: Vec<PadButton>,
     masked_axes: Vec<PadAxis>,
+    /// The first input forwarded since the route entered `app` was journalled (`mask_held`
+    /// starts a route entry, so a new route and a Thaw reset it together with the mask).
+    first_input_logged: bool,
     /// The app's effect id -> the physical pad's.
     ff: BTreeMap<i16, i16>,
     /// The app's effects as it uploaded them: uploaded again to the pad it is bound to (RUY-627).
@@ -551,6 +554,7 @@ impl Virtual {
             .into_iter()
             .filter(|&a| axis_held(a, state.axis(a)))
             .collect();
+        self.first_input_logged = false;
     }
 
     fn unmask(&mut self, input: PadInput) {
@@ -566,6 +570,8 @@ pub struct Router<B: Backend> {
     backend: B,
     accounts: Box<dyn Accounts>,
     route: Route,
+    /// When the route last entered `app` (a new route or a Thaw), for the first-input journal line.
+    app_entered: Option<Instant>,
     instance: String,
     app_id: String,
     profile: String,
@@ -635,6 +641,7 @@ impl<B: Backend> Router<B> {
             backend,
             accounts,
             route: Route::Shell,
+            app_entered: None,
             instance: String::new(),
             app_id: String::new(),
             profile: String::new(),
@@ -1012,6 +1019,20 @@ impl<B: Backend> Router<B> {
             v.sent = target;
             if !events.is_empty() {
                 self.backend.write_virtual(v.id, &events);
+                // The first input that reaches the game per pad and route entry: when, never what
+                // (no button or axis: not a key logger).
+                if !v.first_input_logged {
+                    v.first_input_logged = true;
+                    let ms = self
+                        .app_entered
+                        .map_or(0, |t| now.saturating_duration_since(t).as_millis());
+                    let instance = self.owner.as_ref().map_or("", |o| o.instance.as_str());
+                    let line = format!(
+                        "first input forwarded to pad{} (instance {instance}, {ms} ms after the route)",
+                        v.n
+                    );
+                    self.notices.push(Notice::Journal(line));
+                }
             }
         }
     }
@@ -1060,6 +1081,7 @@ impl<B: Backend> Router<B> {
                     sent: PadState::default(),
                     masked_buttons: Vec::new(),
                     masked_axes: Vec::new(),
+                    first_input_logged: false,
                     ff: BTreeMap::new(),
                     effects: BTreeMap::new(),
                     playing: BTreeSet::new(),
@@ -2101,6 +2123,7 @@ impl<B: Backend> Router<B> {
         match r {
             Route::App if same_owner => {
                 if old != Route::App {
+                    self.app_entered = Some(now);
                     // Back from the overlay (the Hub, frozen or not: the same devices, RUY-541):
                     // what is held now waits for its release.
                     for pad in self.pads.values_mut() {
@@ -2113,6 +2136,7 @@ impl<B: Backend> Router<B> {
                 // A pad connected under the overlay gets its virtual pad now (`make_missing`).
             }
             Route::App => {
+                self.app_entered = Some(now);
                 self.destroy_all();
                 self.owner = uid.map(|uid| Owner {
                     instance: instance.to_owned(),
@@ -4137,6 +4161,92 @@ mod tests {
             .into_iter()
             .filter(|l| l.contains(" created for ") || l.ends_with(" destroyed"))
             .collect()
+    }
+
+    /// The journal lines about the first input forwarded to a virtual pad (RUY-602).
+    fn first_input_lines(r: &mut Router<Fake>) -> Vec<String> {
+        journal(r)
+            .into_iter()
+            .filter(|l| l.starts_with("first input forwarded"))
+            .collect()
+    }
+
+    #[test]
+    fn the_first_forwarded_input_is_journalled_once_per_pad_and_route() {
+        let ms = Duration::from_millis;
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        join(&mut r, b, "p2");
+        let t = t0();
+        r.set_route("app", "i1", STK, "p1", SHELL, t);
+        // Guide and a button held at the entry are not forwarded: no line for them.
+        r.input_at(
+            a,
+            &[press(PadButton::Guide), release(PadButton::Guide)],
+            t + ms(10),
+        );
+        assert!(first_input_lines(&mut r).is_empty());
+        r.input_at(a, &[press(PadButton::South)], t + ms(20));
+        r.input_at(
+            a,
+            &[release(PadButton::South), press(PadButton::East)],
+            t + ms(30),
+        );
+        r.input_at(a, &[release(PadButton::East)], t + ms(40));
+        // Pad b gets its own line; its later batches none.
+        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, 20000)], t + ms(250));
+        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, 0)], t + ms(260));
+        assert_eq!(
+            first_input_lines(&mut r),
+            vec![
+                "first input forwarded to pad1 (instance i1, 20 ms after the route)",
+                "first input forwarded to pad2 (instance i1, 250 ms after the route)",
+            ]
+        );
+        // A new route entry starts over.
+        let t2 = t + ms(1000);
+        r.set_route("app", "i2", STK, "p1", SHELL, t2);
+        r.input_at(a, &[press(PadButton::South)], t2 + ms(5));
+        r.input_at(a, &[release(PadButton::South)], t2 + ms(6));
+        assert_eq!(
+            first_input_lines(&mut r),
+            vec!["first input forwarded to pad1 (instance i2, 5 ms after the route)"]
+        );
+        // The Hub and back (a Thaw) starts over too; a button held at the Thaw does not count.
+        r.set_route("overlay", "i2", STK, "p1", SHELL, t2 + ms(100));
+        let t3 = t2 + ms(500);
+        r.input_at(a, &[press(PadButton::North)], t3 - ms(100));
+        r.set_route("app", "i2", STK, "p1", SHELL, t3);
+        r.input_at(a, &[release(PadButton::North)], t3 + ms(1));
+        assert!(first_input_lines(&mut r).is_empty());
+        r.input_at(a, &[press(PadButton::West)], t3 + ms(7));
+        assert_eq!(
+            first_input_lines(&mut r),
+            vec!["first input forwarded to pad1 (instance i2, 7 ms after the route)"]
+        );
+    }
+
+    #[test]
+    fn the_first_input_line_names_no_button_or_axis() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        let t = t0();
+        r.set_route("app", "i1", STK, "p1", SHELL, t);
+        r.input_at(
+            a,
+            &[
+                press(PadButton::South),
+                PadInput::Axis(PadAxis::RightX, 30000),
+            ],
+            t + Duration::from_millis(3),
+        );
+        assert_eq!(
+            first_input_lines(&mut r),
+            vec!["first input forwarded to pad1 (instance i1, 3 ms after the route)"]
+        );
     }
 
     #[test]
