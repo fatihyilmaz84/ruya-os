@@ -21,7 +21,12 @@ FocusScope {
     property bool awaitingCopy: false        // a copy asked for by this picker is running
 
     // What the buttons do while it is open (Shell.modalHintsOf, the hint bar).
-    readonly property var modalHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Cancel") }]
+    // The view decides: the library selects or cancels; the drive's view only goes back, and
+    // offers Select only while it lists a picture.
+    readonly property var modalHints: {
+        const back = { action: "back", text: usbMode ? qsTr("Back") : qsTr("Cancel") }
+        return usbMode && entries.length === 0 ? [back] : [{ action: "accept", text: qsTr("Select") }, back]
+    }
 
     signal closed()
 
