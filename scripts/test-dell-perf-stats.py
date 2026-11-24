@@ -23,9 +23,9 @@ def check(name, ok, detail=""):
     failed += 0 if ok else 1
 
 
-def line(ts, fps, full, mean, p99):
+def line(ts, fps, full, mean, p99, lows=""):
     return (f"{ts:.6f} dell ruya-shell[1]: ruya-shell: perf-frames fps={fps} full={full} commits={fps} "
-            f"meanMs={mean} p99Ms={p99}")
+            f"meanMs={mean} p99Ms={p99}{lows}")
 
 
 # A launch at 100.0, the game's first frame at 100.5, full speed at 102, then 10 s at 60 FPS with one
@@ -61,6 +61,14 @@ check("frames: only the lines inside the window count", out.get("ft_lines") == 1
 old_image = stats.frames(chr(10).join(l for l in journal if "intervals" not in l), 110.0, 120.0, 100.0)
 check("frames: an image without the intervals line has fps but no frame times",
       old_image.get("fps") == 60.0 and "ft_p99_ms" not in old_image, old_image)
+check("frames: an old line has no lows", "fps_low1" not in out and "fps_low01" not in out, out)
+with_lows = [l.replace("p99Ms=17.0", "p99Ms=17.0 low1=-1 low01=-1") if i == 6 else l.replace("p99Ms=17.0", "p99Ms=17.0 low1=48 low01=40")
+             for i, l in enumerate(journal)]
+new_image = stats.frames("\n".join(with_lows), 110.0, 120.0, 100.0)
+check("frames: the lows are the lowest of the window, -1 (measuring) left out",
+      new_image.get("fps_low1") == 48 and new_image.get("fps_low01") == 40, new_image)
+check("frames: the new keys do not change the other numbers",
+      new_image.get("fps") == 60.0 and new_image.get("cold_start_s") == 0.4, new_image)
 check("rank: nearest rank on a short list", stats.rank([1.0, 2.0, 3.0, 4.0], 0.99) == 4.0 and stats.rank([1.0, 2.0, 3.0, 4.0], 0.5) == 2.0)
 check("frames: lines outside the window are ignored", stats.frames(text, 200.0, 210.0, 100.0).get("fps") is None)
 check("frames: lines of a window that is not full are ignored",

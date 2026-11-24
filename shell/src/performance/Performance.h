@@ -119,6 +119,9 @@ public:
     Q_INVOKABLE void setFrameLog(bool on);
     // Recomputes the frame numbers now (the frame timer does it every FrameUpdateMs).
     Q_INVOKABLE void updateFrames();
+    // The "perf-frames" log line for the last computed numbers (updateFrames logs it four times a second
+    // under RUYA_PERF_LOG); the 1 % and 0.1 % lows are -1 while measuring. Public for the test.
+    Q_INVOKABLE QString frameLogLine() const;
 
     // Tests only, and only with the mock backend (otherwise no-ops).
     Q_INVOKABLE void mockSet(const QString &name, const QString &state, double value);

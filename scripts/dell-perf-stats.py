@@ -15,6 +15,7 @@ The shell (RUYA_PERF_LOG=1) logs, four times a second, "perf-frames" (the last s
 for fps and the cold start) and once a second "perf-frame-intervals": every presented-frame interval of
 that second in ms, rounded to 0.01. Over the measured window [t1, t2):
   fps         mean frames per second (perf-frames)
+  fps_low1, fps_low01   the shell's 1 % / 0.1 % lows (perf-frames low1= low01=), the lowest of the window; absent on an older image or while measuring
   ft_p50_ms, ft_p99_ms, ft_p999_ms   nearest-rank percentiles of every interval in the window
   ft_worst_ms the longest interval
   stutter     intervals over twice ft_p50_ms
@@ -28,7 +29,7 @@ import re
 import statistics
 import sys
 
-FRAMES = re.compile(r"^(\d+\.\d+) .*perf-frames fps=(\d+) full=(\d) commits=(\d+) meanMs=([\d.]+) p99Ms=([\d.]+)")
+FRAMES = re.compile(r"^(\d+\.\d+) .*perf-frames fps=(\d+) full=(\d) commits=(\d+) meanMs=([\d.]+) p99Ms=([\d.]+)(?: low1=(-?\d+) low01=(-?\d+))?")
 INTERVALS = re.compile(r"^(\d+\.\d+) .*perf-frame-intervals ([\d.,]+)")
 STARTING = re.compile(r"^(\d+\.\d+) .*Starting ruya-app-")
 
@@ -70,7 +71,8 @@ def frames(text, t1, t2, launch):
             seen.append((float(m.group(1)), [float(v) for v in m.group(2).split(",") if v]))
         m = FRAMES.match(line)
         if m:
-            rows.append((float(m.group(1)), int(m.group(2)), int(m.group(3)), float(m.group(5)), float(m.group(6))))
+            rows.append((float(m.group(1)), int(m.group(2)), int(m.group(3)), float(m.group(5)), float(m.group(6)),
+                         int(m.group(7)) if m.group(7) else -1, int(m.group(8)) if m.group(8) else -1))
     out = {}
     if start is not None:
         first = next((r[0] for r in rows if r[0] > start and r[1] > 0), None)
@@ -83,6 +85,11 @@ def frames(text, t1, t2, launch):
     if not kept:
         return out
     out["fps"] = round(statistics.mean(r[1] for r in kept), 1)
+    # The shell's own 1 % / 0.1 % lows (-1 while measuring, absent on an older image): the lowest of the window.
+    for key, col in (("fps_low1", 5), ("fps_low01", 6)):
+        known = [r[col] for r in kept if r[col] >= 0]
+        if known:
+            out[key] = min(known)
     intervals = sorted(v for ts, vs in seen if t1 <= ts < t2 for v in vs)
     out["ft_lines"] = sum(1 for ts, _ in seen if t1 <= ts < t2)
     if intervals:

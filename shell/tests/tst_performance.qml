@@ -367,11 +367,13 @@ Item {
             Performance.fakeFrameClockMs(t + 5)
             Performance.updateFrames()
             compare(Performance.fpsLow1, -1, "99 intervals: Measuring...")
+            verify(/ low1=-1 low01=-1$/.test(Performance.frameLogLine()), Performance.frameLogLine())
             t = drive(stand.surface, stand.win, t, 20, 1, 1)         // 100
             Performance.fakeFrameClockMs(t + 5)
             Performance.updateFrames()
             compare(Performance.fpsLow1, 50, "100 intervals: the 1% low")
             compare(Performance.fpsLow01, -1, "the 0.1% low waits for 1000")
+            verify(/ p99Ms=[\d.]+ low1=50 low01=-1$/.test(Performance.frameLogLine()), Performance.frameLogLine())
             t = drive(stand.surface, stand.win, t, 20, 899, 1)       // 999
             Performance.fakeFrameClockMs(t + 5)
             Performance.updateFrames()
@@ -381,6 +383,7 @@ Item {
             Performance.updateFrames()
             compare(Performance.fpsLow1, 50)
             compare(Performance.fpsLow01, 50, "1000 intervals: the 0.1% low")
+            verify(/ low1=50 low01=50$/.test(Performance.frameLogLine()), Performance.frameLogLine())
         }
 
         function test_spikes_set_the_lows() {
