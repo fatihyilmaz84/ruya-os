@@ -258,6 +258,10 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     blackWith("darkpatch", QRect(144, 0, 8, 18));
     blackWith("clockstrip", QRect(145, 0, 15, 90));
     blackWith("clockbusy", QRect(145, 0, 15, 10));
+    // A patch edge through the clock (clockedge: white from sample column 30, x 0.9375, the clock lies over 0.898..0.95) and
+    // busy art under the nav's words (navbusy: the top two rows of the band's four, over the left half), RUY-1159.
+    blackWith("clockedge", QRect(150, 0, 10, 90));
+    blackWith("navbusy", QRect(0, 0, 80, 10));
     // A strip under the bell tab only (sample column 14 of 32, about 840..900 of a 1080p screen): the nav's words on black.
     blackWith("bellstrip", QRect(70, 0, 5, 90));
     // One flat grey of relative luminance 0.31 (greyflat): dark ink reads (6.2:1), Daylight's warning brown does not (2.5:1).

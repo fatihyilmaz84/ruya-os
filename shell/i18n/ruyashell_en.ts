@@ -3803,13 +3803,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationCentreView</name>
     <message>
-        <location filename="../qml/NotificationCentreView.qml" line="+71"/>
-        <location line="+253"/>
+        <location filename="../qml/NotificationCentreView.qml" line="+74"/>
+        <location line="+257"/>
         <source>Clear all</source>
         <translation>Clear all</translation>
     </message>
     <message>
-        <location line="-251"/>
+        <location line="-255"/>
         <source>Toggle</source>
         <translation>Toggle</translation>
     </message>
@@ -3834,7 +3834,7 @@ This can&apos;t be undone.</translation>
         <translation>Clear</translation>
     </message>
     <message>
-        <location line="+212"/>
+        <location line="+216"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Notifications</translation>
@@ -3853,7 +3853,7 @@ This can&apos;t be undone.</translation>
         <translation>Quiet mode</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+89"/>
         <source>Pinned until resolved</source>
         <translation>Pinned until resolved</translation>
     </message>
@@ -3941,7 +3941,12 @@ This can&apos;t be undone.</translation>
         <translation>Notifications</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+2"/>
+        <source>Sections</source>
+        <translation>Sections</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6200,7 +6205,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+409"/>
+        <location line="+410"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -6308,7 +6313,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+544"/>
+        <location line="+542"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6335,7 +6340,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2071"/>
+        <location line="-2070"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6366,13 +6371,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1057"/>
+        <location line="+1058"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>Same game as the %1 version?</translation>
     </message>
     <message>
-        <location line="+735"/>
+        <location line="+733"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

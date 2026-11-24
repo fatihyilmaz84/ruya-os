@@ -289,7 +289,7 @@ Item {
             const row = findChild(rowOf(idOf("Drive inserted")), "notificationRow")
             verify(row.expanded, "the focused row shows its actions")
             compare(findChild(row, "notificationAction_0").color, Theme.primaryFill)
-            compare(hintText(), "accept Select, options Clear, back Back")
+            compare(hintText(), "accept Select, options Clear, back Back, tabPrev_tabNext Sections")
             const invoked = NotificationCentre.mockCalls("invoke")
             keyClick(Qt.Key_Return)
             tryVerify(() => !centreOpen(), 2000, "an action that leaves closes the centre")
@@ -404,7 +404,7 @@ Item {
             clearToasts()
             openCentre()
             tryVerify(() => rowFocused("Match found"))
-            compare(hintText(), "accept Select, left_right Choose, options Clear, back Back")
+            compare(hintText(), "accept Select, left_right Choose, options Clear, back Back, tabPrev_tabNext Sections")
             const row = findChild(rowOf(idOf("Match found")), "notificationRow")
             compare(row.pick, 0)
             keyClick(Qt.Key_Right)
@@ -440,6 +440,24 @@ Item {
             tryVerify(() => !centreOpen() && bellFocused(), 2000, "Back closes, the bell has the focus")
         }
 
+        // An emptied list says no "N new" (RUY-1159): Clear all clears what was new, so the title stands alone over the
+        // empty state; with a pinned item left, the count is of what is still there (none of the new ones).
+        function test_no_new_count_over_an_empty_list() {
+            post("One", tc.t0 - 2000)
+            post("Two", tc.t0 - 1000)
+            openCentre()
+            tryVerify(() => rowFocused("Two"))
+            compare(part("centreNewCount").text, "2 new")
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => part("centreClearAll").activeFocus, 2000, "Clear all")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => NotificationCentre.count === 0, 2000, "Clear all clears")
+            tryVerify(() => part("centreEmpty").visible, 2000, "the empty state")
+            verify(!part("centreNewCount").visible, "no \"2 new\" over an empty list")
+            compare(sheet().newShown, 0)
+        }
+
         function test_clear_all_keeps_pinned() {
             post("One", tc.t0 - 2000)
             post("Two", tc.t0 - 1000)
@@ -452,7 +470,7 @@ Item {
             tryVerify(() => part("centreQuiet").activeFocus, 2000, "Up from the first row: Quiet mode")
             keyClick(Qt.Key_Up)
             tryVerify(() => part("centreClearAll").activeFocus, 2000, "then Clear all")
-            compare(hintText(), "accept Clear all, back Back")
+            compare(hintText(), "accept Clear all, back Back, tabPrev_tabNext Sections")
             keyClick(Qt.Key_Return)
             tryVerify(() => NotificationCentre.count === 1, 2000, "Clear all clears")
             compare(NotificationCentre.items[0].title, "The console is too hot", "the pinned item stays")
@@ -536,7 +554,7 @@ Item {
         function test_quiet_mode() {
             openCentre()
             tryVerify(() => part("centreQuiet").activeFocus, 2000, "nothing kept: the focus is on Quiet mode")
-            compare(hintText(), "accept Toggle, back Back")
+            compare(hintText(), "accept Toggle, back Back, tabPrev_tabNext Sections")
             keyClick(Qt.Key_Return)
             tryCompare(NotificationCentre, "quiet", true, 2000, "A on Quiet mode turns it on")
             verify(part("centreQuiet").checked)
@@ -660,7 +678,7 @@ Item {
             openCentre()
             tryVerify(() => part("centreQuiet").activeFocus, 2000, "empty: Quiet mode")
             verify(part("centreEmpty").visible, "the empty state")
-            compare(hintText(), "accept Toggle, back Back")
+            compare(hintText(), "accept Toggle, back Back, tabPrev_tabNext Sections")
             keyClick(Qt.Key_Down)
             verify(part("centreQuiet").activeFocus, "no rows: Down stays")
             keyClick(Qt.Key_Up)

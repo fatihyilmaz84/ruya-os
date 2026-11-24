@@ -230,11 +230,22 @@ ArtBand ArtPalette::band(const ArtColors &colors, qreal viewAspect, qreal from, 
     const qreal bandEnd = y0 + (y1 - y0) * BandShare;
     const int rowFrom = std::clamp(int(std::floor(y0)), 0, h - 1);
     const int rowTo = std::clamp(int(std::ceil(bandEnd)), rowFrom + 1, h);
-    // The columns under the x range: those whose centres lie in it, at least the one under its middle.
     const qreal left = x0 + (x1 - x0) * std::clamp(std::min(from, to), qreal(0), qreal(1));
     const qreal right = x0 + (x1 - x0) * std::clamp(std::max(from, to), qreal(0), qreal(1));
-    int colFrom = std::clamp(int(std::ceil(left - 0.5)), 0, w - 1);
-    int colTo = std::clamp(int(std::floor(right - 0.5)) + 1, 0, w);
+    // The columns under the x range: those whose centres lie in it, and one it touches by more than a glyph (GlyphShare
+    // of the view's width: an item over a patch's edge has the patch's light behind its glyph); at least the one
+    // under its middle.
+    const qreal glyph = (x1 - x0) * GlyphShare;
+    int colFrom = w;
+    int colTo = 0;
+    for (int c = 0; c < w; ++c) {
+        const qreal overlap = std::min<qreal>(c + 1, right) - std::max<qreal>(c, left);
+        const bool centreIn = c + 0.5 >= left && c + 0.5 <= right;
+        if (centreIn || overlap > glyph) {
+            colFrom = std::min(colFrom, c);
+            colTo = std::max(colTo, c + 1);
+        }
+    }
     if (colTo <= colFrom) {
         colFrom = std::clamp(int(std::floor((left + right) / 2)), 0, w - 1);
         colTo = colFrom + 1;
