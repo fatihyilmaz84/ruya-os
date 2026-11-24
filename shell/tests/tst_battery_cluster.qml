@@ -102,8 +102,8 @@ Item {
             const bell = find("bellGlass")
             const bellLeft = bell.mapToItem(tc.shell, 0, 0).x
             const bellRight = bellLeft + bell.width
-            if (navRight + 24 * u > bellLeft + 0.5)
-                return what + " at " + size[1] + "p: the bell starts at " + bellLeft + ", the nav ends at " + navRight
+            if (navRight + Theme.spaceM * u > bellLeft + 0.5)
+                return what + " at " + size[1] + "p: the bell starts at " + bellLeft + ", the nav ends at " + navRight + " (a gap of spaceM at least)"
             if (Math.abs(bellRight + Theme.spaceM * u - pill.x) > 0.5)
                 return what + " at " + size[1] + "p: the bell ends at " + bellRight + ", the cluster starts at " + pill.x
             if (pill.x + pill.width > tc.shell.width - tc.shell.marginX + 1)
@@ -552,7 +552,7 @@ Item {
             compare(bell.height, glass.height, "the nav pill's height")
             compare(bell.width, bell.height, "icon-only: round")
             compare(pos(bell).y, pos(glass).y, "on the nav's line")
-            verify(pos(bell).x > pos(glass).x + glass.width, "right of the nav's pill")
+            verify(pos(bell).x >= pos(glass).x + glass.width + Theme.spaceM * u, "right of the nav's pill, spaceM at least")
             verify(pos(bell).x + bell.width < pos(tray).x, "left of the tray")
             compare(pos(bell).x + bell.width + Theme.spaceM * u, pos(tray).x, "a gap before the tray's first item")
             const pill = find("navPill_notifications")
@@ -567,6 +567,50 @@ Item {
             verify(pos(bell).x < before)
             tc.shell.destroy()
             wait(50)
+        }
+
+        // `item` lies inside the bell's glass (both in the shell's coordinates).
+        function inBellGlass(item, size, what) {
+            const glass = find("bellGlass")
+            const a = item.mapToItem(tc.shell, 0, 0)
+            const g = glass.mapToItem(tc.shell, 0, 0)
+            verify(a.x >= g.x - 0.5 && a.x + item.width <= g.x + glass.width + 0.5 && a.y >= g.y - 0.5 && a.y + item.height <= g.y + glass.height + 0.5,
+                   size + "p: " + what + " lies in the bell's glass: " + a.x + "," + a.y + " " + item.width + "x" + item.height)
+        }
+        // The names of the items of the nav that belong to the bell (and each one's check that it is inside the glass).
+        function bellItems(item, size, names) {
+            for (const child of item.children) {
+                if (child.objectName.indexOf("bell") === 0 || child.objectName.indexOf("_notifications") > 0) {
+                    names.push(child.objectName)
+                    if (child.visible && child.width > 0 && child.objectName !== "bellBadge" && child.objectName !== "bellBadgeText")
+                        inBellGlass(child, size, child.objectName)
+                }
+                bellItems(child, size, names)
+            }
+        }
+
+        // One bell pill only (RUY-1170 round 2): after focus goes Home, Settings, bell, nothing bell-shaped lies outside the
+        // bell's own glass: its fill and ring, its pill, its glyph; the nav's pill has no ghost of the highlight at the bell
+        // (a glide left at an old x showed as a stray disc beside the gear). At 1080p and 720p.
+        function test_only_one_bell_pill_after_the_focus_travels() {
+            Batteries.mockPopulate()
+            for (const size of [[1920, 1080], [1280, 720]]) {
+                openShell(size[0], size[1])
+                const nav = find("sectionNav")
+                keyClick(Qt.Key_Up)
+                tryVerify(() => nav.activeFocus, 2000)
+                for (let i = 0; i < nav.keys.length && nav.currentKey !== "notifications"; ++i)
+                    keyClick(Qt.Key_Right)                    // Home, Games, Media, Store, Settings, the bell
+                compare(nav.currentKey, "notifications", "the focus travelled to the bell")
+                tryVerify(() => !find("navGlide").visible, 2000, size[1] + "p: the nav's highlight is gone from the nav's pill")
+                const names = []
+                bellItems(nav, size[1], names)
+                verify(names.length >= 4, size[1] + "p: the bell's items were found: " + names)
+                compare(names.filter(n => n === "bellGlass").length, 1, "one bell glass")
+                compare(names.filter(n => n === "navPill_notifications").length, 1, "one bell pill")
+                tc.shell.destroy()
+                wait(50)
+            }
         }
 
         // D-pad around the bell (RUY-1170): the nav's order is unchanged, the tray's first item is next to it.
@@ -602,7 +646,9 @@ Item {
             waitForRendering(tc.shell)
             tryVerify(() => settled() && pillIsLaidOut(), 2000, "the tray is laid out")
             const clock = find("statusClock")
-            const where = () => [more.mapToItem(tc.shell, 0, 0).x, more.width, clock.mapToItem(tc.shell, 0, 0).x]
+            // The chip's place relative to the clock: the clock text changes width every minute (HH:mm in a proportional
+            // font) and the right-anchored tray moves with it, so absolute x would read that as a shift.
+            const where = () => [more.mapToItem(tc.shell, 0, 0).x - clock.mapToItem(tc.shell, 0, 0).x, more.width]
             const before = where()
             openMore()
             compare(focus.visible, true)
@@ -782,14 +828,23 @@ Item {
                     keyClick(Qt.Key_Up)
                     tryVerify(() => nav.activeFocus, 2000)
                     nav.currentIndex = nav.keys.indexOf("notifications")
-                    wait(300)
+                    tryVerify(() => !find("navGlide").visible, 2000, "the nav's highlight has left the nav's pill")
+                    waitForRendering(tc.shell)
                     grabImage(tc.shell).save(shotsDir + "/bell-place-" + lang + "-" + size[2] + "-focused.png")
+                    if ((lang === "en" && size[2] === "1080") || (lang === "tr" && size[2] === "720")) {
+                        // The unread badge on the moved bell.
+                        NotificationCentre.post({ title: "Badge", kind: "info", source: "system" })
+                        tryVerify(() => find("bellBadge").visible, 2000, "the badge shows")
+                        waitForRendering(tc.shell)
+                        grabImage(tc.shell).save(shotsDir + "/bell-place-" + lang + "-" + size[2] + "-badge.png")
+                    }
                     keyClick(Qt.Key_Return)                          // its page: the bell is current
                     tryVerify(() => tc.shell.navSection === "notifications", 2000)
-                    wait(600)
-                    keyClick(Qt.Key_Up)
+                    tryVerify(() => tc.shell.topSettled(), 3000, "the page has settled")
+                    for (let i = 0; i < 4 && !nav.activeFocus; ++i)       // from the first row up to the top stop, then the nav
+                        keyClick(Qt.Key_Up)
                     tryVerify(() => nav.activeFocus, 2000, "Up from the page's top stop reaches the nav")
-                    wait(300)
+                    waitForRendering(tc.shell)
                     grabImage(tc.shell).save(shotsDir + "/bell-place-" + lang + "-" + size[2] + "-current.png")
                     tc.shell.destroy()
                     wait(50)

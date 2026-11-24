@@ -33,15 +33,8 @@ Item {
     function measure(item) {
         if (!item || !glide.parent)
             return null
-        let gx = 0
-        let gy = 0
-        let p = item
-        while (p && p !== glide.parent) {
-            gx += p.x
-            gy += p.y
-            p = p.parent
-        }
-        return p === glide.parent ? { x: gx, y: gy, w: item.width, h: item.height } : null
+        const at = ItemOffset.of(item, glide.parent)
+        return at ? { x: at.x, y: at.y, w: item.width, h: item.height } : null
     }
 
     readonly property var geometry: measure(target)

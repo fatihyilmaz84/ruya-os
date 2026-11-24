@@ -80,17 +80,6 @@ FocusScope {
     function pillOf(key) {
         return key === bellKey ? bellPill : (repeater.count === wordKeys.length ? repeater.itemAt(wordKeys.indexOf(key)) : null)
     }
-    // An item's offset in this item, through every parent's x and y (a binding on it follows each of them).
-    function offsetOf(item) {
-        let x = 0
-        let y = 0
-        for (let i = item; i && i !== nav; i = i.parent) {
-            x += i.x
-            y += i.y
-        }
-        return Qt.point(x, y)
-    }
-
     implicitWidth: pills.width + 2 * Theme.spaceXs * u
     implicitHeight: Theme.buttonHeight * u + 2 * Theme.spaceXs * u
     width: implicitWidth
@@ -132,15 +121,6 @@ FocusScope {
         target: nav.currentKey === nav.bellKey ? null : nav.pillOf(nav.currentKey)
         shown: nav.activeFocus && nav.currentKey !== nav.bellKey
     }
-    // The bell's own: it glides on its own pill, never across the bar to it.
-    FocusGlide {
-        id: bellGlide
-        objectName: "bellGlide"
-        u: nav.u
-        target: nav.bellPill
-        shown: nav.activeFocus && nav.currentKey === nav.bellKey
-    }
-
     // The words: the pills of the nav's glass, measured as one item of the bar.
     Item {
         id: words
@@ -176,12 +156,13 @@ FocusScope {
             required property int index
             required property string modelData
             readonly property Item pill: nav.pillOf(modelData)
-            readonly property FocusGlide glideOf: modelData === nav.bellKey ? bellGlide : glide
+            readonly property bool glided: modelData !== nav.bellKey && glide.active
             readonly property bool isSection: modelData === nav.section
             readonly property bool focused: nav.activeFocus && modelData === nav.currentKey
 
-            x: pill ? nav.offsetOf(pill).x : 0
-            y: pill ? nav.offsetOf(pill).y : 0
+            readonly property var at: ItemOffset.of(pill, nav)
+            x: at ? at.x : 0
+            y: at ? at.y : 0
             width: pill ? pill.width : 0
             height: pill ? pill.height : 0
 
@@ -189,7 +170,7 @@ FocusScope {
                 objectName: "navPillFill_" + under.modelData
                 anchors.fill: parent
                 radius: height / 2
-                color: under.isSection ? Theme.primaryFill : (under.focused && !under.glideOf.active ? Theme.focusFill : "transparent")
+                color: under.isSection ? Theme.primaryFill : (under.focused && !under.glided ? Theme.focusFill : "transparent")
                 border.width: under.focused && !under.isSection ? Theme.focusRingWidth * nav.u : 0
                 border.color: Theme.focusRing
             }
@@ -297,8 +278,9 @@ FocusScope {
         height: 32 * nav.u // token-ok: the badge's size, 04 §5 "Bell"
         width: Math.max(height, badgeLabel.implicitWidth + 2 * Theme.spaceXs * nav.u)
         radius: height / 2
-        x: bell ? nav.offsetOf(bell).x + bell.width - width * 0.75 : 0
-        y: bell ? nav.offsetOf(bell).y - height * 0.25 : 0
+        readonly property var at: ItemOffset.of(bell, nav)
+        x: at ? at.x + bell.width - width * 0.75 : 0
+        y: at ? at.y - height * 0.25 : 0
         color: Theme.primaryFill
         border.width: Theme.hairlineAt(nav.u)
         border.color: bellInk.color
