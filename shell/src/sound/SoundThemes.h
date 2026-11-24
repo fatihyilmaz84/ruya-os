@@ -133,8 +133,8 @@ public:
     // directory that lives as long as this object; the path, or "" on failure.
     Q_INVOKABLE QString fixturesDir();
     Q_INVOKABLE static QVariantList fixtureCases();
-    // The hostile-file test of SoundTheme::fuzz: { ok, cases, problem }. Takes a few seconds; bounded by `timeoutMs`.
-    Q_INVOKABLE static QVariantMap fuzz(int timeoutMs = 60000);
+    // The hostile-file test of SoundTheme::fuzz: { ok, cases, problem, slowestMs, slowestCase }. Runs the whole set; each file must get a verdict within `perCaseMs`, `totalMs` is only a hang guard.
+    Q_INVOKABLE static QVariantMap fuzz(int perCaseMs = 5000, int totalMs = 600000);
 
     // Tests only, with the mock backend (otherwise no-ops). mockPrepareDrive writes a stick tree
     // (RuyaOS/sounds/Glassy: usable, Plain: usable, Broken: refused) and makes the mock stick's mount

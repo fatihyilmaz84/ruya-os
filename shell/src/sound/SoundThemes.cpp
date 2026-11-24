@@ -463,12 +463,14 @@ QVariantList SoundThemes::fixtureCases()
     return list;
 }
 
-QVariantMap SoundThemes::fuzz(int timeoutMs)
+QVariantMap SoundThemes::fuzz(int perCaseMs, int totalMs)
 {
     QString problem;
     int cases = 0;
-    const bool ok = SoundTheme::fuzz(&problem, &cases, timeoutMs);
-    return {{QStringLiteral("ok"), ok}, {QStringLiteral("cases"), cases}, {QStringLiteral("problem"), problem}};
+    SoundTheme::FuzzReport report;
+    const bool ok = SoundTheme::fuzz(&problem, &cases, &report, perCaseMs, totalMs);
+    return {{QStringLiteral("ok"), ok}, {QStringLiteral("cases"), cases}, {QStringLiteral("problem"), problem},
+            {QStringLiteral("slowestMs"), report.slowestMs}, {QStringLiteral("slowestCase"), report.slowestCase}};
 }
 
 QString SoundThemes::mockPrepareDrive()

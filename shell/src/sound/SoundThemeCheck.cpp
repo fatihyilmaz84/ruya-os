@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -13,8 +14,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -1462,16 +1465,43 @@ int mutations(const QByteArray &seed, Run run)
 
 } // namespace
 
-bool fuzz(QString *problem, int *cases, int timeoutMs)
+bool fuzz(QString *problem, int *cases, FuzzReport *report, int perCaseMs, int totalMs)
 {
+    // The worker publishes which case it is in and when it started (milliseconds on `clock`, -1 between
+    // cases); the waiting side reads them. Nothing here is a wall-clock budget for the whole run: a loaded
+    // machine only makes each case slower, and one case over `perCaseMs` is the failure.
     struct State
     {
-        bool done = false;
-        int cases = 0;
+        std::atomic<bool> done{false};
+        std::atomic<int> cases{0};
+        std::atomic<int> series{0};
+        std::atomic<qint64> caseStart{-1};
+        std::atomic<qint64> slowestMs{0};
+        std::atomic<int> slowestCase{0};
+        std::atomic<int> slowestSeries{0};
         QString problem;
+        QElapsedTimer clock;
     };
+    static const char *const seriesNames[] = {"wav", "ogg", "flac"};
+    const auto caseName = [](int series, int number) { return QStringLiteral("%1 file, case %2").arg(QLatin1String(seriesNames[series])).arg(number); };
     auto state = std::make_shared<State>();
-    QThread *thread = QThread::create([state] {
+    state->clock.start();
+    // Runs one mutated file: times it, and keeps the slowest.
+    const auto timed = [state](int series, const std::function<void()> &run) {
+        state->series = series;
+        state->caseStart = state->clock.elapsed();
+        const qint64 start = state->caseStart;
+        run();
+        const qint64 took = state->clock.elapsed() - start;
+        state->caseStart = -1;
+        if (took > state->slowestMs) {
+            state->slowestMs = took;
+            state->slowestCase = state->cases.load();
+            state->slowestSeries = series;
+        }
+        ++state->cases;
+    };
+    QThread *thread = QThread::create([state, timed] {
         QTemporaryDir dir;
         if (!dir.isValid()) {
             state->problem = QStringLiteral("no temporary directory");
@@ -1509,23 +1539,47 @@ bool fuzz(QString *problem, int *cases, int timeoutMs)
             }
         };
         // The file under test is rewritten for each mutation; the verdict is not looked at, only that one comes.
-        state->cases += mutations(wav, [&](const QByteArray &b) { writeTheme(b, QByteArray(), QString()); (void)check(folder); });
-        state->cases += mutations(ogg, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.ogg")); (void)check(folder); });
-        state->cases += mutations(flac, [&](const QByteArray &b) { writeTheme(plain, b, QStringLiteral("pad.flac"), 5000); (void)check(folder); });
+        mutations(wav, [&](const QByteArray &b) { timed(0, [&] { writeTheme(b, QByteArray(), QString()); (void)check(folder); }); });
+        mutations(ogg, [&](const QByteArray &b) { timed(1, [&] { writeTheme(plain, b, QStringLiteral("pad.ogg")); (void)check(folder); }); });
+        mutations(flac, [&](const QByteArray &b) { timed(2, [&] { writeTheme(plain, b, QStringLiteral("pad.flac"), 5000); (void)check(folder); }); });
         state->done = true;
     });
     thread->start();
-    const bool finished = thread->wait(timeoutMs);
-    if (!finished) {
-        thread->terminate();                      // a hang is the failure being looked for; do not wait for it
-        thread->wait(2000);
-        *problem = QStringLiteral("the checker did not return within %1 ms").arg(timeoutMs);
-        *cases = state->cases;
+    // Every case of the fixed set runs to the end. One case in flight for more than `perCaseMs` is a hang
+    // (the thread is abandoned); `totalMs` only catches a runaway of the whole run.
+    QString failure;
+    while (!thread->wait(20)) {
+        const int series = state->series;
+        const int number = state->cases;
+        const qint64 start = state->caseStart;
+        const qint64 now = state->clock.elapsed();
+        const bool sameCase = start >= 0 && number == state->cases && series == state->series && start == state->caseStart;
+        if (sameCase && now - start > perCaseMs)
+            failure = QStringLiteral("%1 took more than %2 ms: the checker does not return").arg(caseName(series, number)).arg(perCaseMs);
+        else if (now > totalMs)
+            failure = QStringLiteral("the checker did not finish within %1 ms in total").arg(totalMs);
+        if (!failure.isEmpty()) {
+            thread->terminate();                  // a hang is the failure being looked for; do not wait for it
+            thread->wait(2000);
+            break;
+        }
+    }
+    *cases = state->cases;
+    FuzzReport local;
+    local.slowestMs = state->slowestMs;
+    local.slowestCase = caseName(state->slowestSeries, state->slowestCase);
+    if (report)
+        *report = local;
+    if (!failure.isEmpty()) {
+        *problem = failure;
         return false;
     }
     delete thread;
-    *cases = state->cases;
     *problem = state->problem;
+    if (state->done && state->problem.isEmpty() && state->slowestMs > perCaseMs) {   // finished, but one case was too slow
+        *problem = QStringLiteral("%1 took %2 ms (the bound is %3 ms)").arg(local.slowestCase).arg(local.slowestMs).arg(perCaseMs);
+        return false;
+    }
     return state->done && state->problem.isEmpty();
 }
 
