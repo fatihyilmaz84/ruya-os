@@ -416,6 +416,8 @@ pub struct Book {
     shelves: BTreeMap<String, Shelf>,
     builtins: BTreeMap<String, Profile>,
     journal: Vec<String>,
+    /// Consoles whose last read failed and was journaled (the streak ends with a read that works).
+    unreadable: BTreeSet<String>,
 }
 
 impl Default for Book {
@@ -466,6 +468,7 @@ impl Book {
             shelves: BTreeMap::new(),
             builtins: builtins(),
             journal: Vec::new(),
+            unreadable: BTreeSet::new(),
         }
     }
 
@@ -474,16 +477,23 @@ impl Book {
         std::mem::take(&mut self.journal)
     }
 
-    /// Loads a console profile's files once.
+    /// Loads a console profile's files once. A console whose directory cannot be read is tried
+    /// again by the next call (it may become readable), but journaled once per failure streak: a
+    /// pad press asks for its Confirm mode, so a line per attempt would flood the journal.
     fn load(&mut self, console: &str) -> Result<(), Status> {
         if self.shelves.contains_key(console) {
             return Ok(());
         }
         let files = match self.store.read_all(console) {
-            Ok(f) => f,
+            Ok(f) => {
+                self.unreadable.remove(console);
+                f
+            }
             Err(e) => {
-                self.journal
-                    .push(format!("reading the profiles of {console} failed: {e}"));
+                if self.unreadable.insert(console.to_owned()) {
+                    self.journal
+                        .push(format!("reading the profiles of {console} failed: {e}"));
+                }
                 return Err(Status::Failed);
             }
         };
@@ -1885,6 +1895,83 @@ mod tests {
         assert_eq!(failing.forget("p1"), Status::Failed);
         assert_eq!(ids(&mut failing), ["default", "nintendo"]);
         assert!(failing.take_journal()[0].contains("removing the controller profiles of p1"));
+    }
+
+    /// A store whose directory cannot be read.
+    struct Unreadable;
+
+    impl ProfileStore for Unreadable {
+        fn read_all(&mut self, _console: &str) -> io::Result<Vec<(String, String)>> {
+            Err(io::Error::other("the directory is unreadable"))
+        }
+        fn write(&mut self, _: &str, _: &str, _: &str) -> io::Result<()> {
+            Err(io::Error::other("unreadable"))
+        }
+        fn remove(&mut self, _: &str, _: &str) -> io::Result<()> {
+            Err(io::Error::other("unreadable"))
+        }
+        fn remove_all(&mut self, _: &str) -> io::Result<()> {
+            Err(io::Error::other("unreadable"))
+        }
+        fn list_consoles(&mut self) -> io::Result<Vec<String>> {
+            Err(io::Error::other("unreadable"))
+        }
+    }
+
+    fn readable_store(console: &str) -> Box<dyn ProfileStore> {
+        let mut store = MemStore::default();
+        store.files.insert(
+            (console.to_owned(), SETTINGS.to_owned()),
+            r#"{"confirm_buttons":{"pad":"east"}}"#.to_owned(),
+        );
+        Box::new(store)
+    }
+
+    #[test]
+    fn an_unreadable_directory_is_journaled_once_per_failure_streak() {
+        let mut b = Book::new(Box::new(Unreadable));
+        for _ in 0..1000 {
+            assert_eq!(b.confirm_button("p1", "pad"), Confirm::Family);
+        }
+        let journal = b.take_journal();
+        assert_eq!(journal.len(), 1, "{journal:?}");
+        assert!(journal[0].contains("reading the profiles of p1 failed"));
+        // Every other caller of load follows the same rule (no second journaling path).
+        assert_eq!(b.confirm_buttons("p1"), Err(Status::Failed));
+        assert_eq!(
+            b.set_confirm_button("p1", "pad", Confirm::East),
+            Status::Failed
+        );
+        assert!(b.list("p1").is_err());
+        assert!(b.take_journal().is_empty(), "the streak is journaled");
+        // The streak is per console: a second console journals its own line, once.
+        for _ in 0..10 {
+            b.confirm_button("p2", "pad");
+        }
+        let journal = b.take_journal();
+        assert_eq!(journal.len(), 1, "{journal:?}");
+        assert!(journal[0].contains("profiles of p2 failed"));
+    }
+
+    #[test]
+    fn a_directory_that_becomes_readable_loads_and_a_new_failure_journals_again() {
+        let mut b = Book::new(Box::new(Unreadable));
+        assert_eq!(b.confirm_button("p1", "pad"), Confirm::Family);
+        assert_eq!(b.take_journal().len(), 1);
+        // The directory comes back: the next call loads it, with no stale failure.
+        b.store = readable_store("p1");
+        assert_eq!(b.confirm_button("p1", "pad"), Confirm::East);
+        assert!(b.take_journal().is_empty());
+        // It fails again later (the shelf is dropped, as a hand-removed directory would be): a new
+        // streak, journaled once.
+        b.shelves.remove("p1");
+        b.store = Box::new(Unreadable);
+        for _ in 0..5 {
+            assert_eq!(b.confirm_button("p1", "pad"), Confirm::Family);
+        }
+        let journal = b.take_journal();
+        assert_eq!(journal.len(), 1, "{journal:?}");
+        assert!(journal[0].contains("reading the profiles of p1 failed"));
     }
 
     #[test]
