@@ -198,6 +198,16 @@ wait_fstate() {
     bad "$2: FreezerState $got, not $3, after $n s"
     return 1
 }
+# RUY-711: assert_fstate <user> <unit> <state> <ok text> <context>: reads the FreezerState ONCE, PASS with
+# the ok text or FAIL naming that value ("<unit>: FreezerState <read> <context>"). No wait: use it where
+# the state is already settled, or must stay (a unit that stays frozen); wait_fstate after a Thaw.
+assert_fstate() {
+    local got
+    got="$(fstate "$1" "$2")"
+    [ "$got" = "$3" ] && { ok "$4"; return 0; }
+    bad "$2: FreezerState $got $5"
+    return 1
+}
 # --- wait_fstate end
 # The app's loaded, active Flatpak scopes in user $1's manager (exact names).
 app_scope_names() {
@@ -1221,7 +1231,7 @@ check)
     tfrozen="$(date +%s)"
     case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze answered ok";; *) bad "Freeze";; esac
     for u in "$inst" $scopes; do
-        [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen" || bad "$u: FreezerState $(fstate "$user" "$u") after Freeze"
+        assert_fstate "$user" "$u" frozen "$u is frozen" "after Freeze"
     done
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*true" 10 && ok "FrozenChanged(true) arrived" || bad "no FrozenChanged(true)"
     running | grep -q '"frozen":{"type":"b","data":true}' && ok "ListRunning says frozen" || bad "ListRunning does not say frozen: $(running)"
@@ -1272,7 +1282,7 @@ check)
         || bad "ruya-shell's manager is gone with the shell stopped: the restore below has nowhere to run"
     case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw answered ok";; *) bad "Thaw";; esac
     for u in "$inst" $scopes; do
-        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again" || bad "$u: FreezerState $(fstate "$user" "$u") after Thaw"
+        wait_fstate "$user" "$u" running 5
     done
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 10 && ok "FrozenChanged(false) arrived" || bad "no FrozenChanged(false)"
     if [ "$audio" = 1 ]; then
@@ -1331,7 +1341,7 @@ check)
     # Without swap a wrong reclaim logs 'no swap is active' instead, so both lines count (review).
     slog2 | grep -a -q "$inst: memory reclaim\|$inst: no swap is active" && bad "a reclaim ran for a freeze that was thawed at once: $(slog2 | grep -a "$inst: memory reclaim\|$inst: no swap is active" | head -1)" || ok "no reclaim line for the freeze thawed at once"
     for u in "$inst" $scopes; do
-        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs on after the quick Thaw" || bad "$u: FreezerState $(fstate "$user" "$u") after the quick Thaw"
+        wait_fstate "$user" "$u" running 5
     done
     kill -0 "$(pgrep -u "$user" -f "sleep 3000" | head -1)" 2>/dev/null && ok "the app's process runs on" || bad "the app's process is gone after the quick Freeze and Thaw"
     # T-165 (RUY-87): a profile that leaves has its apps frozen. ruya-session follows Profiles1's
@@ -1345,7 +1355,7 @@ check)
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*true" 15 && ok "the Lock froze the app: FrozenChanged(true), no Freeze from the check" \
         || bad "no FrozenChanged(true) within 15 s of the Lock"
     for u in "$inst" $lscopes; do
-        [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen after the Lock" || bad "$u: FreezerState $(fstate "$user" "$u") after the Lock"
+        assert_fstate "$user" "$u" frozen "$u is frozen after the Lock" "after the Lock"
     done
     [ "$(echo "$lscopes" | grep -c .)" -ge 2 ] && ok "the dashed id's scopes (named with \\x2d) were checked: $(echo $lscopes)" || bad "expected at least two active scopes of $sleeper before the Lock, found: $lscopes"
     running | grep -q '"frozen":{"type":"b","data":true}' && ok "ListRunning says frozen while locked" || bad "ListRunning does not say frozen while locked: $(running)"
@@ -1353,7 +1363,7 @@ check)
         && ok "journal: froze $inst: its profile is not signed in" || bad "no 'froze $inst' line in the journal after the Lock"
     case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
     case "$(thaw_app "$inst")" in 's "not-allowed"') ok "Thaw with nobody signed in: not-allowed";; *) bad "Thaw while locked";; esac
-    [ "$(fstate "$user" "$inst")" = frozen ] && ok "and it stays frozen" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the refused Thaw"
+    assert_fstate "$user" "$inst" frozen "and it stays frozen" "after the refused Thaw"
     # The reply status decides, not busctl's exit code: a wrong or missing PIN is a successful call
     # (RUY-441). An empty PIN on a PIN profile answers "pin-required" (0.0.78), a stale one "wrong-pin".
     out="$(sign_in "$pid")"
@@ -1361,10 +1371,10 @@ check)
     # The service thaws nothing at a sign-in: the shell's sweep does (it is stopped here), so a Thaw from
     # the check stands in for it.
     sleep 2
-    [ "$(fstate "$user" "$inst")" = frozen ] && ok "signed in again: still frozen until the shell's Thaw" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the sign-in"
+    assert_fstate "$user" "$inst" frozen "signed in again: still frozen until the shell's Thaw" "after the sign-in"
     case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw after the sign-in: ok";; *) bad "Thaw after the sign-in";; esac
     for u in "$inst" $lscopes; do
-        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again after the Thaw" || bad "$u: FreezerState $(fstate "$user" "$u") after the Thaw"
+        wait_fstate "$user" "$u" running 5
     done
     # Frozen again for the Stop below: it must thaw first, so the app quits on its SIGTERM ("quit",
     # not "killed" after the grace time).
@@ -1418,7 +1428,7 @@ check)
     wait_sig "\"member\":\"AppStarted\".*$sleeper" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
     wait_sig "\"member\":\"FrozenChanged\".*$instl.*true" 15 && ok "FrozenChanged(true) for the app launched before the Lock" \
         || bad "no FrozenChanged(true) within 15 s for $instl"
-    [ "$(fstate "$user" "$instl")" = frozen ] && ok "$instl is frozen (FreezerState)" || bad "$instl: FreezerState $(fstate "$user" "$instl") after the early Lock"
+    assert_fstate "$user" "$instl" frozen "$instl is frozen (FreezerState)" "after the early Lock"
     journalctl -u ruya-session -b --no-pager -o cat --since "@$tlock2" 2>/dev/null | grep -a -q "froze $instl: its profile is not signed in" \
         && ok "journal: froze $instl: its profile is not signed in" || bad "no 'froze $instl' line in the journal"
     out="$(sign_in "$pid")"
