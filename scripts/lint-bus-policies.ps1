@@ -93,8 +93,12 @@ function New-DoorTable { return (New-Object System.Collections.Hashtable ([Strin
 function Read-Baseline([string]$Path) {
     if (-not (Test-Path $Path)) { return @{ Json = $null; Problem = "no $Path" } }
     $leaf = Split-Path -Leaf $Path
+    # The text test makes the answer the same in Windows PowerShell 5.1 and pwsh 7: 7 enumerates a root array, so
+    # `[{...}]` would parse to its one inner object. A text that starts with `{` and is malformed is still "not valid JSON".
+    $text = Get-Content -Raw $Path
+    if ($null -eq $text -or -not $text.Trim().StartsWith("{")) { return @{ Json = $null; Problem = "$leaf is not a JSON object" } }
     try {
-        $json = Get-Content -Raw $Path | ConvertFrom-Json -ErrorAction Stop
+        $json = $text | ConvertFrom-Json -ErrorAction Stop
     } catch {
         $why = ($_.Exception.Message -replace '\s+', ' ').Trim()
         return @{ Json = $null; Problem = "$leaf is not valid JSON: $why" }
@@ -485,6 +489,8 @@ if ($SelfTest) {
         @{ Name = "a baseline that is JSON null"; Json = 'null' },
         @{ Name = "a baseline that is an empty array"; Json = '[]' },
         @{ Name = "a baseline that is an array of the good object"; Json = '[{"public_bus_doors": {"org.x.A1": ["org.x.A1.Pub"]}}]' },
+        @{ Name = "a baseline that is an array, with whitespace, of the good object"; Json = "[`r`n  {`"public_bus_doors`": {`"org.x.A1`": [`"org.x.A1.Pub`"]}}`r`n]" },
+        @{ Name = "a baseline that is a byte-order mark and null"; Json = "$([char]0xFEFF)null" },
         @{ Name = "a baseline that is a number"; Json = '42' },
         @{ Name = "a baseline that is a string"; Json = '"x"' })) {
         $bp = Join-Path $dir "baseline.json"
