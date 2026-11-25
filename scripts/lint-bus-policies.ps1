@@ -32,6 +32,9 @@
 #      `<annotation name="org.ruyaos.Caller" value="root"/>` is denied to ruya-shell in writing: the
 #      `user="ruya-shell"` policy has `deny send_destination="<name>" send_member="<method>"` AFTER its
 #      last `allow send_destination="<name>"` (in dbus policy the last matching rule wins).
+#   Every compare of a policy value (user, context, names, interface, member, send_type, receive_type) is
+#   case-sensitive (-c*), as dbus-broker's: `user="Root"` is not root. A rule element is exactly `allow` or `deny`
+#   (RUY-1199).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -39,6 +42,9 @@ if (-not $Root) { $Root = $Repo }
 $ownerOnlyUsers = @("ruya-library", "ruya-input")
 
 # The attributes that narrow a receive rule in dbus-daemon(1): with one of them the rule matches only some signals.
+# Attribute names are matched case-insensitively here and in the receive-deny check on purpose: a rule that
+# spells receive_* or eavesdrop in another case is still flagged (the strict direction); every VALUE compare
+# in this file is case-sensitive (-c*), because dbus-broker matches values exactly (RUY-1199).
 function Get-RecvNarrowing($Rule) {
     foreach ($a in $Rule.Attributes) {
         if (($a.Name -like "receive_*" -and $a.Name -notin @("receive_sender", "receive_type")) -or $a.Name -eq "eavesdrop") { $a.Name }
@@ -47,7 +53,7 @@ function Get-RecvNarrowing($Rule) {
 
 # The methods api/dbus/<name>.xml marks root only (org.ruyaos.Caller = root); none without that file.
 function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
-    if ($Name -notmatch '^[A-Za-z0-9_.]+$') { return @() }   # a wildcard or empty name (refused by rule 2)
+    if ($Name -cnotmatch '^[A-Za-z0-9_.]+$') { return @() }   # a wildcard or empty name (refused by rule 2)
     $xml = Join-Path $ApiDir "$Name.xml"
     if (-not (Test-Path $xml)) { return @() }
     $settings = New-Object System.Xml.XmlReaderSettings
@@ -58,6 +64,8 @@ function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
     try { $doc.Load($reader) } finally { $reader.Dispose() }
     foreach ($m in $doc.SelectNodes("//interface/method")) {
         foreach ($an in $m.SelectNodes("annotation")) {
+            # Case-insensitive on purpose (the strict direction): this annotation is our own marker, read by this lint and
+            # not by dbus-broker, so `value="Root"` still demands the deny; a case-sensitive compare would drop it silently.
             if ($an.GetAttribute("name") -eq "org.ruyaos.Caller" -and $an.GetAttribute("value") -eq "root") { $m.GetAttribute("name") }
         }
     }
@@ -72,7 +80,7 @@ function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
     $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
     if ($null -eq $json.public_bus_doors) { return @{ Doors = $doors; Problems = $problems } }
     foreach ($p in $json.public_bus_doors.PSObject.Properties) {
-        if ($p.Name -like "_*") { continue }
+        if ($p.Name -clike "_*") { continue }
         $doors[$p.Name] = @($p.Value)
         $xml = Join-Path $ApiDir "$($p.Name).xml"
         if (-not (Test-Path $xml)) { $problems += "public door $($p.Name) has no $xml"; continue }
@@ -154,16 +162,17 @@ function Test-DoorAllow($Rule, $Doors, $DeniedNames, $DeniedRecv) {
     $attrs = @($Rule.Attributes | ForEach-Object { $_.Name } | Sort-Object)
     if ($Rule.HasAttribute("send_destination")) {
         $name = $Rule.GetAttribute("send_destination"); $iface = $Rule.GetAttribute("send_interface")
-        $shape = (($attrs -join ",") -eq "send_destination,send_interface,send_type" -and $Rule.GetAttribute("send_type") -eq "method_call")
+        $shape = (($attrs -join ",") -ceq "send_destination,send_interface,send_type" -and $Rule.GetAttribute("send_type") -ceq "method_call")
         $denied = $DeniedNames.Contains($name)
     } elseif ($Rule.HasAttribute("receive_sender")) {
         $name = $Rule.GetAttribute("receive_sender"); $iface = $Rule.GetAttribute("receive_interface")
-        $shape = (($attrs -join ",") -eq "receive_interface,receive_sender,receive_type" -and $Rule.GetAttribute("receive_type") -eq "signal")
+        $shape = (($attrs -join ",") -ceq "receive_interface,receive_sender,receive_type" -and $Rule.GetAttribute("receive_type") -ceq "signal")
         $denied = $DeniedRecv.Contains($name)
     } else { return "is not a public door's send or receive" }
-    if (-not $Doors.ContainsKey($name)) { return "is for $name, which is not a public door (security-baseline.json public_bus_doors)" }
+    # A PowerShell hashtable ignores case: compare the door names (its keys) with -ccontains.
+    if (@($Doors.Keys) -cnotcontains $name) { return "is for $name, which is not a public door (security-baseline.json public_bus_doors)" }
     if (-not $shape) { return "is not exactly a door's shape (send_destination + send_interface + send_type=method_call, or receive_sender + receive_interface + receive_type=signal)" }
-    if ($iface -notin $Doors[$name]) { return "opens $iface, which is not a public interface of $name" }
+    if (@($Doors[$name]) -cnotcontains $iface) { return "opens $iface, which is not a public interface of $name" }
     if (-not $denied) { return "comes before the default deny of $name (the last matching rule wins: the allow must follow it)" }
     return $null
 }
@@ -187,45 +196,50 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors, $Signals) {
     foreach ($p in $doc.SelectNodes("//policy")) {
         $ctx = $p.GetAttribute("context"); $user = $p.GetAttribute("user")
         $rules = @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" })
-        if ($ctx -eq "default") {
+        # A rule element is exactly allow or deny: the compares below are case-sensitive, so `<Allow .../>` would
+        # otherwise be neither and slip past every check (dbus-broker does not know it either).
+        foreach ($r in $rules) {
+            if ($r.LocalName -cnotin @("allow", "deny")) { $errs.Add("a policy rule must be exactly allow or deny ($($r.OuterXml))") }
+        }
+        if ($ctx -ceq "default") {
             foreach ($r in $rules) {
-                if ($r.LocalName -eq "allow") {
+                if ($r.LocalName -ceq "allow") {
                     $why = Test-DoorAllow $r $Doors $deniedNames $deniedRecv
                     if ($why) { $errs.Add("default context has an allow that $why ($($r.OuterXml))") }
                 }
-                elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("send_destination")) { [void]$deniedNames.Add($r.GetAttribute("send_destination")) }
-                elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("own")) { [void]$deniedOwn.Add($r.GetAttribute("own")) }
-                elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("receive_sender")) {
+                elseif ($r.LocalName -ceq "deny" -and $r.HasAttribute("send_destination")) { [void]$deniedNames.Add($r.GetAttribute("send_destination")) }
+                elseif ($r.LocalName -ceq "deny" -and $r.HasAttribute("own")) { [void]$deniedOwn.Add($r.GetAttribute("own")) }
+                elseif ($r.LocalName -ceq "deny" -and $r.HasAttribute("receive_sender")) {
                     $narrow = @(Get-RecvNarrowing $r)
                     if ($narrow.Count -gt 0) { $errs.Add("a narrowed receive deny does not close the default: it also names $($narrow -join ', ') ($($r.OuterXml))") }
-                    elseif ($r.GetAttribute("receive_type") -eq "signal") { [void]$deniedRecv.Add($r.GetAttribute("receive_sender")) }
+                    elseif ($r.GetAttribute("receive_type") -ceq "signal") { [void]$deniedRecv.Add($r.GetAttribute("receive_sender")) }
                     else { $errs.Add("a receive deny must name receive_type=signal ($($r.OuterXml))") }
                 }
             }
             continue
         }
-        if ($ctx -or ($user -notin @("root", "ruya-shell", "ruya-link") -and $user -notin $ownerOnlyUsers)) {
+        if ($ctx -or ($user -cnotin @("root", "ruya-shell", "ruya-link") -and $user -cnotin $ownerOnlyUsers)) {
             $errs.Add("policy kind not allowed: $($p.OuterXml.Substring(0, [Math]::Min(60, $p.OuterXml.Length)))")
             continue
         }
         foreach ($r in $rules) {
-            if ($r.LocalName -eq "deny" -and $user -in @("root", "ruya-shell") -and (@($r.Attributes | Where-Object { $_.Name -like "receive_*" }).Count -gt 0)) {
+            if ($r.LocalName -ceq "deny" -and $user -cin @("root", "ruya-shell") -and (@($r.Attributes | Where-Object { $_.Name -like "receive_*" }).Count -gt 0)) {
                 $errs.Add("a receive deny in the $user policy would cut it off from the service's signals ($($r.OuterXml))")
             }
-            if ($r.LocalName -ne "allow") { continue }
+            if ($r.LocalName -cne "allow") { continue }
             foreach ($a in "own", "send_destination") { if ($r.HasAttribute($a)) { [void]$allowedNames.Add($r.GetAttribute($a)) } }
-            if ($r.HasAttribute("receive_sender") -and $user -in @("root", "ruya-shell")) {
-                if ($r.GetAttribute("receive_type") -eq "signal") { [void]$allowedRecv.Add("$user|$($r.GetAttribute('receive_sender'))") }
+            if ($r.HasAttribute("receive_sender") -and $user -cin @("root", "ruya-shell")) {
+                if ($r.GetAttribute("receive_type") -ceq "signal") { [void]$allowedRecv.Add("$user|$($r.GetAttribute('receive_sender'))") }
                 else { $errs.Add("a receive allow must name receive_type=signal ($($r.OuterXml))") }
             }
-            if ($user -eq "ruya-link") {
+            if ($user -ceq "ruya-link") {
                 if ($r.HasAttribute("own")) { $errs.Add("ruya-link may not own a name ($($r.OuterXml))") }
                 if (-not ($r.HasAttribute("send_destination") -and $r.HasAttribute("send_member"))) { $errs.Add("ruya-link allow needs send_destination and send_member ($($r.OuterXml))") }
                 foreach ($a in "send_destination", "send_member") {
                     $v = $r.GetAttribute($a)
                     if ($r.HasAttribute($a) -and ([string]::IsNullOrWhiteSpace($v) -or $v.Contains("*"))) { $errs.Add("ruya-link $a must be an exact name, not empty or a wildcard ($($r.OuterXml))") }
                 }
-            } elseif ($user -in $ownerOnlyUsers) {
+            } elseif ($user -cin $ownerOnlyUsers) {
                 if ($r.HasAttribute("own")) {
                     if ($r.Attributes.Count -ne 1) { $errs.Add("$user may only allow own ($($r.OuterXml))") }
                 } else {
@@ -246,16 +260,16 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors, $Signals) {
     # Rule 5: every root-only member of a name the file allows is denied to ruya-shell after its allow.
     $shellRules = @()
     foreach ($p in $doc.SelectNodes("//policy")) {
-        if ($p.GetAttribute("user") -eq "ruya-shell") { $shellRules += @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" }) }
+        if ($p.GetAttribute("user") -ceq "ruya-shell") { $shellRules += @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" }) }
     }
     foreach ($n in $allowedNames) {
         foreach ($member in @(Get-RootOnlyMembers $ApiDir $n)) {
             $lastAllow = -1; $deny = -1
             for ($i = 0; $i -lt $shellRules.Count; $i++) {
                 $r = $shellRules[$i]
-                if ($r.GetAttribute("send_destination") -ne $n) { continue }
-                if ($r.LocalName -eq "allow") { $lastAllow = $i }
-                elseif ($r.LocalName -eq "deny" -and $r.GetAttribute("send_member") -eq $member) { $deny = $i }
+                if ($r.GetAttribute("send_destination") -cne $n) { continue }
+                if ($r.LocalName -ceq "allow") { $lastAllow = $i }
+                elseif ($r.LocalName -ceq "deny" -and $r.GetAttribute("send_member") -ceq $member) { $deny = $i }
             }
             if ($deny -lt 0) { $errs.Add("$n.$member is root only (org.ruyaos.Caller) but ruya-shell has no deny send_member=`"$member`"") }
             elseif ($deny -lt $lastAllow) { $errs.Add("the ruya-shell deny of $n.$member comes before an allow of $n, which wins") }
@@ -358,6 +372,21 @@ if ($SelfTest) {
         @{ Name = "a service signal of another interface than the baseline entry's"; From = $sigAllow; To = $sigAllow.Replace('send_interface="org.x.B1"', 'send_interface="org.x.B2"'); Expect = 1 },
         @{ Name = "a service signal of another member than the baseline entry's"; From = $sigAllow; To = $sigAllow.Replace('send_member="Wanted"', 'send_member="Other"'); Expect = 1 },
         @{ Name = "a service signal on another path than the baseline's"; From = $sigAllow; To = $sigAllow.Replace('/org/x/B1', '/org/x/Other'); Expect = 1 },
+        # RUY-1199: dbus-broker matches every value exactly, so a value in another case is another value. Each fixture
+        # below is accepted if its compare ignores case; the others of the same family would still refuse it, so each
+        # adds the odd policy beside the good ones.
+        @{ Name = "a policy for user Root (another case than root)"; From = '<policy context="default">'; To = '<policy user="Root"><allow send_destination="org.x.A1"/></policy><policy context="default">'; Expect = 1 },
+        @{ Name = "a service policy for user Ruya-Library (another case than ruya-library)"; From = '<policy context="default">'; To = '<policy user="Ruya-Library"><allow own="org.x.A1"/></policy><policy context="default">'; Expect = 1 },
+        @{ Name = "a default context written Default"; From = '<policy context="default">'; To = '<policy context="Default">'; Expect = 1 },
+        @{ Name = "a rule element written Allow (neither allow nor deny)"; From = $doorAllow; To = $doorAllow.Replace('<allow', '<Allow'); Expect = 1 },
+        @{ Name = "a default receive deny whose receive_type is SIGNAL"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="SIGNAL"/>'; Expect = 1 },
+        @{ Name = "a root receive allow whose receive_type is SIGNAL"; From = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="SIGNAL"/>'; Expect = 1 },
+        @{ Name = "a door's send allow whose send_type is METHOD_CALL"; From = $doorAllow; To = $doorAllow.Replace('method_call', 'METHOD_CALL'); Expect = 1 },
+        @{ Name = "a door's receive allow whose receive_type is SIGNAL"; From = $doorRecv; To = $doorRecv.Replace('"signal"', '"SIGNAL"'); Expect = 1 },
+        @{ Name = "a door's allow of an interface in another case than the door list's"; From = $doorAllow; To = $doorAllow.Replace('org.x.A1.Pub', 'org.x.A1.PUB'); Expect = 1 },
+        @{ Name = "a door's allow for a name in another case than the door list's"; From = ""; To = ""; DoorName = "ORG.x.A1"; Expect = 1 },
+        @{ Name = "a root-only member denied in another case (send_member Put -> PUT)"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = '<deny send_destination="org.x.A1" send_member="PUT"/>'; Expect = 1 },
+        @{ Name = "a root-only member denied for a destination in another case"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = '<deny send_destination="ORG.x.A1" send_member="Put"/>'; Expect = 1 },
         @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {
@@ -372,7 +401,7 @@ if ($SelfTest) {
         [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
         [IO.File]::WriteAllText((Join-Path $ad "org.x.B1.xml"), $apiB)
         [IO.File]::WriteAllText((Join-Path $ad "org.x.B2.xml"), $apiB2)
-        $doors = if ($c.NoDoor) { @{} } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
+        $doors = if ($c.NoDoor) { @{} } elseif ($c.DoorName) { @{ $c.DoorName = @("org.x.A1.Pub") } } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
         $member = if ($c.SigMember) { $c.SigMember } else { "Wanted" }
         $sigPath = if ($c.SigPath) { $c.SigPath } else { "/org/x/B1" }
         $sigUser = if ($c.SigUser) { $c.SigUser } else { "ruya-library" }
