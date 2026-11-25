@@ -2800,7 +2800,7 @@ done
 # RUY-1045: a pin is LF only; Pin::parse refuses any CR (Rust test a_crlf_pin_is_refused) and so does
 # check_pin, counting the CR with tr (Git Bash drops it in grep, sed and $(...)). A CR byte cannot be a
 # tracked fixture (lint-text.ps1), so the copies of good.pin with a CR are built here: on every line
-# (CRLF), and on the url= line only (that one passes the https:// test, so only the CR refusal sees it).
+# (CRLF), and on the url= or the root= line only (those pass the https:// and root tests, so only the CR refusal sees them).
 for cr_on in '' 'url=' 'root='; do
     crlf="$ir/crlf.pin"
     while IFS= read -r line || [ -n "$line" ]; do
