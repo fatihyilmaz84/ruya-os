@@ -87,15 +87,20 @@ function New-DoorTable { return (New-Object System.Collections.Hashtable ([Strin
 
 # Reads the security baseline once for both readers below: @{ Json = <parsed object>; Problem = $null }, or
 # @{ Json = $null; Problem = <why> } for a missing file, malformed JSON or keys that differ only in case (both
-# PowerShell editions throw on those). The caller fails closed on a Problem (RUY-1207).
+# PowerShell editions throw on those), or a root that is not a JSON object: an empty or whitespace-only file and
+# `null` parse to $null, an array to object[], a scalar to a string or number, none of them with an error.
+# The caller fails closed on a Problem (RUY-1207, RUY-1208).
 function Read-Baseline([string]$Path) {
     if (-not (Test-Path $Path)) { return @{ Json = $null; Problem = "no $Path" } }
+    $leaf = Split-Path -Leaf $Path
     try {
-        return @{ Json = (Get-Content -Raw $Path | ConvertFrom-Json -ErrorAction Stop); Problem = $null }
+        $json = Get-Content -Raw $Path | ConvertFrom-Json -ErrorAction Stop
     } catch {
         $why = ($_.Exception.Message -replace '\s+', ' ').Trim()
-        return @{ Json = $null; Problem = "$(Split-Path -Leaf $Path) is not valid JSON: $why" }
+        return @{ Json = $null; Problem = "$leaf is not valid JSON: $why" }
     }
+    if ($json -isnot [System.Management.Automation.PSCustomObject]) { return @{ Json = $null; Problem = "$leaf is not a JSON object" } }
+    return @{ Json = $json; Problem = $null }
 }
 
 # The public doors (image/security-baseline.json "public_bus_doors"): bus name -> the interfaces a
@@ -471,6 +476,22 @@ if ($SelfTest) {
         [IO.File]::WriteAllText($bp, $d.Json)
         $got = @((Get-PublicDoors $bp $dir).Problems).Count
         if (($got -gt 0) -ne ($d.Expect -gt 0)) { Write-Host "FAIL: self-test: door list $(if ($d.Expect) {'accepted'} else {'refused'}) $($d.Name)"; $bad++ }
+    }
+    # A baseline whose root is not a JSON object parses without an error; it is still exactly one Problem of its
+    # own from Get-PublicDoors, and Get-ServiceSignals stays silent (RUY-1208).
+    foreach ($r in @(
+        @{ Name = "an empty baseline file"; Json = '' },
+        @{ Name = "a whitespace-only baseline file"; Json = "  `r`n  " },
+        @{ Name = "a baseline that is JSON null"; Json = 'null' },
+        @{ Name = "a baseline that is an empty array"; Json = '[]' },
+        @{ Name = "a baseline that is an array of the good object"; Json = '[{"public_bus_doors": {"org.x.A1": ["org.x.A1.Pub"]}}]' },
+        @{ Name = "a baseline that is a number"; Json = '42' },
+        @{ Name = "a baseline that is a string"; Json = '"x"' })) {
+        $bp = Join-Path $dir "baseline.json"
+        [IO.File]::WriteAllText($bp, $r.Json)
+        $problems = @((Get-PublicDoors $bp $dir).Problems)
+        if ($problems.Count -ne 1 -or $problems[0] -ne "baseline.json is not a JSON object") { Write-Host "FAIL: self-test: $($r.Name) is not refused as one 'not a JSON object' problem (got: $($problems -join ' | '))"; $bad++ }
+        if (@(Get-ServiceSignals $bp).Count -ne 0) { Write-Host "FAIL: self-test: $($r.Name) gives service signals"; $bad++ }
     }
     Remove-Item -Recurse -Force $dir
     # The service_signals list itself: every entry is exact and carries a reason.
