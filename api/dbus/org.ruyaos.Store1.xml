@@ -73,9 +73,11 @@
                          the shell maps them to words; absent = none
     screenshots     aa{sv} GetApp only: absent from Search and ListInstalled. AppStream order, the
                          type="default" one first, at most 10. Each {image s, thumb s, caption s}:
-                         image = URL of the widest <image> at most 1920 px wide (the type="source"
-                         one if none has a width); thumb = the narrowest at least 400 px wide (else
-                         image); caption = <caption> or "".
+                         image = URL of the widest <image> with a width of at most 1920 px; if none
+                         has one, the type="source" image, whatever its size; if there is none of
+                         those, the first <image>. thumb = the narrowest <image> at least 400 px
+                         wide; if none is, the same URL as image. A screenshot with no <image> is
+                         left out. caption = <caption> or "".
     icon            s    URL (https: or file:) or "" - the shell draws a generated tile then
     tile            s    URL or ""
     hero            s    URL or ""
