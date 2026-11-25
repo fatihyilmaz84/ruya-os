@@ -615,6 +615,22 @@ fn pin_errors_say_what_is_wrong() {
     );
 }
 
+/// A pin is LF only (`.gitattributes`): `lines()` would strip a `\r` and accept the file, while
+/// `install-runners.sh check_pin` keeps it in the value and refuses it. A CR byte cannot be a
+/// tracked fixture (`lint-text.ps1`), so the CRLF text is built from `good.pin` here, and
+/// `scripts/test-vm-checks.sh` builds the same bytes for `check-pin` (RUY-1045).
+#[test]
+fn a_crlf_pin_is_refused() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pins");
+    let good = std::fs::read_to_string(dir.join("good.pin")).expect("good.pin");
+    assert!(Pin::parse(&good).is_ok(), "the LF original parses");
+    assert!(!good.contains('\r'), "good.pin must stay LF");
+    assert_eq!(
+        Pin::parse(&good.replace('\n', "\r\n")).unwrap_err(),
+        "carriage return: the pin file is LF only"
+    );
+}
+
 /// Every file of `tests/fixtures/prunes/`, with its verdict from its name: `good*` parses, `bad*` does
 /// not. `scripts/test-vm-checks.sh` runs `install-runners.sh check-prune` over the same files and
 /// holds the shell to the same verdicts (RUY-1039).

@@ -471,7 +471,67 @@ fn the_runner_pins_runner_json_and_the_shell_mock_agree() {
                 mock_path.display()
             );
         }
+        if runner.version.starts_with(GE_PROTON) {
+            let other = other_ge_proton_versions(&mock, &runner.version, &MOCK_BUNDLED_GE_PROTON);
+            assert!(
+                other.is_empty(),
+                "{}: names a GE-Proton other than the pinned {}: {other:?}",
+                mock_path.display(),
+                runner.version
+            );
+            for v in MOCK_BUNDLED_GE_PROTON {
+                assert!(
+                    mock.contains(v),
+                    "MOCK_BUNDLED_GE_PROTON lists {v}, the mock does not"
+                );
+            }
+        }
         seen += 1;
     }
     assert!(seen >= 2, "the image pins {seen} runners");
+}
+
+const GE_PROTON: &str = "GE-Proton";
+
+/// The older GE-Proton the mock's Windows game carries as its own bundled copy, the version its
+/// developer tested (`MockLibraryBackend.cpp`, RUY-903): the one version the mock may name besides the
+/// image's pinned one.
+const MOCK_BUNDLED_GE_PROTON: [&str; 1] = ["GE-Proton10-9"];
+
+/// Every `GE-Proton<major>-<minor>` token of `text` (comments included) that is neither `pinned` nor
+/// in `allowed`, as `(line number, token)`: the mock's runner strings drift from the pin otherwise.
+fn other_ge_proton_versions(text: &str, pinned: &str, allowed: &[&str]) -> Vec<(usize, String)> {
+    let digits = |s: &str| s.bytes().take_while(u8::is_ascii_digit).count();
+    let mut found = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        for (at, _) in line.match_indices(GE_PROTON) {
+            let rest = &line[at + GE_PROTON.len()..];
+            let major = digits(rest);
+            if major == 0 || !rest[major..].starts_with('-') {
+                continue;
+            }
+            let minor = digits(&rest[major + 1..]);
+            if minor == 0 {
+                continue;
+            }
+            let token = format!("{GE_PROTON}{}", &rest[..major + 1 + minor]);
+            if token != pinned && !allowed.contains(&token.as_str()) {
+                found.push((i + 1, token));
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn other_ge_proton_versions_finds_a_version_that_is_not_the_pinned_one() {
+    let text = "a(\"proton-ge GE-Proton11-13\");\nb(\"proton-ge GE-Proton11-12\", GE-Proton10-9);\n// GE-Proton11-130 and GE-Proton\n";
+    assert_eq!(
+        other_ge_proton_versions(text, "GE-Proton11-13", &["GE-Proton10-9"]),
+        vec![
+            (2, "GE-Proton11-12".to_string()),
+            (3, "GE-Proton11-130".to_string())
+        ]
+    );
+    assert!(other_ge_proton_versions("GE-Proton11-13-x86_64", "GE-Proton11-13", &[]).is_empty());
 }

@@ -2797,6 +2797,23 @@ for f in "$pins"/*.pin; do
     esac
 done
 [ "$npins" -ge 12 ] || fail "install-runners: only $npins pin fixtures"
+# RUY-1045: a pin is LF only; Pin::parse refuses any CR (Rust test a_crlf_pin_is_refused) and so does
+# check_pin, counting the CR with tr (Git Bash drops it in grep, sed and $(...)). A CR byte cannot be a
+# tracked fixture (lint-text.ps1), so the copies of good.pin with a CR are built here: on every line
+# (CRLF), and on the url= line only (that one passes the https:// test, so only the CR refusal sees it).
+for cr_on in '' 'url=' 'root='; do
+    crlf="$ir/crlf.pin"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+        "$cr_on"*) printf '%s\r\n' "$line" ;;
+        *) printf '%s\n' "$line" ;;
+        esac
+    done < "$pins/good.pin" > "$crlf"
+    want="$(wc -l < "$pins/good.pin")"; [ -z "$cr_on" ] || want=1
+    [ "$(tr -cd '\r' < "$crlf" | wc -c)" = "$want" ] || fail "install-runners: the CR fixture (${cr_on:-every line}) has $(tr -cd '\r' < "$crlf" | wc -c) CR, want $want"
+    out="$(bash "$here/../image/play/install-runners.sh" check-pin "$crlf" 2>&1)"; rc=$?
+    [ "$rc" != 0 ] && expect_contains "install-runners: check_pin refuses a pin with a CR (${cr_on:-every line})" "$out" "carriage return: the pin file is LF only" || fail "install-runners: check_pin accepted a pin with a CR (${cr_on:-every line}): $out"
+done
 # RUY-37: the pin folder's own files (licence texts) are laid over the release; none replaces a release
 # file; a tree without a licence text fails the build.
 nsha="$(sha256sum "$ir/release-nolicence.tar.gz" | cut -d' ' -f1)"
