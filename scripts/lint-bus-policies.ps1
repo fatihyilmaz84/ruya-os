@@ -85,13 +85,28 @@ function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
 # dbus-broker matches names exactly (RUY-1206).
 function New-DoorTable { return (New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)) }
 
+# Reads the security baseline once for both readers below: @{ Json = <parsed object>; Problem = $null }, or
+# @{ Json = $null; Problem = <why> } for a missing file, malformed JSON or keys that differ only in case (both
+# PowerShell editions throw on those). The caller fails closed on a Problem (RUY-1207).
+function Read-Baseline([string]$Path) {
+    if (-not (Test-Path $Path)) { return @{ Json = $null; Problem = "no $Path" } }
+    try {
+        return @{ Json = (Get-Content -Raw $Path | ConvertFrom-Json -ErrorAction Stop); Problem = $null }
+    } catch {
+        $why = ($_.Exception.Message -replace '\s+', ' ').Trim()
+        return @{ Json = $null; Problem = "$(Split-Path -Leaf $Path) is not valid JSON: $why" }
+    }
+}
+
 # The public doors (image/security-baseline.json "public_bus_doors"): bus name -> the interfaces a
 # default-context allow may open. Each listed interface must exist in api/dbus/<name>.xml with every
 # method, signal and property tagged org.ruyaos.Stability (a public element, ADR-022).
+# A baseline that cannot be read is this function's one Problem (Get-ServiceSignals stays silent about it).
 function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
     $doors = New-DoorTable; $problems = @()
-    if (-not (Test-Path $BaselinePath)) { return @{ Doors = $doors; Problems = @("no $BaselinePath") } }
-    $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
+    $baseline = Read-Baseline $BaselinePath
+    if ($null -ne $baseline.Problem) { return @{ Doors = $doors; Problems = @($baseline.Problem) } }
+    $json = $baseline.Json
     if ($null -eq $json.public_bus_doors) { return @{ Doors = $doors; Problems = $problems } }
     foreach ($p in $json.public_bus_doors.PSObject.Properties) {
         if ($p.Name -clike "_*") { continue }
@@ -121,9 +136,8 @@ function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
 # {user, destination, path, interface, member}: the one signal a service user may send to another service.
 function Get-ServiceSignals([string]$BaselinePath) {
     $list = @()
-    if (-not (Test-Path $BaselinePath)) { return $list }
-    $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
-    if ($null -eq $json.service_signals) { return $list }
+    $json = (Read-Baseline $BaselinePath).Json   # an unreadable baseline is already Get-PublicDoors's FAIL line
+    if ($null -eq $json -or $null -eq $json.service_signals) { return $list }
     foreach ($s in @($json.service_signals)) {
         $list += @{ user = [string]$s.user; destination = [string]$s.destination; path = [string]$s.path; interface = [string]$s.interface; member = [string]$s.member; reason = [string]$s.reason }
     }
@@ -430,7 +444,7 @@ if ($SelfTest) {
         $doors = New-DoorTable
         if (-not $c.NoDoor) { $doors[$(if ($c.DoorName) { $c.DoorName } else { "org.x.A1" })] = @("org.x.A1.Pub") }
         if ($c.DoorTwin) { $doors[$c.DoorTwin] = @("org.x.A1") }   # a second door that differs only in case, listing another interface
-        $member =if ($c.SigMember) { $c.SigMember } else { "Wanted" }
+        $member = if ($c.SigMember) { $c.SigMember } else { "Wanted" }
         $sigPath = if ($c.SigPath) { $c.SigPath } else { "/org/x/B1" }
         $sigUser = if ($c.SigUser) { $c.SigUser } else { "ruya-library" }
         $sigDest = if ($c.SigDest) { $c.SigDest } else { "org.x.A1" }
@@ -449,7 +463,10 @@ if ($SelfTest) {
         @{ Name = "a door whose interface is all tagged (control)"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1.Pub"]}}'; Expect = 0 },
         @{ Name = "a door listing an untagged interface"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1"]}}'; Expect = 1 },
         @{ Name = "a door listing an interface the XML lacks"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1.Nope"]}}'; Expect = 1 },
-        @{ Name = "a door without a contract"; Json = '{"public_bus_doors": {"org.x.B1": ["org.x.B1.Pub"]}}'; Expect = 1 })) {
+        @{ Name = "a door without a contract"; Json = '{"public_bus_doors": {"org.x.B1": ["org.x.B1.Pub"]}}'; Expect = 1 },
+        # A baseline that does not parse is one Problem from the shared reader, never a raw exception (RUY-1207).
+        @{ Name = "a malformed baseline"; Json = '{"public_bus_doors": {"org.x.A1": ['; Expect = 1 },
+        @{ Name = "a baseline with keys that differ only in case"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1.Pub"]}, "Public_Bus_Doors": {}}'; Expect = 1 })) {
         $bp = Join-Path $dir "baseline.json"
         [IO.File]::WriteAllText($bp, $d.Json)
         $got = @((Get-PublicDoors $bp $dir).Problems).Count
