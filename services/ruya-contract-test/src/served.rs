@@ -367,8 +367,8 @@ mod tests {
         ] {
             let source = format!(
                 "const Q: [char; 2] = {literal};\n\
-                 fn t(s: &str) -> &str {{ s.trim_matches('\"') }}\n\
-                 #[interface(name = \"org.ruyaos.X1\")]"
+                 #[interface(name = \"org.ruyaos.X1\")]\n\
+                 fn t(s: &str) -> &str {{ s.trim_matches('\"') }}"
             );
             assert_eq!(names(&source), ["org.ruyaos.X1"], "{literal}");
         }
