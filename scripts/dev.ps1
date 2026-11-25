@@ -459,6 +459,23 @@ function Test-RevertCheckPiping {
             }
         }
     }
+    # RUY-1203: a child that dies on a terminating error (the RUY-994 case) leaves no Totals or FAILED line and does
+    # not return; it is CAUGHT, says "child aborted" and exits 0, in every mode; the same child with nothing to
+    # throw about is NOT CAUGHT.
+    $throwRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { throw "fixture child died" } else { "ALL GREEN" } }.GetNewClosure()
+    foreach ($mode in @("default", "docs", "vmchecks")) {
+        foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
+            foreach ($piped in @($false, $true)) {
+                if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $throwRunner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+                else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $throwRunner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
+                $code = $LASTEXITCODE
+                $text = $lines -join "`n"
+                $said = if ($case.Caught) { ($text -match '(?m)^CAUGHT') -and ($text -match 'child aborted: fixture child died') } else { $text -match 'NOT CAUGHT' }
+                $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
+                if (-not $good) { $ok = $false; Write-Host "    aborted child mode=$mode piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+            }
+        }
+    }
     # RUY-765: a relative -File resolves against the current location; one that is not there is refused and
     # never created in this checkout; a file in another checkout (a worktree) is refused, unchanged.
     Push-Location $fx
