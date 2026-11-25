@@ -238,7 +238,8 @@
     </property>
 
     <!-- Rescan asks for `profile`'s Steam items again: ruya-session runs the profile's reader
-         and puts the result. -->
+         and puts the result. The argument is a hint: ruya-session scans only the profile it
+         knows is active (signed in) and ignores a signal that names any other. -->
     <signal name="ProfileScanWanted">
       <arg name="profile" type="s"/>
     </signal>

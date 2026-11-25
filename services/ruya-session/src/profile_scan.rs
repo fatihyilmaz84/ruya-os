@@ -10,7 +10,8 @@
 //!   (b) when Library1's name gets a new owner, for the active profile, so its items come back
 //!       without a sign-in;
 //!   (c) when a profile's Steam instance ends (it may have installed or removed games);
-//!   (d) on `Library1.ProfileScanWanted(profile)`, which `Rescan` sends.
+//!   (d) on `Library1.ProfileScanWanted(profile)`, which `Rescan` sends; a hint: only when
+//!       `profile` is the active one, any other is ignored.
 //! At most one reader per profile runs at a time; a trigger while it runs asks for one more run
 //! after it (so a change during the run is not lost), never for a second one beside it.
 
@@ -87,7 +88,15 @@ impl Planner {
                     Vec::new()
                 }
             }
-            Trigger::Wanted(profile) => self.scan(&profile),
+            // A hint: only the profile this service knows is signed in is scanned, whatever
+            // the signal names (ruya-library's idea of it can lag; a new sign-in scans itself).
+            Trigger::Wanted(profile) => {
+                if self.is_active(&profile) {
+                    self.scan(&profile)
+                } else {
+                    Vec::new()
+                }
+            }
             Trigger::Done(profile) => {
                 self.running.remove(&profile);
                 if self.again.remove(&profile) {
@@ -97,6 +106,11 @@ impl Planner {
                 }
             }
         }
+    }
+
+    /// Is `profile` the signed-in profile as last read (never "" or before the first read)?
+    pub fn is_active(&self, profile: &str) -> bool {
+        !profile.is_empty() && self.active.as_deref() == Some(profile)
     }
 
     /// `SetActiveProfile` with the active profile, then its scan when it is a profile. Nothing
@@ -196,11 +210,59 @@ mod tests {
     }
 
     #[test]
-    fn profile_scan_wanted_scans_a_valid_profile() {
+    fn profile_scan_wanted_scans_the_active_profile() {
         let mut p = Planner::new();
+        p.on(active("p3"));
+        p.on(Trigger::Done("p3".into()));
         assert_eq!(p.on(Trigger::Wanted("p3".into())), [scan("p3")]);
-        assert_eq!(p.on(Trigger::Wanted("../x".into())), []);
-        assert_eq!(p.on(Trigger::Wanted(String::new())), []);
+    }
+
+    #[test]
+    fn profile_scan_wanted_for_any_other_profile_is_ignored() {
+        let mut p = Planner::new();
+        assert_eq!(
+            p.on(Trigger::Wanted("p1".into())),
+            [],
+            "nothing read yet: the first Active scans"
+        );
+        p.on(active("p1"));
+        p.on(Trigger::Done("p1".into()));
+        assert_eq!(p.on(Trigger::Wanted("p2".into())), [], "a valid other id");
+        assert_eq!(p.on(Trigger::Wanted("../x".into())), [], "malformed");
+        assert_eq!(p.on(Trigger::Wanted(String::new())), [], "empty");
+        assert_eq!(
+            p.on(Trigger::Wanted("p1".into())),
+            [scan("p1")],
+            "the active"
+        );
+    }
+
+    #[test]
+    fn profile_scan_wanted_follows_sign_out_and_switch() {
+        let mut p = Planner::new();
+        p.on(active("p1"));
+        p.on(Trigger::Done("p1".into()));
+        p.on(active(""));
+        assert_eq!(p.on(Trigger::Wanted("p1".into())), [], "signed out");
+        p.on(active("p1"));
+        p.on(Trigger::Done("p1".into()));
+        p.on(active("p2"));
+        p.on(Trigger::Done("p2".into()));
+        assert_eq!(p.on(Trigger::Wanted("p1".into())), [], "after a switch");
+        assert_eq!(p.on(Trigger::Wanted("p2".into())), [scan("p2")]);
+    }
+
+    #[test]
+    fn is_active_is_the_signed_in_profile_only() {
+        let mut p = Planner::new();
+        assert!(
+            !p.is_active("p1") && !p.is_active(""),
+            "before the first read"
+        );
+        p.on(active("p1"));
+        assert!(p.is_active("p1") && !p.is_active("p2"));
+        p.on(active(""));
+        assert!(!p.is_active("p1") && !p.is_active(""), "signed out");
     }
 
     #[test]
@@ -214,7 +276,7 @@ mod tests {
             "still one more only"
         );
         assert_eq!(
-            p.on(Trigger::Wanted("p2".into())),
+            p.on(ended("p2", "flatpak:com.valvesoftware.Steam")),
             [scan("p2")],
             "another profile is not held up"
         );
