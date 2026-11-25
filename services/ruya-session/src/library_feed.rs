@@ -68,6 +68,13 @@ async fn drive(connection: Connection, triggers: Receiver<Trigger>) {
             }
             None => return eprintln!("ruya-session: the Steam reader's triggers are gone"),
         };
+        if let Trigger::Wanted(profile) = &trigger {
+            if !planner.is_active(profile) {
+                eprintln!(
+                    "ruya-session: ProfileScanWanted for {profile:?}, which is not the active profile: ignored"
+                );
+            }
+        }
         for action in planner.on(trigger) {
             match action {
                 Action::SetActive(profile) => set_active(&connection, &profile).await,
