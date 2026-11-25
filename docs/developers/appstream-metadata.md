@@ -114,10 +114,10 @@ Use OARS 1.1, the standard for Flatpak: answer each question for your game, for 
 | all `none` | All ages |
 | a `mild` | 7+ |
 | a `moderate` | 12+ |
-| an `intense` in `sex-*`, `drugs-*` or `violence-sexual` | 18+ |
-| any other `intense` (also `money-gambling`: the code looks for an id starting with `gambling`, which OARS 1.1 does not have) | 16+ |
+| an `intense` in `sex-*`, `drugs-*`, `violence-sexual` or `money-gambling` | 18+ |
+| any other `intense` | 16+ |
 
-The label is shown on the app page ("Ages 12+"). **A game without a `<content_rating>` is shown as "All ages"; so do not skip it.** What it will do next (**planned**, T-211, T-212): a parent sets an age limit for a profile; an app above the limit does not launch and cannot be installed for that profile, and **an app with no rating counts as 18+** for restricted profiles. Rate honestly: the rating is yours, the console only applies it.
+The label is shown on the app page ("Ages 12+"). **A game without a `<content_rating>` is shown as "Not rated", never as "All ages"; so do not skip it.** What it will do next (**planned**, T-211, T-212): a parent sets an age limit for a profile; an app above the limit does not launch and cannot be installed for that profile, and **an app with no rating counts as 18+** for restricted profiles. Rate honestly: the rating is yours, the console only applies it.
 
 ## Controller support
 
