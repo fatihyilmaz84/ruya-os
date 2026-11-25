@@ -363,6 +363,22 @@ Item {
             compare(finished.signalArguments[1][1], "ok", "the level now fits")
         }
 
+        // RUY-1181: the same rule for an update; Open Chess is installed and has one.
+        function test_update_of_an_incompatible_app_is_refused() {
+            const id = "org.example.Chess"
+            verify(Store.app(id).updateAvailable)
+            Store.mockSetMinApiLevel(id, 1)
+            tryVerify(() => Store.app(id).compatible === false)
+            Store.update(id)
+            tryCompare(finished, "count", 1)
+            compare(finished.signalArguments[0][1], "incompatible")
+            verify(Store.app(id).updateAvailable, "the update is still there")
+            Store.mockSetApiLevel(1)
+            Store.update(id)
+            tryCompare(finished, "count", 2)
+            compare(finished.signalArguments[1][1], "ok", "the level now fits")
+        }
+
         function test_update() {
             verify(Store.app("org.example.Chess").updateAvailable)
             Store.update("org.example.Chess")

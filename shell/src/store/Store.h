@@ -141,6 +141,8 @@ public:
     Q_INVOKABLE void mockInstallOutside(const QString &appId, const QString &name, const QStringList &permissions);
     // The mock console's API level (0 until mockReset); org.example.Future needs 1 (RUY-636).
     Q_INVOKABLE void mockSetApiLevel(int level);
+    // The level one app asks for, until mockReset (RUY-1181: an installed app whose update is incompatible).
+    Q_INVOKABLE void mockSetMinApiLevel(const QString &appId, int level);
     // Every later search answers after ms, until mockReset (T-377: the Store page before the
     // service's answer to its filter).
     Q_INVOKABLE void mockSearchReplyDelay(int ms);

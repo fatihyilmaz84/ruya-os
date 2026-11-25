@@ -479,6 +479,12 @@ void Store::mockSetApiLevel(int level)
         mock->setApiLevel(level);
 }
 
+void Store::mockSetMinApiLevel(const QString &appId, int level)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setMinApiLevel(appId, level);
+}
+
 void Store::mockSearchReplyDelay(int ms)
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
