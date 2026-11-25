@@ -20,6 +20,54 @@ use std::str::FromStr;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+
+/// The one XML reader of this crate: every reader of a contract file (and of zbus's output) reads
+/// through it, so "is the file well-formed XML" has one answer (RUY-1103).
+///
+/// quick_xml is lenient by default. `enable_all_checks` turns on its two well-formedness checks
+/// (`--` inside a comment; an end tag that does not close the open element, which it already
+/// refuses by default and now stays refused). An element still open at the end of the input it
+/// never reports, so [`StrictReader::next_event`] tracks the open elements and refuses that too.
+struct StrictReader<'a> {
+    reader: Reader<&'a [u8]>,
+    open: Vec<String>,
+}
+
+impl<'a> StrictReader<'a> {
+    fn new(xml: &'a str) -> Self {
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().enable_all_checks(true);
+        Self {
+            reader,
+            open: Vec::new(),
+        }
+    }
+
+    fn next_event(&mut self) -> Result<Event<'a>, String> {
+        let event = self
+            .reader
+            .read_event()
+            .map_err(|e| format!("XML error at {}: {e}", self.reader.buffer_position()))?;
+        match &event {
+            Event::Start(e) => self
+                .open
+                .push(String::from_utf8_lossy(e.name().as_ref()).into_owned()),
+            Event::End(_) => {
+                self.open.pop();
+            }
+            Event::Eof => {
+                if let Some(name) = self.open.last() {
+                    return Err(format!(
+                        "XML error at {}: element <{name}> is never closed",
+                        self.reader.buffer_position()
+                    ));
+                }
+            }
+            _ => {}
+        }
+        Ok(event)
+    }
+}
 use zbus::object_server::Interface;
 
 /// One interface: its members by kind and name, each with its canonical shape.
@@ -62,7 +110,7 @@ fn required(e: &BytesStart<'_>, key: &str, what: &str) -> Result<String, String>
 /// members. The member key is `method Name`, `signal Name` or `property Name`.
 pub fn parse(xml: &str) -> Result<BTreeMap<String, Members>, String> {
     let mut interfaces: BTreeMap<String, Members> = BTreeMap::new();
-    let mut reader = Reader::from_str(xml);
+    let mut reader = StrictReader::new(xml);
     let mut interface: Option<String> = None;
     // The method or signal whose `arg` elements are being read: (key, is_signal).
     let mut open: Option<(String, bool)> = None;
@@ -70,9 +118,7 @@ pub fn parse(xml: &str) -> Result<BTreeMap<String, Members>, String> {
     let mut errors: Vec<String> = Vec::new();
 
     loop {
-        let event = reader
-            .read_event()
-            .map_err(|e| format!("XML error at {}: {e}", reader.buffer_position()))?;
+        let event = reader.next_event()?;
         let (e, is_empty) = match &event {
             Event::Start(e) => (Some(e), false),
             Event::Empty(e) => (Some(e), true),
@@ -157,13 +203,11 @@ pub fn interface_names(xml: &str) -> Result<Vec<String>, String> {
 /// statuses each method documents from it).
 pub fn member_comments(xml: &str) -> Result<BTreeMap<String, String>, String> {
     let mut comments = BTreeMap::new();
-    let mut reader = Reader::from_str(xml);
+    let mut reader = StrictReader::new(xml);
     let mut interface: Option<String> = None;
     let mut last_comment = String::new();
     loop {
-        let event = reader
-            .read_event()
-            .map_err(|e| format!("XML error at {}: {e}", reader.buffer_position()))?;
+        let event = reader.next_event()?;
         match &event {
             Event::Comment(c) => {
                 last_comment = String::from_utf8_lossy(c.as_ref()).into_owned();
@@ -483,6 +527,55 @@ mod tests {
         assert_eq!(c["a.B.S"].trim(), "for S");
         assert_eq!(c["a.B.P"], "", "an element between them takes the comment");
         assert!(member_comments("<node><method name=\"M\"/></node>").is_err());
+    }
+
+    /// Both readers (`parse`, `member_comments`) refuse `xml`, and the error names `needle`.
+    fn assert_refused(xml: &str, needle: &str) {
+        for (reader, result) in [
+            ("parse", parse(xml).map(|_| ())),
+            ("member_comments", member_comments(xml).map(|_| ())),
+        ] {
+            let err = result.expect_err(&format!("{reader} accepted {xml:?}"));
+            assert!(err.contains(needle), "{reader}: {err}");
+        }
+    }
+
+    /// RUY-1103: `lint-dev-docs` refuses `--` in a comment, so the contract test must too.
+    #[test]
+    fn a_double_hyphen_inside_a_comment_is_refused() {
+        assert_refused(
+            "<node><!-- a -- b --><interface name=\"a.B\"/></node>",
+            "--",
+        );
+    }
+
+    #[test]
+    fn a_mismatched_end_tag_is_refused() {
+        assert_refused(
+            "<node><interface name=\"a.B\"></node></interface>",
+            "interface",
+        );
+    }
+
+    #[test]
+    fn an_unclosed_element_is_refused() {
+        assert_refused("<node><interface name=\"a.B\"></interface>", "never closed");
+        assert_refused("<node><interface name=\"a.B\">", "never closed");
+    }
+
+    #[test]
+    fn every_contract_file_is_well_formed() {
+        let mut files = 0;
+        for entry in std::fs::read_dir(contract_dir()).unwrap() {
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            if name.ends_with(".xml") {
+                let xml = read_contract(&name);
+                parse(&xml).unwrap_or_else(|e| panic!("{name}: {e}"));
+                member_comments(&xml).unwrap_or_else(|e| panic!("{name}: {e}"));
+                files += 1;
+            }
+        }
+        assert!(files > 0, "no contract file found in {:?}", contract_dir());
     }
 
     const CONTRACT: &str = r#"<node>
