@@ -1696,7 +1696,7 @@ FAKEEOF
 real_sleep="$(PATH="${PATH//"$shims:"/}" command -v sleep)"
 # FAKE_BUG comes from the caller's prefix. $1 = the wait_seen bound in 0.2 s tries: the good run
 # gets the real check's 5 s (it returns as soon as the line shows, so a busy host costs nothing);
-# the bug runs are expected to FAIL and wait the whole bound, so they keep a short one.
+# the bug run is expected to FAIL and waits the whole bound, so it keeps a short one.
 runnotif() {
     rm -rf "$nt/st"; mkdir -p "$nt/st"; : > "$nt/bus.log"
     NOTIF_ST="$nt/st" NOTIF_BUSLOG="$nt/bus.log" NOTIF_SLEEP="$real_sleep" \
