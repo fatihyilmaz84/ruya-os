@@ -416,18 +416,26 @@ function Test-RevertCheckPiping {
     $runner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "FAIL!  : tst_fixture::test_value()"; "Totals: 0 passed, 1 failed" } else { "Totals: 1 passed, 0 failed" } }.GetNewClosure()
     $script = Join-Path $PSScriptRoot "revert-check.ps1"
     $ok = $true
+    # One case: run revert-check (output plain or piped through Select-Object -Last 3) with -File/-Old/-New and
+    # $Extra's parameters; the verdict is CAUGHT (exit 0, a CAUGHT line, plus $AlsoCaught when given) or NOT CAUGHT
+    # (exit 1), and the file is back to its original text. Returns $true when it holds; says what it saw when not.
+    function Test-RevertCase($Label, $Run, $File, $New, $Piped, $Caught, $Extra, $AlsoCaught = $null) {
+        $params = @{ File = $File; Old = "value=good"; New = $New } + $Extra
+        if ($Piped) { $lines = @(& $Run @params *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+        else { $lines = @(& $Run @params *>&1 | Out-String -Stream) }
+        $code = $LASTEXITCODE
+        $text = $lines -join "`n"
+        $said = if ($Caught) { ($text -match '(?m)^CAUGHT') -and (-not $AlsoCaught -or $text -match $AlsoCaught) } else { $text -match 'NOT CAUGHT' }
+        $good = ($code -eq $(if ($Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $File) -eq "value=good`n")
+        if (-not $good) { Write-Host "    ${Label}: exit $code, output:`n$text" -ForegroundColor Yellow }
+        return [bool]$good
+    }
     $staleLog = Join-Path $fx "ruya-qmltest-tst_fixture.txt"
     # The third case: a failing log left by an earlier run must not make a no-op mutation look caught.
     foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false }, @{ New = "value=good"; Caught = $false; Stale = $true })) {
         foreach ($piped in @($false, $true)) {
             if ($case.Stale) { Set-Content -LiteralPath $staleLog -Value "FAIL!  : tst_fixture::test_old()" }
-            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
-            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
-            $code = $LASTEXITCODE
-            $text = $lines -join "`n"
-            $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
-            $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
-            if (-not $good) { $ok = $false; Write-Host "    piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+            if (-not (Test-RevertCase "piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Runner = $runner; Test = "tst_fixture"; LogDir = $fx })) { $ok = $false }
         }
     }
     # RUY-659: default mode also takes the child's exit code: a stand-in that exits non-zero with no failing
@@ -435,13 +443,7 @@ function Test-RevertCheckPiping {
     $exitRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { $global:LASTEXITCODE = 3; "FAILED: fixture self-check" } else { $global:LASTEXITCODE = 0; "ALL GREEN" } }.GetNewClosure()
     foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
         foreach ($piped in @($false, $true)) {
-            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $exitRunner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
-            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $exitRunner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
-            $code = $LASTEXITCODE
-            $text = $lines -join "`n"
-            $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
-            $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
-            if (-not $good) { $ok = $false; Write-Host "    exit-code piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+            if (-not (Test-RevertCase "exit-code piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Runner = $exitRunner; Test = "tst_fixture"; LogDir = $fx })) { $ok = $false }
         }
     }
     # RUY-657: -Mode docs / vmchecks take the verdict from the child's failure ("FAILED: ..." from the stand-in).
@@ -449,13 +451,7 @@ function Test-RevertCheckPiping {
     foreach ($mode in @("docs", "vmchecks")) {
         foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
             foreach ($piped in @($false, $true)) {
-                if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $docsRunner *>&1 | Select-Object -Last 3 | Out-String -Stream) }
-                else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $docsRunner *>&1 | Out-String -Stream) }
-                $code = $LASTEXITCODE
-                $text = $lines -join "`n"
-                $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
-                $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
-                if (-not $good) { $ok = $false; Write-Host "    mode=$mode piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+                if (-not (Test-RevertCase "mode=$mode piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Mode = $mode; Runner = $docsRunner })) { $ok = $false }
             }
         }
     }
@@ -466,13 +462,7 @@ function Test-RevertCheckPiping {
     foreach ($mode in @("default", "docs", "vmchecks")) {
         foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
             foreach ($piped in @($false, $true)) {
-                if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $throwRunner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
-                else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $throwRunner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
-                $code = $LASTEXITCODE
-                $text = $lines -join "`n"
-                $said = if ($case.Caught) { ($text -match '(?m)^CAUGHT') -and ($text -match 'child aborted: fixture child died') } else { $text -match 'NOT CAUGHT' }
-                $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
-                if (-not $good) { $ok = $false; Write-Host "    aborted child mode=$mode piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+                if (-not (Test-RevertCase "aborted child mode=$mode piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Mode = $mode; Runner = $throwRunner; Test = "tst_fixture"; LogDir = $fx } 'child aborted: fixture child died')) { $ok = $false }
             }
         }
     }
@@ -487,12 +477,7 @@ function Test-RevertCheckPiping {
     [IO.File]::WriteAllText($rustTarget, "value=good`n")
     $rustThrow = { if ((Get-Content -Raw -LiteralPath $rustTarget) -match 'value=bad') { throw "fixture cargo died" } else { "test result: ok. 1 passed; 0 failed" } }.GetNewClosure()
     foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
-        $lines = @(& (Join-Path $rustRepo "scripts\revert-check.ps1") -File $rustTarget -Old "value=good" -New $case.New -Runner $rustThrow -Test fixture_test *>&1 | Out-String -Stream)
-        $code = $LASTEXITCODE
-        $text = $lines -join "`n"
-        $said = if ($case.Caught) { ($text -match '(?m)^CAUGHT') -and ($text -match 'child aborted: fixture cargo died') } else { $text -match 'NOT CAUGHT' }
-        $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $rustTarget) -eq "value=good`n")
-        if (-not $good) { $ok = $false; Write-Host "    aborted child, rust mode caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+        if (-not (Test-RevertCase "aborted child, rust mode caught=$($case.Caught)" (Join-Path $rustRepo "scripts\revert-check.ps1") $rustTarget $case.New $false $case.Caught @{ Runner = $rustThrow; Test = "fixture_test" } 'child aborted: fixture cargo died')) { $ok = $false }
     }
     # RUY-765: a relative -File resolves against the current location; one that is not there is refused and
     # never created in this checkout; a file in another checkout (a worktree) is refused, unchanged.

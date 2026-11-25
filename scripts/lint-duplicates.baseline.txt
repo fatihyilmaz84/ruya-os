@@ -2,7 +2,6 @@
 # share the code and delete the line. Never add a line to get a new copy through; the baseline only shrinks.
 # fileA | fileB | duplicated tokens   # reason
 scripts/dell-glass-check.sh | scripts/dell-hub-check.sh | 104  # debt
-scripts/dev.ps1 | scripts/dev.ps1 | 204  # debt
 scripts/vm-boot-shots.ps1 | scripts/vm-lib.ps1 | 93  # debt
 scripts/vm-devices-check.sh | scripts/vm-storage-check.sh | 114  # debt
 scripts/vm-goto.ps1 | scripts/vm-screenshot.ps1 | 82  # debt
