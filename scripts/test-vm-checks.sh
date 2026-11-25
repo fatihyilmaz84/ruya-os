@@ -1519,221 +1519,231 @@ out="$(RUYA_WD_START_S=1 FAKE_NO_START2=1 runwd)"
 expect_contains "watchdog: no start line from the new shell: FAIL" "$out" "FAIL: the new shell (pid 2002) did not log"
 
 # --- vm-notifications-check.sh (RUY-730): each assertion can fail -------------------------------
-# A fake Notifications1 and Profiles1 behind busctl, systemctl, systemd-analyze, journalctl, runuser and id,
-# over one JSON state file; the signals and calls a real busctl monitor would see go to a bus log that the
-# fake monitor follows with tail. FAKE_BUG breaks one rule.
+# A fake Notifications1 and Profiles1 behind busctl, systemctl, systemd-analyze, journalctl, runuser, id,
+# stdbuf and sleep, over a few state files; the signals and calls a real busctl monitor would see go to a
+# bus log that the fake monitor follows. FAKE_BUG breaks one rule.
+# The fakes are bash functions exported into the check's bash (export -f), not PATH shims: a shim is a
+# process per call (two with python behind it, ~90 ms on a Windows host) and the check makes hundreds.
 echo "vm-notifications-check.sh: each assertion can fail"
-nt="$tmp/notif"; mkdir -p "$nt/bin"
-cat > "$nt/fake.py" <<'PYEOF'
-import json, os, sys
-state_path, buslog, tool = sys.argv[1], sys.argv[2], sys.argv[3]
-args = sys.argv[4:]
-bugs = set(os.environ.get("FAKE_BUG", "").split(","))
-caller = os.environ.get("FAKE_CALLER", "root")
-try:
-    with open(state_path) as f:
-        st = json.load(f)
-except FileNotFoundError:
-    st = {"next": 1, "items": {}, "toast": 4, "sources": {}, "active": "", "journal": []}
-
-def save():
-    with open(state_path, "w") as f:
-        json.dump(st, f)
-
-def out(sig, *data):
-    print(json.dumps({"type": sig, "data": list(data)}))
-
-def bus(member, data, sender=":1.9"):
-    with open(buslog, "a", newline="\n") as f:
-        f.write(json.dumps({"type": "signal", "sender": sender, "member": member, "payload": {"data": data}}) + "\n")
-
-def restart():
-    if "no_persist" in bugs:
-        st["items"] = {}
-    if "id_reuse" in bugs:
-        st["next"] = 1
-    if "setting_lost" in bugs:
-        st["toast"] = 4
-    if "shell_silent" not in bugs:
-        st["journal"].append("ruya-shell: Notifications1 is not on the bus; notifications are not kept")
-    if "no_reread" not in bugs:
-        bus("GetAll", ["org.ruyaos.Notifications1"], sender=":1.7")
-
-if tool == "systemctl":
-    if args[0] == "is-active":
-        print("inactive" if "inactive" in bugs else "active")
-    elif args[0] == "restart":
-        restart()
-    save()
-    sys.exit(0)
-if tool == "systemd-analyze":
-    print("-> Overall exposure level for ruya-notifications.service: %s OK" % ("5.0" if "exposure" in bugs else "1.1"))
-    sys.exit(0)
-if tool == "journalctl":
-    print("\n".join(st["journal"]))
-    sys.exit(0)
-
-# busctl
-a = [x for x in args if not x.startswith("--")]
-verb = a[0]
-if verb == "status":
-    sys.exit(0)
-if verb == "list":
-    print(":1.7 1200 ruya-shell ruya-shell :1.7 ruya-compositor@tty1.service - -")
-    print(":1.9 1300 ruya-notifica root :1.9 ruya-notifications.service - -")
-    sys.exit(0)
-svc, rest = a[1], a[4:]
-if verb == "get-property":  # busctl --json: "data" is the value itself
-    name = rest[0]
-    value = {"ActiveProfile": ("s", st["active"]), "ToastSeconds": ("u", st["toast"]),
-             "SourcesEnabled": ("a{sb}", st["sources"])}[name]
-    print(json.dumps({"type": value[0], "data": value[1]}))
-    sys.exit(0)
-if verb == "set-property":
-    name, vals = rest[0], rest[2:]
-    if name == "ToastSeconds":
-        st["toast"] = int(vals[0])
-    elif name == "SourcesEnabled":
-        n = int(vals[0])
-        st["sources"] = {vals[1 + 2 * i]: vals[2 + 2 * i] == "true" for i in range(n)}
-    save()
-    sys.exit(0)
-method, vals = rest[0], rest[2:]
-if svc == "org.ruyaos.Profiles1":
-    if method == "ListProfiles":
-        out("a(ssssb)", [["p1", "Check Admin", "#3a5bd9", "admin", True]])
-    elif method == "SwitchTo":
-        st["active"] = vals[0]
-        out("suu", "ok", 0, 0)
-    elif method == "Lock":
-        st["active"] = ""
-    save()
-    sys.exit(0)
-items = st["items"]
-if method == "Post":
-    # Like busctl: the signature must be the contract's (8 strings, a(ss), s, b).
-    if rest[1] != "ssssssssa(ss)sb" or len(vals) != 11:
-        print("Failed to parse '' number of array entries: Invalid argument", file=sys.stderr)
-        sys.exit(1)
-    profile, key, source, title = vals[0], vals[1], vals[2], vals[5]
-    if caller == "nobody" and "nobody_allowed" not in bugs:
-        print("Call failed: Access denied", file=sys.stderr)
-        sys.exit(1)
-    if caller == "ruya-shell" and "shell_forbidden" in bugs:
-        out("su", "forbidden", 0)
-        sys.exit(0)
-    if st["sources"].get(source) is False and "source_kept" not in bugs:
-        out("su", "ok", 0)
-        sys.exit(0)
-    lst = items.setdefault(profile, [])
-    if key and "no_replace" not in bugs:
-        for it in [i for i in lst if i["key"] == key]:
-            lst.remove(it)
-            bus("Removed", [profile, [it["id"]], "replaced"])
-    iid = st["next"]
-    st["next"] += 1
-    lst.append({"id": iid, "key": key, "source": source, "title": title, "unread": True})
-    if "no_added" not in bugs:
-        bus("Added", [profile, [iid, source, "", "info", title, "", "", [], "normal", False, True, 0]])
-    out("su", "ok", iid)
-elif method == "List":
-    out("a(ussssssa(ss)sbbx)", [[i["id"], i["source"], "", "info", i["title"], "", "", [], "normal", False, i["unread"], 0] for i in items.get(vals[0], [])])
-elif method == "MarkRead":
-    if "unread_stays" not in bugs:
-        for i in items.get(vals[0], []):
-            i["unread"] = False
-    bus("Changed", [vals[0]])
-    out("s", "ok")
-elif method == "Withdraw":
-    for p, lst in items.items():
-        for it in [i for i in lst if i["key"] == vals[0]]:
-            if "no_withdraw" not in bugs:
-                lst.remove(it)
-                bus("Removed", [p, [it["id"]], "withdrawn"])
-    out("s", "ok")
-elif method == "Dismiss":
-    for lst in items.values():
-        for it in [i for i in lst if i["id"] == int(vals[0])]:
-            lst.remove(it)
-    out("s", "ok")
-save()
-PYEOF
-cat > "$nt/bin/busctl" <<'SHIMEOF'
-#!/bin/sh
-# monitor: prints what is added to the bus log from now on, until it is killed or its parent is gone
-# (a loop of the shell, not tail -f: a leftover native tail would hold the test's output pipe open).
-case " $* " in *" monitor "*)
-    n="$(wc -l < "$NOTIF_BUSLOG")"; i=0
-    while kill -0 "$PPID" 2>/dev/null && [ "$i" -lt 600 ]; do
-        m="$(wc -l < "$NOTIF_BUSLOG")"
-        if [ "$m" -gt "$n" ]; then tail -n "+$((n + 1))" "$NOTIF_BUSLOG" | head -n "$((m - n))"; n="$m"; fi
-        i=$((i + 1)); sleep 0.1
+nt="$tmp/notif"; mkdir -p "$nt"
+cat > "$nt/fake.sh" <<'FAKEEOF'
+# State, under $NOTIF_ST (a missing file is a fresh service): next (the next id), toast, active (the signed-in
+# profile), journal, sources ("name true|false" lines) and items.<profile> ("id|key|source|title|unread" lines).
+fk_bug() { case ",${FAKE_BUG:-}," in *",$1,"*) return 0 ;; esac; return 1; }
+fk_rd() { # <file> <default>: REPLY is the file's first line
+    REPLY="$2"; [ -f "$NOTIF_ST/$1" ] && IFS= read -r REPLY < "$NOTIF_ST/$1"; return 0
+}
+fk_wr() { printf '%s\n' "$2" > "$NOTIF_ST/$1"; }
+fk_out() { printf '{"type":"%s","data":%s}\n' "$1" "$2"; }
+fk_bus() { # <member> <data as JSON> [sender]: a signal on the bus log
+    printf '{"type":"signal","sender":"%s","member":"%s","payload":{"data":%s}}\n' "${3:-:1.9}" "$1" "$2" >> "$NOTIF_BUSLOG"
+}
+# fk_drop <id|key> <value> <reason> [profile]: takes the matching items out of the profile (of all when none is
+# named); a reason also puts Removed on the bus.
+fk_drop() {
+    local f name id key rest keep m
+    for f in "$NOTIF_ST"/items.*; do
+        [ -f "$f" ] || continue
+        name="${f##*/items.}"
+        [ -z "${4:-}" ] || [ "$name" = "$4" ] || continue
+        keep=""
+        while IFS='|' read -r id key rest; do
+            [ -n "$id" ] || continue
+            if [ "$1" = id ]; then m="$id"; else m="$key"; fi
+            if [ "$m" = "$2" ]; then
+                [ -z "$3" ] || fk_bus Removed "[\"$name\",[$id],\"$3\"]"
+            else
+                keep="$keep$id|$key|$rest"$'\n'
+            fi
+        done < "$f"
+        printf '%s' "$keep" > "$f"
     done
-    exit 0 ;;
-esac
-exec python3 "$NOTIF_PY" "$NOTIF_STATE" "$NOTIF_BUSLOG" busctl "$@"
-SHIMEOF
-for t in systemctl systemd-analyze journalctl; do
-    printf '#!/bin/sh\nexec python3 "$NOTIF_PY" "$NOTIF_STATE" "$NOTIF_BUSLOG" %s "$@"\n' "$t" > "$nt/bin/$t"
-done
-cat > "$nt/bin/runuser" <<'SHIMEOF'
-#!/bin/sh
-# runuser -u <user> -- <command...>
-user="$2"; shift 3
-FAKE_CALLER="$user" exec "$@"
-SHIMEOF
-cat > "$nt/bin/id" <<'SHIMEOF'
-#!/bin/sh
-echo 990
-SHIMEOF
-cat > "$nt/bin/stdbuf" <<'SHIMEOF'
-#!/bin/sh
-shift
-exec "$@"
-SHIMEOF
-chmod +x "$nt/bin/"*
+}
+fk_off() { # <source>: is it switched off?
+    local k v
+    [ -f "$NOTIF_ST/sources" ] || return 1
+    while read -r k v; do [ "$k" = "$1" ] && [ "$v" = false ] && return 0; done < "$NOTIF_ST/sources"
+    return 1
+}
+fk_restart() {
+    fk_bug no_persist && rm -f "$NOTIF_ST"/items.*
+    fk_bug id_reuse && fk_wr next 1
+    fk_bug setting_lost && fk_wr toast 4
+    fk_bug shell_silent || echo "ruya-shell: Notifications1 is not on the bus; notifications are not kept" >> "$NOTIF_ST/journal"
+    fk_bug no_reread || fk_bus GetAll '["org.ruyaos.Notifications1"]' :1.7
+    return 0
+}
+systemctl() {
+    case "$1" in
+        is-active) if fk_bug inactive; then echo inactive; else echo active; fi ;;
+        restart) fk_restart ;;
+    esac
+    return 0
+}
+systemd-analyze() {
+    local level=1.1
+    fk_bug exposure && level=5.0
+    echo "-> Overall exposure level for ruya-notifications.service: $level OK"
+}
+journalctl() { [ -f "$NOTIF_ST/journal" ] && while IFS= read -r line; do echo "$line"; done < "$NOTIF_ST/journal"; return 0; }
+runuser() { local user="$2"; shift 3; FAKE_CALLER="$user" "$@"; } # runuser -u <user> -- <command...>
+id() { echo 990; }
+stdbuf() { shift; "$@"; }
+sleep() { return 0; }
+# monitor: prints what is added to the bus log from now on, until it is killed or the check is gone.
+fk_monitor() {
+    local line i=0
+    exec 8< "$NOTIF_BUSLOG"
+    while IFS= read -r line <&8; do :; done
+    while kill -0 $$ 2>/dev/null && [ "$i" -lt 600 ]; do
+        while IFS= read -r line <&8; do printf '%s\n' "$line"; done
+        i=$((i + 1)); "$NOTIF_SLEEP" 0.1 > /dev/null 2>&1
+    done
+}
+# the call of a Notifications1 method: post, list and the rest; $1 is the method, the others its values
+fk_notif() {
+    local profile key source title f id k s t u keep j sep
+    case "$1" in
+    Post)
+        shift; profile="$1"; key="$2"; source="$3"; title="$6"
+        if [ "${FAKE_CALLER:-root}" = nobody ] && ! fk_bug nobody_allowed; then echo "Call failed: Access denied" >&2; return 1; fi
+        if [ "${FAKE_CALLER:-root}" = ruya-shell ] && fk_bug shell_forbidden; then fk_out su '["forbidden",0]'; return 0; fi
+        if fk_off "$source" && ! fk_bug source_kept; then fk_out su '["ok",0]'; return 0; fi
+        [ -n "$key" ] && ! fk_bug no_replace && fk_drop key "$key" replaced "$profile"
+        fk_rd next 1; id="$REPLY"; fk_wr next $((id + 1))
+        echo "$id|$key|$source|$title|true" >> "$NOTIF_ST/items.$profile"
+        fk_bug no_added || fk_bus Added "[\"$profile\",[$id,\"$source\",\"\",\"info\",\"$title\",\"\",\"\",[],\"normal\",false,true,0]]"
+        fk_out su "[\"ok\",$id]" ;;
+    List)
+        f="$NOTIF_ST/items.$2"; j=""; sep=""
+        if [ -f "$f" ]; then
+            while IFS='|' read -r id k s t u; do
+                [ -n "$id" ] || continue
+                j="$j$sep[$id,\"$s\",\"\",\"info\",\"$t\",\"\",\"\",[],\"normal\",false,$u,0]"; sep=,
+            done < "$f"
+        fi
+        fk_out 'a(ussssssa(ss)sbbx)' "[[$j]]" ;;
+    MarkRead)
+        f="$NOTIF_ST/items.$2"
+        if ! fk_bug unread_stays && [ -f "$f" ]; then
+            keep=""
+            while IFS='|' read -r id k s t u; do [ -n "$id" ] && keep="$keep$id|$k|$s|$t|false"$'\n'; done < "$f"
+            printf '%s' "$keep" > "$f"
+        fi
+        fk_bus Changed "[\"$2\"]"
+        fk_out s '["ok"]' ;;
+    Withdraw)
+        fk_bug no_withdraw || fk_drop key "$2" withdrawn
+        fk_out s '["ok"]' ;;
+    Dismiss)
+        fk_drop id "$2" ""
+        fk_out s '["ok"]' ;;
+    esac
+}
+# busctl: the verbs and shapes the check uses, as the real busctl takes and prints them (--json=short)
+busctl() {
+    local a=() x k v i n
+    case " $* " in *" monitor "*) fk_monitor; return 0 ;; esac
+    for x in "$@"; do case "$x" in --*) ;; *) a+=("$x") ;; esac; done
+    case "${a[0]}" in
+    status) return 0 ;;
+    list)
+        echo ":1.7 1200 ruya-shell ruya-shell :1.7 ruya-compositor@tty1.service - -"
+        echo ":1.9 1300 ruya-notifica root :1.9 ruya-notifications.service - -"
+        return 0 ;;
+    get-property)  # "data" is the value itself
+        case "${a[4]}" in
+            ActiveProfile) fk_rd active ""; fk_out s "\"$REPLY\"" ;;
+            ToastSeconds) fk_rd toast 4; fk_out u "$REPLY" ;;
+            SourcesEnabled)
+                v=""; i=""
+                if [ -f "$NOTIF_ST/sources" ]; then
+                    while read -r k x; do v="$v$i\"$k\":$x"; i=,; done < "$NOTIF_ST/sources"
+                fi
+                fk_out 'a{sb}' "{$v}" ;;
+        esac
+        return 0 ;;
+    set-property)  # name, signature, then the values
+        case "${a[4]}" in
+            ToastSeconds) fk_wr toast "${a[6]}" ;;
+            SourcesEnabled)
+                n="${a[6]}"; v=""
+                for ((i = 0; i < n; i++)); do v="$v${a[7 + 2 * i]} ${a[8 + 2 * i]}"$'\n'; done
+                printf '%s' "$v" > "$NOTIF_ST/sources" ;;
+        esac
+        return 0 ;;
+    esac
+    # call <service> <path> <interface> <method> <signature> <values...>
+    if [ "${a[1]}" = org.ruyaos.Profiles1 ]; then
+        case "${a[4]}" in
+            ListProfiles) fk_out 'a(ssssb)' '[[["p1","Check Admin","#3a5bd9","admin",true]]]' ;;
+            SwitchTo) fk_wr active "${a[6]}"; fk_out suu '["ok",0,0]' ;;
+            Lock) fk_wr active "" ;;
+        esac
+        return 0
+    fi
+    if [ "${a[4]}" = Post ]; then
+        # Like busctl: the signature must be the contract's (8 strings, a(ss), s, b).
+        if [ "${a[5]:-}" != 'ssssssssa(ss)sb' ] || [ "${#a[@]}" -ne 17 ]; then
+            echo "Failed to parse '' number of array entries: Invalid argument" >&2
+            return 1
+        fi
+    fi
+    fk_notif "${a[4]}" "${a[@]:6}"
+}
+FAKEEOF
+# The fake monitor's pause is the real sleep; the section's `sleep` is the no-op of $shims.
+real_sleep="$(PATH="${PATH//"$shims:"/}" command -v sleep)"
 # FAKE_BUG comes from the caller's prefix. $1 = the wait_seen bound in 0.2 s tries: the good run
 # gets the real check's 5 s (it returns as soon as the line shows, so a busy host costs nothing);
 # the bug runs are expected to FAIL and wait the whole bound, so they keep a short one.
 runnotif() {
-    rm -f "$nt/state.json"; : > "$nt/bus.log"
-    NOTIF_PY="$nt/fake.py" NOTIF_STATE="$nt/state.json" NOTIF_BUSLOG="$nt/bus.log" \
-        NOTIF_BASELINE="$here/../image/security-baseline.json" NOTIF_WAIT="${1:-3}" PATH="$nt/bin:$shims:$PATH" \
-        bash "$here/vm-notifications-check.sh" check 2>&1
+    rm -rf "$nt/st"; mkdir -p "$nt/st"; : > "$nt/bus.log"
+    NOTIF_ST="$nt/st" NOTIF_BUSLOG="$nt/bus.log" NOTIF_SLEEP="$real_sleep" \
+        NOTIF_BASELINE="$here/../image/security-baseline.json" NOTIF_WAIT="${1:-3}" \
+        bash -c '. "$1"; export -f $(compgen -A function); exec bash "$2" check' \
+        _ "$nt/fake.sh" "$here/vm-notifications-check.sh" 2>&1
+}
+# What the fake service holds after a run, one line: the signed-in profile, ToastSeconds, the source switches.
+notif_state() {
+    local active="" toast=4 sources="" k v
+    [ -f "$nt/st/active" ] && read -r active < "$nt/st/active"
+    [ -f "$nt/st/toast" ] && read -r toast < "$nt/st/toast"
+    [ -f "$nt/st/sources" ] && while read -r k v; do sources="$sources$k=$v;"; done < "$nt/st/sources"
+    echo "active=[$active] toast=[$toast] sources=[$sources]"
 }
 out="$(runnotif 25)"; rc=$?
 expect_contains "notifications: a good service passes" "$out" "ALL CHECKS PASSED"
 expect_lacks "notifications: a good service: no FAIL" "$out" "FAIL"
 expect_contains "notifications: it signs a profile in when nobody is" "$out" "PASS: signed p1 in for the check"
 [ "$rc" = 0 ] && pass "notifications: a good service: exit 0" || fail "notifications: a good service: exit $rc"
-expect_lacks "notifications: the exit trap locks again" "$(cat "$nt/state.json")" '"active": "p1"'
-expect_contains "notifications: the exit trap puts ToastSeconds back" "$(cat "$nt/state.json")" '"toast": 4'
-expect_contains "notifications: the exit trap puts the sources back" "$(cat "$nt/state.json")" '"sources": {}'
-# Bugs that do not get in each other's way share a run (each run costs seconds of fake busctl calls).
-for group in \
-    "inactive,no_added,unread_stays,shell_silent,no_replace,source_kept,setting_lost" \
-    "exposure,no_persist,no_reread,shell_forbidden,no_withdraw,nobody_allowed" \
-    "id_reuse"; do
-    out="$(FAKE_BUG="$group" runnotif)"; rc=$?
-    [ "$rc" = 1 ] && pass "notifications, bugs $group: exit 1" || fail "notifications, bugs $group: exit $rc"
-    for case in \
-        "inactive|FAIL: ruya-notifications.service is not active" \
-        "exposure|FAIL: exposure 5.0 is above the baseline" \
-        "no_added|FAIL: no Added for item" \
-        "unread_stays|FAIL: MarkRead left item" \
-        "no_persist|FAIL: item 1 is gone after the restart" \
-        "id_reuse|is not above 1" \
-        "shell_silent|FAIL: no 'Notifications1 is not on the bus; notifications are not kept'" \
-        "no_reread|FAIL: no GetAll from the shell" \
-        "shell_forbidden|FAIL: a Post from ruya-shell" \
-        "no_replace|FAIL: the keyed Post did not replace" \
-        "no_withdraw|FAIL: Withdraw" \
-        "source_kept|FAIL: a switched-off source" \
-        "nobody_allowed|FAIL: a Post as nobody was not refused" \
-        "setting_lost|FAIL: ToastSeconds is '4' after the restart"; do
-        bug="${case%%|*}"; needle="${case#*|}"
-        case ",$group," in *",$bug,"*) expect_contains "notifications, bug $bug: caught" "$out" "$needle" ;; esac
-    done
+expect_lacks "notifications: the exit trap locks again" "$(notif_state)" 'active=[p1]'
+expect_contains "notifications: the exit trap puts ToastSeconds back" "$(notif_state)" 'toast=[4]'
+expect_contains "notifications: the exit trap puts the sources back" "$(notif_state)" 'sources=[]'
+# Every bug at once: none gets in another's way (each case's FAIL line is its own), and a run costs seconds.
+# The bugs to switch on are the cases' own names.
+bugcases=(
+    "inactive|FAIL: ruya-notifications.service is not active"
+    "exposure|FAIL: exposure 5.0 is above the baseline"
+    "no_added|FAIL: no Added for item"
+    "unread_stays|FAIL: MarkRead left item"
+    "no_persist|FAIL: item 1 is gone after the restart"
+    "id_reuse|is not above 1"
+    "shell_silent|FAIL: no 'Notifications1 is not on the bus; notifications are not kept'"
+    "no_reread|FAIL: no GetAll from the shell"
+    "shell_forbidden|FAIL: a Post from ruya-shell"
+    "no_replace|FAIL: the keyed Post did not replace"
+    "no_withdraw|FAIL: Withdraw"
+    "source_kept|FAIL: a switched-off source"
+    "nobody_allowed|FAIL: a Post as nobody was not refused"
+    "setting_lost|FAIL: ToastSeconds is '4' after the restart"
+)
+bugs=""
+for c in "${bugcases[@]}"; do bugs="$bugs${bugs:+,}${c%%|*}"; done
+out="$(FAKE_BUG="$bugs" runnotif)"; rc=$?
+[ "$rc" = 1 ] && pass "notifications, every bug: exit 1" || fail "notifications, every bug: exit $rc"
+for c in "${bugcases[@]}"; do
+    expect_contains "notifications, bug ${c%%|*}: caught" "$out" "${c#*|}"
 done
 
 echo "== vm-play-check.sh: JSON by key (RUY-829) =="
