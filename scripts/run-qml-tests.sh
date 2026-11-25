@@ -10,6 +10,12 @@ exe="${1:?usage: run-qml-tests.sh <tst_ruyashell> <shards> <logdir> [testdir]}"
 shards="${2:-3}"
 logdir="${3:?log directory}"
 testdir="${4:-shell/tests}"
+# RUY-1202: a failed build leaves no test program. Every file would then end in exit 127 and its own
+# "crashed or hung" line, which hides the cause: say it once, at once (dev.ps1 Invoke-QmlShards does the same).
+if [ ! -f "$exe" ] || [ ! -x "$exe" ]; then
+  echo "SHARD FAILED: $exe not found: the build failed"
+  exit 1
+fi
 mkdir -p "$logdir"
 rm -f "$logdir"/*.txt "$logdir"/*.out "$logdir"/*.err
 

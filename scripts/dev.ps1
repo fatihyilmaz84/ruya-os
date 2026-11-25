@@ -390,6 +390,17 @@ function Test-QmlShardRunner {
             -and ($out -match 'Totals: 8 passed, 1 failed, 2 skipped in 4 files')
         if (-not $shOk) { Write-Host "    exit $shExit, output:`n$out" -ForegroundColor Yellow }
         Record "shard runner (sh) self-check (CI's script names a failed, a crashed and a hung file by log; the totals add up)" $shOk
+
+        # RUY-1202: the same script with a program that is not there: one named line, exit 1, at once, no per-file lines.
+        $goneSh = ((Join-Path $fx "build\tst_gone") -replace '\\', '/')
+        $clockSh = [Diagnostics.Stopwatch]::StartNew()
+        $outGone = (& $bash (Join-Path $PSScriptRoot "run-qml-tests.sh") $goneSh 2 ((Join-Path $fx "logs-sh-gone") -replace '\\', '/') ($fx -replace '\\', '/') 2>&1 | Out-String)
+        $goneShExit = $LASTEXITCODE
+        $goneShSec = $clockSh.Elapsed.TotalSeconds
+        $goneShLines = @($outGone -split "`r?`n" | Where-Object { $_ -ne '' })
+        $goneShOk = ($goneShExit -eq 1) -and ($goneShLines.Count -eq 1) -and ($goneShLines[0] -eq "SHARD FAILED: $goneSh not found: the build failed") -and ($goneShSec -lt 10)
+        if (-not $goneShOk) { Write-Host ("    exit $goneShExit, {0:N1} s, output:`n$outGone" -f $goneShSec) -ForegroundColor Yellow }
+        Record "shard runner (sh) self-check (CI's script names a missing test program once and exits 1 at once, no line per file)" $goneShOk
     }
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
 }
