@@ -2,7 +2,7 @@
 
 The AppStream file (`metainfo.xml`) is how the console knows your game's name, picture, age rating and controller support. The Store reads it, and so will parental controls. Write it once, validate it, and the same file serves Flathub.
 
-*Checked against the code as of 2026-11-06. Items marked **planned** are not built yet.*
+*Checked against the code as of 2026-11-25. Items marked **planned** are not built yet.*
 
 ## The rules
 
@@ -100,10 +100,25 @@ Replace the licence, the developer, the URLs and the `org.ruyaos` id with yours.
 | `x-ruya-hero`, `x-ruya-logo` | The Store's pictures | built |
 | `x-ruya-min-api-level` | The lowest API level the app needs, an integer (default 0; missing, negative or not a number counts as 0). The Store hides an app above the console's `RUYA_API_LEVEL` and its page says "Needs a newer RuyaOS" with Install off | built (`ruya-store`, RUY-156) |
 | `x-ruya-launch-mode` | How the shell starts the app | **planned**: nothing reads it yet; set `fullscreen` |
-| `<screenshots>`, `<releases>`, `<url>`, `<branding>` | Flathub and other stores; the console does not show them yet | not used yet |
+| `<screenshots>` with `<image>` and `<caption>` | The picture row on the app page and its full-screen viewer. At most 10, the `type="default"` one first, then file order. The size rule is under the table | built (`ruya-store`, RUY-523) |
+| `<releases>` | The newest `<release>` (by `timestamp`, else `date`; on a tie the first in the file) gives the page's Version and Updated rows. Its `<description>` (`<p>`, `<li>`) is the "What's new" text, shown only while an update is ready to install | built (`ruya-store`, RUY-523) |
+| `<project_license>` | The page's Licence row, shown as you wrote it (an SPDX expression, nothing is checked or translated) | built (`ruya-store`, RUY-523) |
+| `<categories>` | The page's Categories row: the first three of your `<category>` names that the console has a word for (list under the table); the others are not shown | built (`ruya-store`, RUY-523) |
+| `<url>`, `<branding>` | Flathub and other stores; the console does not show them yet | not used yet |
 | `x-ruya-save-paths`, `x-ruya-cache-paths` | Narrow what the backup copies ([Saves and data](saves-and-data.md)) | **planned** (T-215) |
 
 Only apps of type `desktop-application`, `desktop`, `console-application` (or no type) are listed; runtimes and add-ons are skipped.
+
+**Screenshot size rule.** Put a `width` attribute on every `<image>`: an image without one is never picked by size. Per `<screenshot>` the console picks two pictures:
+
+- **The picture** (the full-screen viewer): the widest `<image>` that is **at most 1920 px wide**. If none has a width in that range, the `type="source"` image is used as it is, whatever its size; failing that, the first `<image>`. So give at least one image of 1920 px or less; a wider `source` image is only a fallback.
+- **The thumbnail** (the picture row): the narrowest `<image>` that is **at least 400 px wide**; if there is none, the picture itself.
+
+A screenshot with no `<image>` is left out. A screenshot that breaks the rule is not dropped, it falls back as above. The `<caption>` is the default-language one. The sample's single 1920x1080 `source` image follows the rule (it is both the picture and the thumbnail); for a lighter row add a second `<image type="thumbnail" width="752" height="423">`.
+
+**Releases.** The date is `date="YYYY-MM-DD"` (a time after it is ignored) or `timestamp` in Unix seconds, which wins when both are given. A release with neither counts as the oldest. Only the newest release is read; older ones are ignored.
+
+**Categories the page shows a word for** (others, such as `Game`, are read but not shown): `ActionGame`, `AdventureGame`, `ArcadeGame`, `BoardGame`, `CardGame`, `LogicGame` (Puzzle), `RolePlaying`, `Shooter`, `Simulation`, `SportsGame`, `StrategyGame`, `AudioVideo`, `Player`, `Education`, `Network` (Internet), `Utility` (Utilities).
 
 ## Content rating (OARS) and the age limit
 
@@ -141,7 +156,8 @@ Both keys take a URL (`https:` or `file:`). If a picture is missing the shell dr
 - [ ] `<supports><control>gamepad</control></supports>` and `x-ruya-controller` say what is true.
 - [ ] `x-ruya-hero` (16:9, 1920 px or more) and `x-ruya-logo` (16:9) exist; the icon is SVG.
 - [ ] The default-language text is English, complete, and the summary is one short line.
+- [ ] Every screenshot `<image>` has a `width`, and one is 1920 px or less (see the size rule above).
 
 ## Sources
 
-Checked on 2026-11-06 against: `services/ruya-store/src/appstream.rs` (which fields are read, `severity` and the age label, `x-ruya-*`, `is_app`, only untranslated text); `shell/qml/AppDetailPage.qml` (`controllerText`, `ageText`) and `StorePage.qml` (`tile` and `hero` use); `docs/specs/03-services-and-apps.md` sections 4.1, 4.2, 4.5a; `docs/specs/02-shell.md` section 6; `docs/tasks/T-211-parental-controls-service.md` (planned age limit, unrated counts as 18+); `samples/hello-game/data/org.ruyaos.HelloGame.metainfo.xml` validated with `appstreamcli` 1.1.3 (`--no-net`, passes; pedantic: capital letters in the id).
+Checked on 2026-11-06 (screenshots, releases, licence and categories: 2026-11-25) against: `services/ruya-store/src/appstream.rs` (which fields are read, `severity` and the age label, `x-ruya-*`, `is_app`, only untranslated text; `MAX_SCREENSHOTS`, `MAX_IMAGE_WIDTH`, `MIN_THUMB_WIDTH`, the release choice, `project_license`, `categories`); `api/dbus/org.ruyaos.Store1.xml` (the record keys); `shell/qml/AppDetailPage.qml` (`controllerText`, `ageText`, `categoryText`, the Information rows), `GameAbout.qml` (notes only with an update) and `ScreenshotRow.qml`/`ScreenshotViewer.qml` (`thumb` and `image`) and `StorePage.qml` (`tile` and `hero` use); `docs/specs/03-services-and-apps.md` sections 4.1, 4.2, 4.5a; `docs/specs/02-shell.md` section 6; `docs/tasks/T-211-parental-controls-service.md` (planned age limit, unrated counts as 18+); `samples/hello-game/data/org.ruyaos.HelloGame.metainfo.xml` validated with `appstreamcli` 1.1.3 (`--no-net`, passes; pedantic: capital letters in the id).
