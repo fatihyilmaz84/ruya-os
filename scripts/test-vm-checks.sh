@@ -2797,6 +2797,14 @@ for f in "$pins"/*.pin; do
     esac
 done
 [ "$npins" -ge 12 ] || fail "install-runners: only $npins pin fixtures"
+# RUY-1045: a pin is LF only; Pin::parse refuses a CR (Rust test a_crlf_pin_is_refused) and check_pin
+# keeps it in the value and refuses it. A CR byte cannot be a tracked fixture (lint-text.ps1), so the
+# CRLF copy of good.pin is built here.
+crlf="$ir/crlf.pin"
+while IFS= read -r line || [ -n "$line" ]; do printf '%s\r\n' "$line"; done < "$pins/good.pin" > "$crlf"
+[ "$(grep -c "$(printf '\r')" "$crlf")" = "$(grep -c '' "$pins/good.pin")" ] || fail "install-runners: the CRLF fixture has no CR on every line"
+out="$(bash "$here/../image/play/install-runners.sh" check-pin "$crlf" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && pass "install-runners: check_pin refuses a CRLF pin" || fail "install-runners: check_pin accepted a CRLF pin"
 # RUY-37: the pin folder's own files (licence texts) are laid over the release; none replaces a release
 # file; a tree without a licence text fails the build.
 nsha="$(sha256sum "$ir/release-nolicence.tar.gz" | cut -d' ' -f1)"

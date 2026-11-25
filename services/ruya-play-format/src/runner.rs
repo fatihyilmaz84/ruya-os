@@ -766,9 +766,13 @@ impl Pin {
     /// Parse a pin file: only comments (`#` at the start of the line), blank lines and the keys
     /// `url=`, `sha256=` and `root=`, each exactly once; the url starts with `https://`, the SHA-256
     /// is 64 lower-case hex digits, the root is one folder name (not empty, `.`, `..` or with a
-    /// `/`). The error says what is wrong.
+    /// `/`). A pin is LF only: any `\r` is refused (`lines()` would hide it, `check_pin` keeps it in
+    /// the value). The error says what is wrong.
     pub fn parse(text: &str) -> Result<Pin, String> {
         const KEYS: [&str; 3] = ["url", "sha256", "root"];
+        if text.contains('\r') {
+            return Err("carriage return: the pin file is LF only".into());
+        }
         let mut values: [Vec<&str>; 3] = Default::default();
         for line in text.lines() {
             if line.starts_with('#') || line.trim().is_empty() {
