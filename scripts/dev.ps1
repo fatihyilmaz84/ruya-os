@@ -800,7 +800,8 @@ function Test-Tokens {
 # The lupdate project (source list for lupdate) is written by the build's lupdate target, which
 # also rewrites the tracked .ts files, so `dev.ps1` makes the project itself: from the configure-time
 # <name>.Release.cmake, the same script that target runs. It is regenerated when missing (fresh
-# worktree) or older than shell\CMakeLists.txt (a merge added a source file). The configure that
+# worktree), empty (a full disk left 0 bytes) or older than shell\CMakeLists.txt (a merge added a
+# source file). The configure that
 # refreshes the Release.cmake happens first, explicitly, in the same case.
 function Update-LUpdateProject {
     $dir = Join-Path $ShellBuild ".lupdate"
