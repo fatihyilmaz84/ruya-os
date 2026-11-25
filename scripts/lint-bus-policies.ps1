@@ -32,9 +32,11 @@
 #      `<annotation name="org.ruyaos.Caller" value="root"/>` is denied to ruya-shell in writing: the
 #      `user="ruya-shell"` policy has `deny send_destination="<name>" send_member="<method>"` AFTER its
 #      last `allow send_destination="<name>"` (in dbus policy the last matching rule wins).
+#      The annotation value is exactly "root" or an error naming the interface and member (RUY-1206): `Root`, `admin`
+#      or an empty value would otherwise drop the required deny silently.
 #   Every compare of a policy value (user, context, names, interface, member, send_type, receive_type) is
 #   case-sensitive (-c*), as dbus-broker's: `user="Root"` is not root. A rule element is exactly `allow` or `deny`
-#   (RUY-1199).
+#   (RUY-1199). The table of public doors is ordinal too: two doors differing only in case are two doors (RUY-1206).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -51,11 +53,13 @@ function Get-RecvNarrowing($Rule) {
     }
 }
 
-# The methods api/dbus/<name>.xml marks root only (org.ruyaos.Caller = root); none without that file.
+# The methods api/dbus/<name>.xml marks root only (org.ruyaos.Caller = root), and the annotations it cannot read
+# (a value that is not exactly "root"): { Members; Problems }, both empty without that file.
 function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
-    if ($Name -cnotmatch '^[A-Za-z0-9_.]+$') { return @() }   # a wildcard or empty name (refused by rule 2)
+    $members = @(); $problems = @()
+    if ($Name -cnotmatch '^[A-Za-z0-9_.]+$') { return @{ Members = $members; Problems = $problems } }   # a wildcard or empty name (refused by rule 2)
     $xml = Join-Path $ApiDir "$Name.xml"
-    if (-not (Test-Path $xml)) { return @() }
+    if (-not (Test-Path $xml)) { return @{ Members = $members; Problems = $problems } }
     $settings = New-Object System.Xml.XmlReaderSettings
     $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
     $settings.XmlResolver = $null
@@ -64,18 +68,28 @@ function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
     try { $doc.Load($reader) } finally { $reader.Dispose() }
     foreach ($m in $doc.SelectNodes("//interface/method")) {
         foreach ($an in $m.SelectNodes("annotation")) {
-            # Case-insensitive on purpose (the strict direction): this annotation is our own marker, read by this lint and
-            # not by dbus-broker, so `value="Root"` still demands the deny; a case-sensitive compare would drop it silently.
-            if ($an.GetAttribute("name") -eq "org.ruyaos.Caller" -and $an.GetAttribute("value") -eq "root") { $m.GetAttribute("name") }
+            # The annotation NAME is matched case-insensitively (the strict direction: a marker spelled in another case is
+            # still read, never skipped). Its VALUE is exactly "root" or an error: a value this lint cannot read exactly
+            # (`Root`, `admin`, empty) would otherwise drop the required ruya-shell deny without a word (RUY-1206).
+            if ($an.GetAttribute("name") -ne "org.ruyaos.Caller") { continue }
+            $value = $an.GetAttribute("value")
+            if ($value -ceq "root") { $members += $m.GetAttribute("name") }
+            else { $problems += "${xml}: $($m.ParentNode.GetAttribute('name')).$($m.GetAttribute('name')) has org.ruyaos.Caller value `"$value`", which is not exactly `"root`"" }
         }
     }
+    return @{ Members = $members; Problems = $problems }
 }
+
+# The table of public doors, keyed by bus name. Ordinal: a PowerShell `@{}` ignores case, so two doors that differ
+# only in case would merge into one key (the later list replacing the first) and one would answer for the other;
+# dbus-broker matches names exactly (RUY-1206).
+function New-DoorTable { return (New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)) }
 
 # The public doors (image/security-baseline.json "public_bus_doors"): bus name -> the interfaces a
 # default-context allow may open. Each listed interface must exist in api/dbus/<name>.xml with every
 # method, signal and property tagged org.ruyaos.Stability (a public element, ADR-022).
 function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
-    $doors = @{}; $problems = @()
+    $doors = New-DoorTable; $problems = @()
     if (-not (Test-Path $BaselinePath)) { return @{ Doors = $doors; Problems = @("no $BaselinePath") } }
     $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
     if ($null -eq $json.public_bus_doors) { return @{ Doors = $doors; Problems = $problems } }
@@ -169,7 +183,7 @@ function Test-DoorAllow($Rule, $Doors, $DeniedNames, $DeniedRecv) {
         $shape = (($attrs -join ",") -ceq "receive_interface,receive_sender,receive_type" -and $Rule.GetAttribute("receive_type") -ceq "signal")
         $denied = $DeniedRecv.Contains($name)
     } else { return "is not a public door's send or receive" }
-    # A PowerShell hashtable ignores case: compare the door names (its keys) with -ccontains.
+    # Compare the door names (the keys) with -ccontains whatever table the caller built (New-DoorTable is ordinal).
     if (@($Doors.Keys) -cnotcontains $name) { return "is for $name, which is not a public door (security-baseline.json public_bus_doors)" }
     if (-not $shape) { return "is not exactly a door's shape (send_destination + send_interface + send_type=method_call, or receive_sender + receive_interface + receive_type=signal)" }
     if (@($Doors[$name]) -cnotcontains $iface) { return "opens $iface, which is not a public interface of $name" }
@@ -263,7 +277,9 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors, $Signals) {
         if ($p.GetAttribute("user") -ceq "ruya-shell") { $shellRules += @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" }) }
     }
     foreach ($n in $allowedNames) {
-        foreach ($member in @(Get-RootOnlyMembers $ApiDir $n)) {
+        $callers = Get-RootOnlyMembers $ApiDir $n
+        foreach ($why in $callers.Problems) { $errs.Add($why) }
+        foreach ($member in $callers.Members) {
             $lastAllow = -1; $deny = -1
             for ($i = 0; $i -lt $shellRules.Count; $i++) {
                 $r = $shellRules[$i]
@@ -387,6 +403,16 @@ if ($SelfTest) {
         @{ Name = "a door's allow for a name in another case than the door list's"; From = ""; To = ""; DoorName = "ORG.x.A1"; Expect = 1 },
         @{ Name = "a root-only member denied in another case (send_member Put -> PUT)"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = '<deny send_destination="org.x.A1" send_member="PUT"/>'; Expect = 1 },
         @{ Name = "a root-only member denied for a destination in another case"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = '<deny send_destination="ORG.x.A1" send_member="Put"/>'; Expect = 1 },
+        # RUY-1206: the annotation value is exactly "root" or an error; each fixture keeps the ruya-shell deny in place, so
+        # only the refusal of the unreadable value (not a missing deny) can make the lint fail.
+        @{ Name = "a Caller annotation with value Root (another case than root)"; From = ""; To = ""; Api = $api.Replace('value="root"', 'value="Root"'); Expect = 1 },
+        @{ Name = "a Caller annotation with value admin"; From = ""; To = ""; Api = $api.Replace('value="root"', 'value="admin"'); Expect = 1 },
+        @{ Name = "a Caller annotation with an empty value"; From = ""; To = ""; Api = $api.Replace('value="root"', 'value=""'); Expect = 1 },
+        @{ Name = "a Caller annotation without a value"; From = ""; To = ""; Api = $api.Replace(' value="root"', ''); Expect = 1 },
+        @{ Name = "a Caller annotation with value admin on a method that is not root only"; From = ""; To = ""; Api = $api.Replace('<method name="Get"/>', '<method name="Get"><annotation name="org.ruyaos.Caller" value="admin"/></method>'); Expect = 1 },
+        # Two doors that differ only in case are two doors: the table keeps the first's interface list (a case-insensitive
+        # `@{}` would let the second replace it and refuse the first's own allow).
+        @{ Name = "two doors that differ only in case, each with its own interface list (control: accepted)"; From = ""; To = ""; DoorTwin = "org.x.a1"; Expect = 0 },
         @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {
@@ -398,11 +424,13 @@ if ($SelfTest) {
         [IO.File]::WriteAllText((Join-Path $pd "org.x.A1.conf"), $text)
         $ad = Join-Path $dir "api/dbus"
         New-Item -ItemType Directory -Force $ad | Out-Null
-        [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
+        [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $(if ($c.Api) { $c.Api } else { $api }))
         [IO.File]::WriteAllText((Join-Path $ad "org.x.B1.xml"), $apiB)
         [IO.File]::WriteAllText((Join-Path $ad "org.x.B2.xml"), $apiB2)
-        $doors = if ($c.NoDoor) { @{} } elseif ($c.DoorName) { @{ $c.DoorName = @("org.x.A1.Pub") } } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
-        $member = if ($c.SigMember) { $c.SigMember } else { "Wanted" }
+        $doors = New-DoorTable
+        if (-not $c.NoDoor) { $doors[$(if ($c.DoorName) { $c.DoorName } else { "org.x.A1" })] = @("org.x.A1.Pub") }
+        if ($c.DoorTwin) { $doors[$c.DoorTwin] = @("org.x.A1") }   # a second door that differs only in case, listing another interface
+        $member =if ($c.SigMember) { $c.SigMember } else { "Wanted" }
         $sigPath = if ($c.SigPath) { $c.SigPath } else { "/org/x/B1" }
         $sigUser = if ($c.SigUser) { $c.SigUser } else { "ruya-library" }
         $sigDest = if ($c.SigDest) { $c.SigDest } else { "org.x.A1" }
