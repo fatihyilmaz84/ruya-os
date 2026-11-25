@@ -41,8 +41,10 @@ pin_value() {
 }
 
 # check_pin <pin>: only comments, blank lines and the three keys; a SHA-256, an https URL, a root
-# folder that is one plain name.
+# folder that is one plain name. A pin is LF only (as ruya_play_format::runner::Pin::parse): the CR
+# is counted with tr, since Git Bash drops it in grep, sed and $(...), and the count has none.
 check_pin() {
+    [ "$(tr -cd '\r' < "$1" | wc -c)" = 0 ] || die "$1: carriage return: the pin file is LF only"
     local other
     other="$(grep -Ev '^(#.*|[[:space:]]*|url=.*|sha256=.*|root=.*)$' "$1" || true)"
     [ -z "$other" ] || die "$1: unknown line: $other"
