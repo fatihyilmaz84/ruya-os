@@ -103,25 +103,37 @@ function Get-ServiceSignals([string]$BaselinePath) {
     $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
     if ($null -eq $json.service_signals) { return $list }
     foreach ($s in @($json.service_signals)) {
-        $list += @{ user = [string]$s.user; destination = [string]$s.destination; path = [string]$s.path; interface = [string]$s.interface; member = [string]$s.member }
+        $list += @{ user = [string]$s.user; destination = [string]$s.destination; path = [string]$s.path; interface = [string]$s.interface; member = [string]$s.member; reason = [string]$s.reason }
     }
     return $list
+}
+
+# Why a "service_signals" entry itself is refused: an empty field or a wildcard, or no reason (every baseline entry has one).
+function Test-ServiceSignalList($Signals) {
+    foreach ($s in $Signals) {
+        $who = "service_signals $($s.user) -> $($s.destination) $($s.interface).$($s.member)"
+        foreach ($k in "user", "destination", "path", "interface", "member") {
+            if ([string]::IsNullOrWhiteSpace($s[$k]) -or $s[$k].Contains("*")) { "${who}: $k must be exact, not empty or a wildcard" }
+        }
+        if ([string]::IsNullOrWhiteSpace($s.reason)) { "${who}: no reason" }
+    }
 }
 
 # Why a service user's allow is refused, or nothing when it is a declared service signal (rule 2).
 function Test-ServiceSignalAllow($Rule, [string]$User, $Signals, [string]$ApiDir) {
     $attrs = (@($Rule.Attributes | ForEach-Object { $_.Name } | Sort-Object)) -join ","
-    if ($attrs -ne "send_destination,send_interface,send_member,send_path,send_type") {
+    # Every compare here is case-sensitive (-c*): dbus-broker matches names and types exactly.
+    if ($attrs -cne "send_destination,send_interface,send_member,send_path,send_type") {
         return "may only allow own or a declared signal (send_destination, send_type, send_path, send_interface, send_member and nothing else)"
     }
-    if ($Rule.GetAttribute("send_type") -ne "signal") { return "may only send a signal: send_type must be `"signal`"" }
+    if ($Rule.GetAttribute("send_type") -cne "signal") { return "may only send a signal: send_type must be `"signal`"" }
     foreach ($a in "send_destination", "send_path", "send_interface", "send_member") {
         $v = $Rule.GetAttribute($a)
         if ([string]::IsNullOrWhiteSpace($v) -or $v.Contains("*")) { return "needs an exact $a, not empty or a wildcard" }
     }
     $dest = $Rule.GetAttribute("send_destination"); $path = $Rule.GetAttribute("send_path")
     $iface = $Rule.GetAttribute("send_interface"); $member = $Rule.GetAttribute("send_member")
-    $declared = @($Signals | Where-Object { $_.user -eq $User -and $_.destination -eq $dest -and $_.path -eq $path -and $_.interface -eq $iface -and $_.member -eq $member })
+    $declared = @($Signals | Where-Object { $_.user -ceq $User -and $_.destination -ceq $dest -and $_.path -ceq $path -and $_.interface -ceq $iface -and $_.member -ceq $member })
     if ($declared.Count -eq 0) { return "is not declared in security-baseline.json service_signals" }
     $xml = Join-Path $ApiDir "$iface.xml"
     if (-not (Test-Path $xml)) { return "sends $iface.$member, but there is no $xml" }
@@ -270,6 +282,7 @@ $publicDoors = Get-PublicDoors (Join-Path $Root "image/security-baseline.json") 
 $serviceSignals = @(Get-ServiceSignals (Join-Path $Root "image/security-baseline.json"))
 $bad = 0
 foreach ($m in $publicDoors.Problems) { Write-Host "FAIL: $m"; $bad++ }
+foreach ($m in @(Test-ServiceSignalList $serviceSignals)) { Write-Host "FAIL: $m"; $bad++ }
 $bad += Test-BusPolicies $policyDir $apiDir $publicDoors.Doors $serviceSignals
 if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default (public doors: $(@($publicDoors.Doors.Keys) -join ', '); service signals: $($serviceSignals.Count))" }
 
@@ -288,7 +301,10 @@ if ($SelfTest) {
     $api = '<node><interface name="org.x.A1"><method name="Put"><annotation name="org.ruyaos.Caller" value="root"/></method><method name="Get"/></interface><interface name="org.x.A1.Pub"><method name="Hi"><annotation name="org.ruyaos.Stability" value="experimental"/></method></interface></node>'
     # The signal a service user (ruya-library) may send to org.x.A1 (security-baseline.json service_signals, RUY-1196):
     # org.x.B1.Wanted is a <signal> of the contract api/dbus/org.x.B1.xml, org.x.B1.Call is a method.
-    $apiB = '<node><interface name="org.x.B1"><signal name="Wanted"/><method name="Call"/></interface></node>'
+    # org.x.B1 also declares a second signal (Other) and org.x.B2 declares the same Wanted, so a fixture can differ
+    # from the baseline entry in exactly one of member or interface.
+    $apiB = '<node><interface name="org.x.B1"><signal name="Wanted"/><signal name="Other"/><method name="Call"/></interface></node>'
+    $apiB2 = '<node><interface name="org.x.B2"><signal name="Wanted"/></interface></node>'
     $sigAllow = '<allow send_destination="org.x.A1" send_type="signal" send_path="/org/x/B1" send_interface="org.x.B1" send_member="Wanted"/>'
     $doorAllow = '<allow send_destination="org.x.A1" send_interface="org.x.A1.Pub" send_type="method_call"/>'
     $doorRecv = '<allow receive_sender="org.x.A1" receive_interface="org.x.A1.Pub" receive_type="signal"/>'
@@ -335,6 +351,12 @@ if ($SelfTest) {
         @{ Name = "a service signal the contract does not declare"; From = $sigAllow; To = $sigAllow.Replace('Wanted', 'Nope'); SigMember = "Nope"; Expect = 1 },
         @{ Name = "a service signal that is a method in the contract"; From = $sigAllow; To = $sigAllow.Replace('Wanted', 'Call'); SigMember = "Call"; Expect = 1 },
         @{ Name = "a service signal with no baseline entry"; From = ""; To = ""; NoSignals = $true; Expect = 1 },
+        @{ Name = "a service signal in another case than the baseline's send_type"; From = $sigAllow; To = $sigAllow.Replace('send_type="signal"', 'send_type="SIGNAL"'); Expect = 1 },
+        @{ Name = "a service signal in another case than the baseline's path"; From = $sigAllow; To = $sigAllow.Replace('/org/x/B1', '/ORG/x/B1'); Expect = 1 },
+        @{ Name = "a service signal whose baseline entry is another user's"; From = ""; To = ""; SigUser = "ruya-input"; Expect = 1 },
+        @{ Name = "a service signal whose baseline entry is for another destination"; From = ""; To = ""; SigDest = "org.x.Other"; Expect = 1 },
+        @{ Name = "a service signal of another interface than the baseline entry's"; From = $sigAllow; To = $sigAllow.Replace('send_interface="org.x.B1"', 'send_interface="org.x.B2"'); Expect = 1 },
+        @{ Name = "a service signal of another member than the baseline entry's"; From = $sigAllow; To = $sigAllow.Replace('send_member="Wanted"', 'send_member="Other"'); Expect = 1 },
         @{ Name = "a service signal on another path than the baseline's"; From = $sigAllow; To = $sigAllow.Replace('/org/x/B1', '/org/x/Other'); Expect = 1 },
         @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
@@ -343,16 +365,19 @@ if ($SelfTest) {
         $pd = Join-Path $dir "image/rootfs/usr/share/dbus-1/system.d"
         New-Item -ItemType Directory -Force $pd | Out-Null
         $text = if ($c.From) { $good.Replace($c.From, $c.To) } else { $good }
-        if ($c.From -and $text -eq $good) { Write-Host "FAIL: self-test fixture for $($c.Name) did not change"; $bad++ }
+        if ($c.From -and $text -ceq $good) { Write-Host "FAIL: self-test fixture for $($c.Name) did not change"; $bad++ }
         [IO.File]::WriteAllText((Join-Path $pd "org.x.A1.conf"), $text)
         $ad = Join-Path $dir "api/dbus"
         New-Item -ItemType Directory -Force $ad | Out-Null
         [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
         [IO.File]::WriteAllText((Join-Path $ad "org.x.B1.xml"), $apiB)
+        [IO.File]::WriteAllText((Join-Path $ad "org.x.B2.xml"), $apiB2)
         $doors = if ($c.NoDoor) { @{} } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
         $member = if ($c.SigMember) { $c.SigMember } else { "Wanted" }
         $sigPath = if ($c.SigPath) { $c.SigPath } else { "/org/x/B1" }
-        $signals = if ($c.NoSignals) { @() } else { @(@{ user = "ruya-library"; destination = "org.x.A1"; path = $sigPath; interface = "org.x.B1"; member = $member }) }
+        $sigUser = if ($c.SigUser) { $c.SigUser } else { "ruya-library" }
+        $sigDest = if ($c.SigDest) { $c.SigDest } else { "org.x.A1" }
+        $signals = if ($c.NoSignals) { @() } else { @(@{ user = $sigUser; destination = $sigDest; path = $sigPath; interface = "org.x.B1"; member = $member; reason = "fixture" }) }
         $n = Test-BusPolicies $pd $ad $doors $signals 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
         $failed = [bool]($n -gt 0)
         $want = ($c.Expect -gt 0)
@@ -374,6 +399,15 @@ if ($SelfTest) {
         if (($got -gt 0) -ne ($d.Expect -gt 0)) { Write-Host "FAIL: self-test: door list $(if ($d.Expect) {'accepted'} else {'refused'}) $($d.Name)"; $bad++ }
     }
     Remove-Item -Recurse -Force $dir
+    # The service_signals list itself: every entry is exact and carries a reason.
+    foreach ($t in @(
+        @{ Name = "a service_signals entry with a reason (control)"; S = @{ user = "u"; destination = "d"; path = "/p"; interface = "i"; member = "m"; reason = "r" }; Expect = 0 },
+        @{ Name = "a service_signals entry without a reason"; S = @{ user = "u"; destination = "d"; path = "/p"; interface = "i"; member = "m"; reason = "" }; Expect = 1 },
+        @{ Name = "a service_signals entry with a wildcard member"; S = @{ user = "u"; destination = "d"; path = "/p"; interface = "i"; member = "*"; reason = "r" }; Expect = 1 },
+        @{ Name = "a service_signals entry with an empty user"; S = @{ user = ""; destination = "d"; path = "/p"; interface = "i"; member = "m"; reason = "r" }; Expect = 1 })) {
+        $got = @(Test-ServiceSignalList @($t.S)).Count
+        if (($got -gt 0) -ne ($t.Expect -gt 0)) { Write-Host "FAIL: self-test: signal list $(if ($t.Expect) {'accepted'} else {'refused'}) $($t.Name)"; $bad++ }
+    }
     if ($bad -eq 0) { Write-Host "ok: each bus policy rule refuses its fixture" }
 }
 if ($bad -gt 0) { exit 1 }
