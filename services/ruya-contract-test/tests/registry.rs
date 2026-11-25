@@ -2,14 +2,15 @@
 //!
 //! Every interface in `api/dbus/*.xml` is either served by a service crate that has a
 //! `tests/contract.rs` naming its file, or listed in `NOT_SERVED` with the reason. Every
-//! `org.ruyaos.*` interface a service crate serves (`#[interface(name = "...")]`) is in a contract
-//! file. A new server or a new contract file fails here until it is registered.
+//! `org.ruyaos.*` interface a service crate serves (a zbus `interface` attribute, found by
+//! `served_interface_names`) is in a contract file. A new server or a new contract file fails here
+//! until it is registered.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ruya_contract_test::{contract_dir, interface_names};
+use ruya_contract_test::{contract_dir, interface_names, served_interface_names};
 
 /// Interfaces of the contract that no Rust service serves, with the reason. None today (Play1 is
 /// served by ruya-play since RUY-829).
@@ -59,10 +60,11 @@ fn served() -> BTreeMap<String, String> {
         rust_files(&entry.path().join("src"), &mut files);
         for file in files {
             let text = fs::read_to_string(&file).expect("a source file");
-            for part in text.split("#[interface(name = \"").skip(1) {
-                let name = part.split('"').next().unwrap_or("");
+            let names =
+                served_interface_names(&text).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+            for name in names {
                 if name.starts_with("org.ruyaos.") {
-                    map.insert(name.to_owned(), krate.clone());
+                    map.insert(name, krate.clone());
                 }
             }
         }

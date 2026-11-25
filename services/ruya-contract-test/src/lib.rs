@@ -70,6 +70,9 @@ impl<'a> StrictReader<'a> {
 }
 use zbus::object_server::Interface;
 
+mod served;
+pub use served::served_interface_names;
+
 /// One interface: its members by kind and name, each with its canonical shape.
 pub type Members = BTreeMap<String, String>;
 
