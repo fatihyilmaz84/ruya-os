@@ -181,7 +181,7 @@ try {
         # `cargo test -q` prints "<name> --- FAILED"; without -q it is "test <name> ... FAILED".
         $failed += @([regex]::Matches($out, '(?m)^\s*(?:test )?(\S+) (?:---|\.\.\.) FAILED') | ForEach-Object { $_.Groups[1].Value })
         $ran = [regex]::Matches($out, '(?m)^test result: \S+\. (\d+) passed; (\d+) failed') | ForEach-Object { [int]$_.Groups[1].Value + [int]$_.Groups[2].Value }
-        if (-not $failed -and (($ran | Measure-Object -Sum).Sum -eq 0) -and $out -notmatch 'error(\[E\d+\])?:') {
+        if (-not $aborted -and -not $failed -and (($ran | Measure-Object -Sum).Sum -eq 0) -and $out -notmatch 'error(\[E\d+\])?:') {
             Write-Host "no test matched -Test $($Test -join ', ') in ${crate}: nothing was tested"; $badName = $true
         }
     }
@@ -195,8 +195,10 @@ try {
     # CAUGHT is only a child that ran to the end with every test passing. Also the Rust mode, which reads no exit code.
     if ($aborted) { $failed = @("child aborted: $aborted (exit code $childExit)") }
     ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
-    $buildBroke = (-not $cmdMode) -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
-    if (-not $rust -and -not $cmdMode) { $badName = ($out -match 'no such test file') }
+    # An aborted child is judged before these heuristics: its output is only the error text, which says nothing
+    # about test names or builds.
+    $buildBroke = (-not $cmdMode) -and -not $aborted -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
+    if (-not $rust -and -not $cmdMode) { $badName = (-not $aborted) -and ($out -match 'no such test file') }
     if ($badName) {
         if (-not $rust) { Write-Host "a -Test name is not a file in shell\tests: nothing was tested" }
     } elseif ($buildBroke) {

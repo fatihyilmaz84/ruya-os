@@ -462,7 +462,7 @@ function Test-RevertCheckPiping {
     # RUY-1203: a child that dies on a terminating error (the RUY-994 case) leaves no Totals or FAILED line and does
     # not return; it is CAUGHT, says "child aborted" and exits 0, in every mode; the same child with nothing to
     # throw about is NOT CAUGHT.
-    $throwRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { throw "fixture child died" } else { "ALL GREEN" } }.GetNewClosure()
+    $throwRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { throw "fixture child died (FAILED: cmake)" } else { "ALL GREEN" } }.GetNewClosure()
     foreach ($mode in @("default", "docs", "vmchecks")) {
         foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
             foreach ($piped in @($false, $true)) {
@@ -475,6 +475,24 @@ function Test-RevertCheckPiping {
                 if (-not $good) { $ok = $false; Write-Host "    aborted child mode=$mode piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
             }
         }
+    }
+    # The Rust mode also judges an aborted child before its "no test matched" heuristic (no result lines, no
+    # "error:" in the text, which was exit 2): a copy of the script in a fixture checkout (its own .git and
+    # services\<crate>\) takes the stand-in runner through the Rust verdict path.
+    $rustRepo = Join-Path $fx "rust-checkout"
+    New-Item -ItemType Directory -Path (Join-Path $rustRepo "scripts"), (Join-Path $rustRepo "services\fixturecrate") -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $rustRepo ".git") -Value "gitdir: elsewhere"
+    Copy-Item -LiteralPath $script -Destination (Join-Path $rustRepo "scripts\revert-check.ps1")
+    $rustTarget = Join-Path $rustRepo "services\fixturecrate\lib.rs"
+    [IO.File]::WriteAllText($rustTarget, "value=good`n")
+    $rustThrow = { if ((Get-Content -Raw -LiteralPath $rustTarget) -match 'value=bad') { throw "fixture cargo died" } else { "test result: ok. 1 passed; 0 failed" } }.GetNewClosure()
+    foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
+        $lines = @(& (Join-Path $rustRepo "scripts\revert-check.ps1") -File $rustTarget -Old "value=good" -New $case.New -Runner $rustThrow -Test fixture_test *>&1 | Out-String -Stream)
+        $code = $LASTEXITCODE
+        $text = $lines -join "`n"
+        $said = if ($case.Caught) { ($text -match '(?m)^CAUGHT') -and ($text -match 'child aborted: fixture cargo died') } else { $text -match 'NOT CAUGHT' }
+        $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $rustTarget) -eq "value=good`n")
+        if (-not $good) { $ok = $false; Write-Host "    aborted child, rust mode caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
     }
     # RUY-765: a relative -File resolves against the current location; one that is not there is refused and
     # never created in this checkout; a file in another checkout (a worktree) is refused, unchanged.
