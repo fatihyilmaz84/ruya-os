@@ -4722,17 +4722,12 @@ This can&apos;t be undone.</translation>
         <translation>Signed by %1 · key %2</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Signed by key %1</source>
         <translation>Signed by key %1</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Signed by %1</source>
-        <translation>Signed by %1</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Changed since signed</source>
         <translation>Changed since signed</translation>
     </message>
