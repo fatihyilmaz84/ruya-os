@@ -517,6 +517,18 @@ Item {
             return Usage.history.filter(h => h.kind === "session").map(h => "activitySession_" + h.appId + "_" + h.start)
         }
 
+        // The delegates with this name that are in the list's Column now. Unlike find(), which searches the QObject
+        // tree and so also sees a delegate that only waits for its deferred delete, this is what the page shows.
+        function listRows(name) {
+            const column = find("activityClear").parent
+            const rows = []
+            for (let i = 0; i < column.children.length; ++i) {
+                if (column.children[i].objectName === name)
+                    rows.push(column.children[i])
+            }
+            return rows
+        }
+
         // The Activity page is gone or hidden (its fade-out ended): only then does it stop watching.
         function activityHidden() {
             const body = find("activityBody")
@@ -557,14 +569,22 @@ Item {
             compare(Usage.mockLastLimit(), 60)
             compare(sessionRowNames().length, 60)
             const last = sessionRowNames()[59]
+            // Mark the delegate of the last row (nothing sets z on a row) before the focus reaches it: reaching it
+            // asks for the next page, which the mock answers within that key press. A rebuilt delegate is a fresh object
+            // without the mark; find() or a held reference would not tell, as a rebuild leaves the old delegates
+            // to deleteLater and those are still what they return.
+            tryVerify(() => listRows(last).length === 1)
+            listRows(last)[0].z = 4242
             for (let i = 0; i < 200 && !(find(last) && find(last).activeFocus); ++i)
                 keyClick(Qt.Key_Down)
             verify(find(last).activeFocus, "reached the end of the first page: " + describeFocus())
-            const lastRowObject = find(last)
             tryVerify(() => Usage.mockLastLimit() === 120, 2000, "the end asks for 120")
             tryVerify(() => sessionRowNames().length === 120)
+            // The page takes Usage.history over a moment after it changed: wait until it shows the second page.
+            tryVerify(() => listRows(sessionRowNames()[119]).length === 1, 2000, "the page shows the second page")
             verify(find(last).activeFocus, "focus stays on the row it was on")
-            verify(find(last) === lastRowObject, "the page was appended: the old row is the same delegate, not rebuilt")
+            compare(listRows(last).length, 1, "one row for the session, not an old and a rebuilt one")
+            compare(listRows(last)[0].z, 4242, "the page was appended: the old row is the same delegate, not rebuilt")
             keyClick(Qt.Key_Down)
             verify(find(sessionRowNames()[60]).activeFocus, "and the player goes on down the longer list")
             // On to the end of all 200.
