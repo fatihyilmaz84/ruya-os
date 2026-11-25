@@ -195,7 +195,7 @@ fn a_missing_or_garbled_trust_json_gives_no_tier() {
 }
 
 #[test]
-fn a_signer_without_a_name_shows_its_id_and_an_unsigned_app_none() {
+fn a_signer_without_a_name_has_no_name_and_an_unsigned_app_none() {
     let dir = tempfile::tempdir().unwrap();
     let a = files(dir.path(), "com.example.a");
     put(&a.join("play.json"), br#"{ "name": { "en": "A" } }"#);
@@ -214,7 +214,15 @@ fn a_signer_without_a_name_shows_its_id_and_an_unsigned_app_none() {
         "play.com.example.a\tx\truyaos-play-local\nplay.com.example.b\tx\truyaos-play-local\n",
     );
     let play = |id: &str| items[&format!("flatpak:play.{id}")].play.clone().unwrap();
-    assert_eq!(play("com.example.a").signer.as_deref(), Some("k9"));
+    // RUY-1201: a key is not a name; the key id is served on its own.
+    assert_eq!(play("com.example.a").signer, None);
+    assert_eq!(play("com.example.a").signer_key_id.as_deref(), Some("k9"));
+    let served = record(&Game::alone(items["flatpak:play.com.example.a"].clone()));
+    assert!(!served.contains_key("play_signer"), "{served:?}");
+    assert_eq!(
+        String::try_from(served["play_signer_key_id"].try_clone().unwrap()).unwrap(),
+        "k9"
+    );
     assert_eq!(play("com.example.b").tier.as_deref(), Some("unverified"));
     assert_eq!(play("com.example.b").signer, None);
 }
@@ -299,7 +307,8 @@ fn null_signer_fields_are_absent() {
     };
     assert_eq!(play("both").tier.as_deref(), Some("unverified"));
     assert_eq!(play("both").signer, None);
-    assert_eq!(play("name").signer.as_deref(), Some("k1"));
+    assert_eq!(play("name").signer, None, "a key is not a name (RUY-1201)");
+    assert_eq!(play("name").signer_key_id.as_deref(), Some("k1"));
 }
 
 /// RUY-903 (Linux only: the launcher's real file system): a package the launcher can read, laid

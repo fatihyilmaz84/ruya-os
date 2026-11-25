@@ -318,6 +318,15 @@ void MockLibraryBackend::reset(const QString &scenario)
                 quiet.resolution.resolveError = QStringLiteral("The OS runner is wine-11.0, older than the required 12.0.");
                 quiet.resolution.resolveCode = QStringLiteral("resolve.system_too_old");
                 m_items.append(quiet);
+                // A developer package whose trust.json has a key and no name (RUY-1201): Library1 serves no
+                // play_signer, so the trust line says "Signed by key ..." and the signer sheet has no name row.
+                LibraryItem keyed = item("flatpak:play.com.example.keyed", "game", "Keyed Quest", 0);
+                keyed.art = {{QStringLiteral("icon"), at("pastel")}};
+                keyed.play = true;
+                keyed.playTier = QStringLiteral("developer");
+                keyed.playSignerKeyId = QStringLiteral("3f9a41c07be2d6058e21b4a9d0c7f312");
+                keyed.resolution = imageProton;
+                m_items.append(keyed);
                 LibraryItem odd = item("flatpak:org.example.Oddity", "game", "Oddity", 1762000000);
                 odd.art = {{QStringLiteral("logo"), at("logo")}, {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
                 odd.playTier = QStringLiteral("official");      // never shown: `play` is false

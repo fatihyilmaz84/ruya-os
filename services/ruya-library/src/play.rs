@@ -34,7 +34,8 @@ pub struct PlayInfo {
     pub age_rating: Vec<(String, String)>,
     /// `official`, `developer` or `unverified`; none when `trust.json` is missing or garbled.
     pub tier: Option<String>,
-    /// The signer's name (else its id); none when unsigned or unknown.
+    /// The signer's name as `trust.json` holds it (`signer_name`); none with no tier or no name,
+    /// also for a signer that has only a key id.
     pub signer: Option<String>,
     /// The signer's key id exactly as `trust.json` holds it (`signer_id`); none with no tier or
     /// no signer. Never computed here.
@@ -201,12 +202,11 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path, runners: &Path) {
         .as_ref()
         .and_then(|t| text(t, "tier"))
         .filter(|t| matches!(t.as_str(), "official" | "developer" | "unverified"));
-    // A tier-less item has no signer either: both come from the same file.
-    let signer = tier.as_ref().and(
-        trust
-            .as_ref()
-            .and_then(|t| text(t, "signer_name").or_else(|| text(t, "signer_id"))),
-    );
+    // A tier-less item has no signer either: both come from the same file. A key without a name
+    // has no name here (RUY-1201): the key id is served on its own as `signer_key_id`.
+    let signer = tier
+        .as_ref()
+        .and(trust.as_ref().and_then(|t| text(t, "signer_name")));
     let signer_key_id = tier
         .as_ref()
         .and(trust.as_ref().and_then(|t| text(t, "signer_id")));
