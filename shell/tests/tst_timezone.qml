@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "ZonePaging.js" as ZonePaging
 
 // The time zone (T-213, org.ruyaos.Devices1.Time): the mock follows the contract's statuses, the
 // shell's clock follows a zone change at once, and Settings -> System has an admin-only "Time zone"
@@ -484,6 +485,26 @@ Item {
             compare(chooser.region, "Africa", "after the first region")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("zoneRegions").activeFocus, 2000, "Down leaves Search for the regions")
+        }
+
+        // RUY-671: LB/RB move a page (visibleRows - 1 rows) in the regions and in the cities, clamp at
+        // both ends and keep the row in view.
+        function test_lb_rb_page_the_regions_and_the_cities() {
+            openPicker()
+            const chooser = find("zoneChooser")
+            compare(chooser.visibleRows, 5, "the picker shows the default five rows")
+            ZonePaging.checkPaging(tc, chooser, find("zoneRegions"), () => chooser.regions.length, "regions")
+
+            pressUntil(Qt.Key_Down, () => chooser.region === "Europe", "Down reaches Europe")
+            keyClick(Qt.Key_Return)                         // Accept: into the cities
+            tryVerify(() => find("zoneCities").activeFocus, 2000, "the cities have focus")
+            ZonePaging.checkPaging(tc, chooser, find("zoneCities"), () => chooser.shownCities.length, "cities")
+        }
+
+        function test_lb_rb_do_nothing_on_search() {
+            openPicker()
+            pressUntil(Qt.Key_Up, () => find("zoneSearch").activeFocus, "Up reaches Search")
+            ZonePaging.checkSearchIgnoresPaging(tc, find("zoneSearch"), find("zoneRegions"), find("zoneCities"))
         }
 
         function test_a_clock_that_is_not_set_says_so() {

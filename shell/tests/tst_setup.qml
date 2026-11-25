@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "ZonePaging.js" as ZonePaging
 
 // First-boot setup (T-106): with no profiles the shell shows the setup wizard instead of the
 // picker, and the whole flow works with controller keys only (arrows, Return = Accept,
@@ -543,6 +544,29 @@ Item {
             enterPin("2468")
             tryCompare(setup(), "step", 5)
             compare(find("setupZoneFailed").visible, false)
+        }
+
+        // RUY-671: LB/RB move a page (visibleRows - 1 rows) in the regions and in the cities, clamp at
+        // both ends and keep the row in view.
+        function test_time_zone_lb_rb_page_the_regions_and_the_cities() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000)
+            compare(chooser().visibleRows, 3, "the wizard shows three rows")
+            ZonePaging.checkPaging(tc, chooser(), find("setupZoneRegions"), () => chooser().regions.length, "regions")
+
+            pressUntil(Qt.Key_Down, () => chooser().region === "Europe", "Down reaches Europe")
+            keyClick(Qt.Key_Return)                           // Accept: into the cities
+            tryVerify(() => find("setupZoneCities").activeFocus, 2000, "the cities have focus")
+            ZonePaging.checkPaging(tc, chooser(), find("setupZoneCities"), () => chooser().shownCities.length, "cities")
+        }
+
+        function test_time_zone_lb_rb_do_nothing_on_search() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000)
+            pressUntil(Qt.Key_Up, () => find("setupZoneSearch").activeFocus, "Up reaches Search")
+            ZonePaging.checkSearchIgnoresPaging(tc, find("setupZoneSearch"), find("setupZoneRegions"), find("setupZoneCities"))
         }
 
         function test_the_wizard_chooser_filters_with_its_own_keyboard() {
