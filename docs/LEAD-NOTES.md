@@ -15,7 +15,7 @@ Nothing: no builder, no review, no image build, no VM. Leftover worktrees: `RUY-
 
 ## Do first
 1. **Build image 0.0.109 from `main`** (owner: "the new build can be done with the new lead"): `wsl -d FedoraLinux-44 -- bash -lc 'cd /mnt/d/dev/RuyaOS && scripts/image-chain.sh 0.0.109 oci'` (about 3 h; run it alone, no `dev.ps1 test` meanwhile: WSL memory), then the VM queue (the default list plus `vm-store-check.sh check`, `vm-store-check.sh perms`, `vm-profiles-check.sh create`; **`vm-library-check.sh steam` must be green**: it proves the Session1 policy file in an image), then `dell-update.sh 0.0.109` and `free-space.ps1`. Record the numbers on RUY-390 and RUY-1196. While it builds, spend the tokens on reading and planning, not on Windows tests.
-2. **Check CI after the push** (reviewer's note on RUY-1206): CI runs the lint self-test with pwsh 7 (`ci.yml:32`), this machine only has Windows PowerShell 5.1.
+2. CI at 759c78ca: `ci` and `supply-chain` both **success** (checked by lead-51, incl. the lint self-test under pwsh 7). Check the next push the same way (`gh run list -L 3`).
 3. **RUY-1197** (ruya-session scans only the active profile on the signal) and RUY-1198 (lint rule 6, subscribers). Then more quick wins: `list label=inbox,complexity:simple state=Backlog` (about 50); RUY-1204/1205/1207 are small; RUY-666 (VM).
 
 ## Concerns (ranked)
