@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 import "SettingsNav.js" as SettingsNav
 
 // Settings -> Storage against the mock backend: the console's own storage ("This console", T-196:
@@ -450,14 +451,15 @@ Item {
             const apps = find("storageApps")
             const free = find("storageInternal")
             const data = find("storageData")
+            const tracked = [apps, free, data].map(r => LiveRows.track(r))
             Storage.mockSetInternal(464000000000, 300000000000, 100000000000, 50000000000)
             tryCompare(apps, "value", "100 GB")
             compare(free.value, "300 GB free of 464 GB")
             compare(data.value, "50 GB")
             compare(find("storageSystem").value, "14 GB")
             tryVerify(() => Math.abs(barFill() - 164 / 464) < 0.003, 2000, "the bar follows")
-            verify(find("storageApps") === apps && find("storageInternal") === free && find("storageData") === data,
-                   "the rows were not recreated")
+            for (const row of tracked)
+                LiveRows.verifySame(tc, row, "new numbers")
             verify(apps.activeFocus, "focus stays on the row")
             verify(find("paneStorage").activeFocus)
             keyClick(Qt.Key_Down)                        // and the keys still move on from it
@@ -621,8 +623,9 @@ Item {
             tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
             goTo("storageScan_vol-stick_cat:games")
             const games = find("storageScan_vol-stick_cat:games")
+            const tracked = LiveRows.track(games)
             tryVerify(() => find("storageScan_vol-card_none") !== null, 3000, "the card's result appears below")
-            verify(find("storageScan_vol-stick_cat:games") === games, "the row was not recreated")
+            LiveRows.verifySame(tc, tracked, "another drive reports")
             verify(games.activeFocus, "focus stays")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("storageScan_vol-stick_cat:backups").activeFocus, 2000, "and the keys move on")
@@ -728,12 +731,13 @@ Item {
             verify(rescan.y > find("storageScan_vol-stick_other").y, "under the results")
             verify(rescan.y < find("storageEject_vol-stick").y, "above Eject")
             goTo("storageRescan_vol-stick")
+            const tracked = LiveRows.track(rescan)
             Storage.mockHoldScan(true)
             keyClick(Qt.Key_Return)
             tryVerify(() => Storage.mockScanCalls().length === 2, 3000, "asked again")
             tryVerify(() => scanState("vol-stick") === "running", 3000)
             tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "Scanning... again")
-            verify(find("storageRescan_vol-stick") === rescan, "the row was not recreated")
+            LiveRows.verifySame(tc, tracked, "a rescan starts")
             verify(rescan.activeFocus, "focus stays on the row")
             keyClick(Qt.Key_Return)                      // while it scans: nothing more is asked
             wait(100)

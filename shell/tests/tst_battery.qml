@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 
 // The batteries of the wireless devices (Batteries, UPower behind it) against the mock backend:
 // one chip per device in the status cluster on Home (kind icon, level glyph, percentage), and the
@@ -230,14 +231,16 @@ Item {
             tryVerify(() => chip("pad-2") !== null && chip("pad-1") !== null)
             const first = chip("pad-1")
             const second = chip("pad-2")
+            const firstChip = LiveRows.track(first)
+            const secondChip = LiveRows.track(second)
             Batteries.mockSet("pad-1", 58)
             tryCompare(inChip("pad-1", "batteryPercent"), "text", "58%")
-            verify(chip("pad-1") === first, "the chip is the same item, only its level changed")
-            verify(chip("pad-2") === second)
+            LiveRows.verifySame(tc, firstChip, "only its level changed")
+            LiveRows.verifySame(tc, secondChip, "the other pad's level did not change")
             compare(levelIcon("pad-1"), "battery_4_bar")
             Batteries.mockSet("pad-1", 50)
             tryCompare(inChip("pad-1", "batteryLevelIcon"), "name", "battery_3_bar")
-            verify(chip("pad-1") === first)
+            LiveRows.verifySame(tc, firstChip, "a second change")
         }
 
         function test_a_device_that_disconnects_loses_its_chip() {

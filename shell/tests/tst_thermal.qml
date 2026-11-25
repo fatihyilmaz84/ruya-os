@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 import "SettingsNav.js" as SettingsNav
 
 // The console's temperatures (Thermal, org.ruyaos.Devices1.Thermal) against the mock backend: what
@@ -267,15 +268,17 @@ Item {
             goTo("health_mock:fan")
             const fan = find("health_mock:fan")
             const cpu = find("health_mock:cpu")
+            const fanRow = LiveRows.track(fan)
+            const cpuRow = LiveRows.track(cpu)
             Thermal.mockSet("mock:fan", "fan", 2410, "normal")
             tryCompare(fan, "value", "2410 rpm")
-            verify(find("health_mock:fan") === fan, "the same row, not a new one")
+            LiveRows.verifySame(tc, fanRow, "a new reading")
             verify(fan.activeFocus, "focus stays on the row while its value changes")
 
             setCpu(82, "warm")
             tryCompare(cpu, "marked", true)
             compare(cpu.value, "82 °C")
-            compare(find("health_mock:cpu") === cpu, true)
+            LiveRows.verifySame(tc, cpuRow, "a warmer reading")
             compare(cpu.level, "warm")
             compare(cpu.accessibleValue, "82 °C, Warm")
             verify(fan.activeFocus, "focus stays")

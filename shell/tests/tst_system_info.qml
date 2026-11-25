@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 import "SettingsNav.js" as SettingsNav
 
 // Settings -> About -> System information (T-226) against the mock backends: the sections and rows
@@ -291,12 +292,13 @@ Item {
             openSystemInfo()
             goToRow("memory/used")
             const used = row("memory/used")
+            const usedRow = LiveRows.track(used)
             const before = used.value
             const fillBefore = findChild(used, "usageFill").width
             SystemDetails.mockSet("memory.used_bytes", 6500000000)
             tryVerify(() => used.value !== before, 2000, "the value changed")
             compare(used.value, Storage.formatBytes(6500000000))
-            verify(row("memory/used") === used, "the same row, not a new one")
+            LiveRows.verifySame(tc, usedRow, "a live value")
             tryVerify(() => findChild(used, "usageFill").width !== fillBefore, 2000, "the bar follows")
             verify(used.activeFocus, "focus stays on the row")
             SystemDetails.mockSet("cpu.freq_mhz", 3777)
@@ -485,10 +487,11 @@ Item {
             openSystemInfo()
             goToRow("cpu/model")
             const model = row("cpu/model")
+            const modelRow = LiveRows.track(model)
             DeviceSettings.language = "tr"
             tryCompare(find("sysHeading_cpu"), "text", "İşlemci")
             compare(model.label, "Model")
-            verify(row("cpu/model") === model, "the row is the same object: the model is keys only")
+            LiveRows.verifySame(tc, modelRow, "the language switch (the model is keys only)")
             verify(model.activeFocus, "focus survives the language switch")
             compare(row("cpu/cores").label, "Çekirdek sayısı")
             compare(find("sysSave").label, "Raporu USB sürücüye kaydet")
