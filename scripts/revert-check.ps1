@@ -11,10 +11,12 @@
 #   .\scripts\revert-check.ps1 -File shell\src\usage\Usage.cpp -Old 'if (profile != activeProfile())' -New 'if (false)'
 # -Test tst_usage[,tst_x]: step 2 runs only those test files (`dev.ps1 qml`) instead of `dev.ps1 shell`,
 # much faster; name the file that holds the new test, since nothing else runs.
-# -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks), for a mutation of
+# -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks incl. the translation and bus-policy lints), for a mutation of
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
 # mutation. Neither builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
+#   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-translations.ps1 -Old '<a Get-PadNameFindings rule>' -New '<nothing>'
+#   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-bus-policies.ps1 -Old '<a rule>' -New '<nothing>'
 # A -File under services\<crate>\ is Rust: step 2 is `cargo test -p <crate> --all-features -- <-Test name filters>`
 # (every feature, so code behind one, like ruya-platform's dev-mock, is tested too), e.g.
 #   .\scripts\revert-check.ps1 -File services\ruya-session\src\spawner.rs -Old '...' -New '...' -Test scope_names

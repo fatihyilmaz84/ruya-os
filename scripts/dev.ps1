@@ -763,6 +763,11 @@ function Test-Translations {
     $project = Update-LUpdateProject
     & (Join-Path $PSScriptRoot "lint-translations.ps1") -LUpdateProject $project
     Record "translation lint" ($LASTEXITCODE -eq 0)
+}
+
+# RUY-1182: the self-check needs no lupdate, so it runs with the script self-checks (Test-ScriptSelfChecks).
+function Test-TranslationSelfCheck {
+    Step "translation lint self-check"
     & (Join-Path $PSScriptRoot "lint-translations.ps1") -SelfCheck
     Record "translation lint self-check (a translated pad button name is rejected)" ($LASTEXITCODE -eq 0)
 }
@@ -1274,6 +1279,8 @@ function Test-ScriptSelfChecks {
     Test-Ids
     Test-RegexAnchors
     Test-AppTable
+    Test-TranslationSelfCheck
+    Test-BusPolicies
 }
 
 function Do-Shell {
@@ -1421,7 +1428,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-ApiChangelog; Test-VmChecks; Do-Rust; Test-Conformance; Do-Shell
+        Test-Text; Test-Boot; Test-DevDocs; Test-ApiChangelog; Test-VmChecks; Do-Rust; Test-Conformance; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {
