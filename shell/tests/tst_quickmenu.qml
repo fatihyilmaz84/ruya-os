@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 
 // The Quick Hub (T-448, T-471, 02 §1.6): what Guide opens. One screen, no scroll, at most five focus stops:
 // the status row (not focusable), the game card (Resume, focus first), Home | Close game, the running strip
@@ -89,6 +90,7 @@ Item {
 
         function cleanup() {
             DeviceSettings.reducedMotion = false
+            Batteries.mockReset()   // a battery test's devices must not toast low into the next test's centre
         }
 
         // Play on the hero (Turbo Racer), the answer, and the app's window: the app item is returned focused.
@@ -552,6 +554,68 @@ Item {
             verify(find("hubBatteries").width > 0)
             const first = Batteries.chips[0].id
             verify(findChild(find("hubBatteries"), "hubBattery_" + first), "the lowest device has its chip")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // The chip delegates the Hub's status row shows now: LiveRows.js reads the Row's live children, because
+        // find() also returns a chip that a rebuild removed and that waits for its deferred delete.
+        function hubChips(id) {
+            return LiveRows.children(find("hubBatteries"), "hubBattery_" + id)
+        }
+
+        function hubChipPercent(id) {
+            return findChild(hubChips(id)[0], "batteryPercent").text
+        }
+
+        function test_a_battery_level_change_keeps_the_hub_chips() {
+            start()
+            Batteries.mockClear()
+            Batteries.mockSet("pad-a", 30, "discharging", "controller", "Pad A")
+            Batteries.mockSet("pad-b", 50, "discharging", "controller", "Pad B")
+            tryVerify(() => Batteries.chips.length === 2)
+            openHub()
+            tryVerify(() => hubChips("pad-a").length === 1 && hubChips("pad-b").length === 1)
+            const chipA = LiveRows.track(hubChips("pad-a")[0])
+            const chipB = LiveRows.track(hubChips("pad-b")[0])
+            compare(hubChipPercent("pad-a"), "30%")
+            Batteries.mockSet("pad-a", 28)
+            tryCompare(findChild(chipA.item, "batteryPercent"), "text", "28%")
+            LiveRows.verifySame(tc, chipA, "only its level changed")
+            LiveRows.verifySame(tc, chipB, "the other pad's level did not change")
+            compare(hubChipPercent("pad-b"), "50%")
+            keyClick(Qt.Key_Escape)
+        }
+
+        // The ids of the chips the status row shows now, left to right (LiveRows' view: no chip a rebuild removed).
+        function hubChipIds() {
+            const row = find("hubBatteries")
+            return row.children.filter(c => c.objectName.startsWith("hubBattery_") && c.objectName !== "hubBatteryMore")
+                               .map(c => c.objectName.substring("hubBattery_".length))
+        }
+
+        // A third device that sorts first (the lowest level) takes the first of the two slots (`chipIds` is the first
+        // two of Batteries.chips): the chips are exactly its id and the one that moved over, in that order, one live
+        // chip each (no old and a rebuilt one side by side), the one that fell out is gone and "+1" names it. What the
+        // code does now: the ids are a new array, so the Repeater rebuilds the chip that stays too (pad-a below is
+        // not the object it was); this test does not pin that, only that the shown chips are right and not doubled.
+        function test_the_hub_chips_follow_the_ordered_ids() {
+            start()
+            Batteries.mockClear()
+            Batteries.mockSet("pad-a", 30, "discharging", "controller", "Pad A")
+            Batteries.mockSet("pad-b", 50, "discharging", "controller", "Pad B")
+            tryVerify(() => Batteries.chips.length === 2)
+            openHub()
+            tryVerify(() => hubChipIds().length === 2)
+            compare(hubChipIds(), ["pad-a", "pad-b"], "the lowest level first")
+            verify(!find("hubBatteryMore").visible, "no device is left out")
+            Batteries.mockSet("pad-c", 20, "discharging", "controller", "Pad C")
+            tryCompare(find("hubBatteryMore"), "text", "+1")
+            tryVerify(() => hubChipIds().length === 2 && hubChipIds()[0] === "pad-c", 2000, "the new device takes the first slot")
+            compare(hubChipIds(), ["pad-c", "pad-a"], "the one that moved over is next, the last one fell out")
+            compare(hubChips("pad-a").length, 1, "one live chip for the pad that stays")
+            compare(hubChips("pad-b").length, 0, "the pad that fell out has no chip")
+            compare(hubChipPercent("pad-c"), "20%")
+            compare(hubChipPercent("pad-a"), "30%")
             keyClick(Qt.Key_Escape)
         }
 
