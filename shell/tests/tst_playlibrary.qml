@@ -27,6 +27,7 @@ Item {
         readonly property string hopper: "flatpak:play.com.example.starhopper"
         readonly property string quiet: "flatpak:play.com.example.quiet"
         readonly property string oddity: "flatpak:org.example.Oddity"
+        readonly property string keyed: "flatpak:play.com.example.keyed"
 
         function find(name) { return findChild(tc.shell, name) }
         function page() { return find("page_appDetail") }
@@ -58,7 +59,7 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
-            tryVerify(() => Library.items.length === 13)
+            tryVerify(() => Library.items.length === 14)
             tryVerify(() => Store.available && Store.catalogue.length > 0)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             wait(50)
@@ -172,6 +173,29 @@ Item {
             tryCompare(sheet, "shown", false)
             tryVerify(() => find("detailTrustRow").activeFocus, 2000, "focus returns to the trust row")
             compare(tc.shell.currentPage, "appDetail", "Back closed the sheet only")
+        }
+
+        // RUY-1201: a developer package whose trust.json has a key and no name. Library1 serves no play_signer (not the
+        // key id in its place), so the line is "Signed by key ..." and the sheet has no "Signed by" row.
+        function test_a_key_without_a_name_reads_signed_by_key_and_the_sheet_has_no_name_row() {
+            start()
+            openPage(keyed)
+            const trust = find("detailTrustRow")
+            verify(trust.visible)
+            compare(trust.trust.state, "developer")
+            compare(trust.trust.line, "Signed by key 3f9a…f312")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("detailTrustRow").activeFocus, 2000, "Down from Play goes down to the trust row")
+            keyClick(Qt.Key_Return)
+            const sheet = find("detailSigner")
+            tryCompare(sheet, "shown", true)
+            tryVerify(() => sheet.activeFocus)
+            tryCompare(find("signerRowKey"), "visible", true)
+            compare(find("signerRowName").visible, false, "no name, no row: the key id is not a name")
+            compare(findChild(find("signerRowKey"), "signerValue").text, "3f9a 41c0 7be2 d605 8e21 b4a9 d0c7 f312")
+            keyClick(Qt.Key_Escape)
+            tryCompare(sheet, "shown", false)
+            tryVerify(() => find("detailTrustRow").activeFocus, 2000, "focus returns to the trust row")
         }
 
         function test_trailer_card_is_the_next_stop_and_opens_the_viewer() {
