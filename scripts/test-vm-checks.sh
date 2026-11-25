@@ -735,6 +735,14 @@ expect_contains "wait_fstate: thawing, then running returns 0" "$out" "rc=0"
 out="$(rundrop 'fstate() { echo frozen; }; wait_fstate u unit running 1; echo "rc=$?"')"
 expect_contains "wait_fstate: a stuck frozen unit fails, naming the value tested" "$out" "FAIL: unit: FreezerState frozen, not running"
 expect_contains "wait_fstate: a stuck frozen unit returns 1" "$out" "rc=1"
+# RUY-711: assert_fstate reads once. The fake answers `frozen` the first time and `running` after, so a
+# FAIL that re-read for its message would print `running`, a value the test never judged.
+out="$(rundrop 'reads="$work/fstate-reads"; : > "$reads"; fstate() { echo x >> "$reads"; [ "$(wc -l < "$reads")" -ge 2 ] && echo running || echo frozen; }; assert_fstate u unit running "unit runs" "after Thaw"; echo "rc=$? reads=$(wc -l < "$reads")"')"
+expect_contains "assert_fstate: a FAIL names the value it judged" "$out" "FAIL: unit: FreezerState frozen after Thaw"
+expect_contains "assert_fstate: a FAIL returns 1 after one read" "$out" "rc=1 reads=1"
+out="$(rundrop 'reads="$work/fstate-reads"; : > "$reads"; fstate() { echo x >> "$reads"; [ "$(wc -l < "$reads")" -ge 2 ] && echo thawing || echo frozen; }; assert_fstate u unit frozen "unit stays frozen" "after Thaw"; echo "rc=$? reads=$(wc -l < "$reads")"')"
+expect_contains "assert_fstate: a PASS prints the ok text" "$out" "PASS: unit stays frozen"
+expect_contains "assert_fstate: a PASS returns 0 after one read" "$out" "rc=0 reads=1"
 # restart/check/kill clean up the display check's app too: it needs the runtime they remove. RUY-736:
 # and the stubborn app of `kill` (installed from the same remote). RUY-888: and the saver of `shutdown`.
 for c in 'vm-session-check.sh'; do
