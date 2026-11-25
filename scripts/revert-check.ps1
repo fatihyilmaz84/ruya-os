@@ -7,7 +7,8 @@
 #   4. runs `dev.ps1 build` again so the build directory matches the restored source.
 # A run that is killed (an outer `timeout`) cannot restore: step 1 first writes output\revert-check-pending.json
 # (the file and its original bytes) and the next run of this script applies it before doing anything else (RUY-752).
-# Exit code 0 = the mutation was caught (at least one test failed), 1 = nothing failed (the test cannot fail),
+# Exit code 0 = the mutation was caught (at least one test failed, or the child exited non-zero or died on a terminating
+# error: "child aborted"), 1 = the child finished and nothing failed (the test cannot fail),
 # 2 = the mutation could not be applied (or a -Test name is not a test file). Run it from the checkout (worktree) that holds the change.
 #
 #   .\scripts\revert-check.ps1 -File shell\src\usage\Usage.cpp -Old 'if (profile != activeProfile())' -New 'if (false)'
@@ -115,44 +116,57 @@ try {
     if (-not $LogDir) { $LogDir = Join-Path $Repo "shell\build-win" }
     $qmlLogs = @($Test | ForEach-Object { Join-Path $LogDir ("ruya-qmltest-" + [IO.Path]::GetFileNameWithoutExtension($_) + ".txt") })
     if (-not $rust) { $qmlLogs | ForEach-Object { Remove-Item -LiteralPath $_ -ErrorAction SilentlyContinue } }
-    if ($Runner) {
-        Write-Host "== mutated ${File}; running the stand-in runner =="
-        # A stand-in reports its own exit code by setting $global:LASTEXITCODE (like a child dev.ps1 would).
-        $global:LASTEXITCODE = 0
-        $out = (& $Runner *>&1 | Out-String -Width 4096)
-        $childExit = $global:LASTEXITCODE
-        $logs = $qmlLogs
-        # A stand-in for docs / vmchecks mode reports failure the way dev.ps1 does ("FAILED: ...").
-        if ($cmdMode) { $childExit = if ($out -match '(?m)^\s*FAILED:') { 1 } else { 0 } }
-    } elseif ($Mode -eq "docs") {
-        Write-Host "== mutated ${File}; dev.ps1 docs =="
-        $out = & (Join-Path $PSScriptRoot "dev.ps1") docs *>&1 | Out-String -Width 4096
-        $childExit = $LASTEXITCODE
-        $logs = @()
-    } elseif ($Mode -eq "vmchecks") {
-        Write-Host "== mutated ${File}; bash scripts/test-vm-checks.sh =="
-        Push-Location $Repo
-        try { $out = & bash scripts/test-vm-checks.sh *>&1 | Out-String -Width 4096; $childExit = $LASTEXITCODE } finally { Pop-Location }
-        $logs = @()
-    } elseif ($rust) {
-        Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="
-        Push-Location (Join-Path $Repo "services")
-        try {
-            # libtest takes several name filters (a test runs when its name contains any of them).
-            $out = (& cargo test --locked -q -p $crate --all-features -- @Test 2>&1 | Out-String -Width 4096)
-        } finally { Pop-Location }
-        $logs = @()
-    } elseif ($Test.Count -gt 0) {
-        Write-Host "== mutated ${File}; building and testing only $($Test -join ', ') (dev.ps1 qml) =="
-        # *>&1: dev.ps1 reports with Write-Host (the information stream), which 2>&1 does not capture.
-        $out = & (Join-Path $PSScriptRoot "dev.ps1") qml @Test *>&1 | Out-String -Width 4096
-        $childExit = $LASTEXITCODE
-        $logs = $qmlLogs
-    } else {
-        Write-Host "== mutated ${File}; building and testing (dev.ps1 shell) =="
-        $out = & (Join-Path $PSScriptRoot "dev.ps1") shell *>&1 | Out-String -Width 4096
-        $childExit = $LASTEXITCODE
-        $logs = @(Join-Path $Repo "shell\build-win\ruya-qmltest.txt")
+    # RUY-1203: a child that dies on a terminating error (a `throw`, or an error under `$ErrorActionPreference =
+    # 'Stop'` in dev.ps1: the RUY-994 case, Start-Process on a missing exe) does not return; the error would climb
+    # out of this script past the verdict below (exit 1, no CAUGHT line, which reads as "not caught"). It is caught
+    # here and becomes a failed run, with the error text in $out and the reason in $aborted.
+    $aborted = $null
+    $logs = @()
+    try {
+        if ($Runner) {
+            Write-Host "== mutated ${File}; running the stand-in runner =="
+            # A stand-in reports its own exit code by setting $global:LASTEXITCODE (like a child dev.ps1 would).
+            $global:LASTEXITCODE = 0
+            $out = (& $Runner *>&1 | Out-String -Width 4096)
+            $childExit = $global:LASTEXITCODE
+            $logs = $qmlLogs
+            # A stand-in for docs / vmchecks mode reports failure the way dev.ps1 does ("FAILED: ...").
+            if ($cmdMode) { $childExit = if ($out -match '(?m)^\s*FAILED:') { 1 } else { 0 } }
+        } elseif ($Mode -eq "docs") {
+            Write-Host "== mutated ${File}; dev.ps1 docs =="
+            $out = & (Join-Path $PSScriptRoot "dev.ps1") docs *>&1 | Out-String -Width 4096
+            $childExit = $LASTEXITCODE
+            $logs = @()
+        } elseif ($Mode -eq "vmchecks") {
+            Write-Host "== mutated ${File}; bash scripts/test-vm-checks.sh =="
+            Push-Location $Repo
+            try { $out = & bash scripts/test-vm-checks.sh *>&1 | Out-String -Width 4096; $childExit = $LASTEXITCODE } finally { Pop-Location }
+            $logs = @()
+        } elseif ($rust) {
+            Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="
+            Push-Location (Join-Path $Repo "services")
+            try {
+                # libtest takes several name filters (a test runs when its name contains any of them).
+                $out = (& cargo test --locked -q -p $crate --all-features -- @Test 2>&1 | Out-String -Width 4096)
+            } finally { Pop-Location }
+            $logs = @()
+        } elseif ($Test.Count -gt 0) {
+            Write-Host "== mutated ${File}; building and testing only $($Test -join ', ') (dev.ps1 qml) =="
+            # *>&1: dev.ps1 reports with Write-Host (the information stream), which 2>&1 does not capture.
+            $out = & (Join-Path $PSScriptRoot "dev.ps1") qml @Test *>&1 | Out-String -Width 4096
+            $childExit = $LASTEXITCODE
+            $logs = $qmlLogs
+        } else {
+            Write-Host "== mutated ${File}; building and testing (dev.ps1 shell) =="
+            $out = & (Join-Path $PSScriptRoot "dev.ps1") shell *>&1 | Out-String -Width 4096
+            $childExit = $LASTEXITCODE
+            $logs = @(Join-Path $Repo "shell\build-win\ruya-qmltest.txt")
+        }
+    } catch {
+        $aborted = ($_.Exception.Message -split "`r?`n")[0]
+        $out = "$($_ | Out-String -Width 4096)"
+        $childExit = 1
+        Write-Host "child aborted: $aborted"
     }
     $failed = @()
     foreach ($log in $logs) {
@@ -167,7 +181,7 @@ try {
         # `cargo test -q` prints "<name> --- FAILED"; without -q it is "test <name> ... FAILED".
         $failed += @([regex]::Matches($out, '(?m)^\s*(?:test )?(\S+) (?:---|\.\.\.) FAILED') | ForEach-Object { $_.Groups[1].Value })
         $ran = [regex]::Matches($out, '(?m)^test result: \S+\. (\d+) passed; (\d+) failed') | ForEach-Object { [int]$_.Groups[1].Value + [int]$_.Groups[2].Value }
-        if (-not $failed -and (($ran | Measure-Object -Sum).Sum -eq 0) -and $out -notmatch 'error(\[E\d+\])?:') {
+        if (-not $aborted -and -not $failed -and (($ran | Measure-Object -Sum).Sum -eq 0) -and $out -notmatch 'error(\[E\d+\])?:') {
             Write-Host "no test matched -Test $($Test -join ', ') in ${crate}: nothing was tested"; $badName = $true
         }
     }
@@ -177,9 +191,14 @@ try {
     # test log line (RUY-659): a failure whose log line was lost is still a failure. A build break or a bad
     # -Test name is judged below, before the failures.
     if (-not $cmdMode -and -not $rust -and $failed.Count -eq 0 -and $null -ne $childExit -and $childExit -ne 0) { $failed = @("(dev.ps1 exit code $childExit)") }
+    # The invariant (RUY-1203): a child that did not finish is a failure, whatever mode and whatever it printed; NOT
+    # CAUGHT is only a child that ran to the end with every test passing. Also the Rust mode, which reads no exit code.
+    if ($aborted) { $failed = @("child aborted: $aborted (exit code $childExit)") }
     ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
-    $buildBroke = (-not $cmdMode) -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
-    if (-not $rust -and -not $cmdMode) { $badName = ($out -match 'no such test file') }
+    # An aborted child is judged before these heuristics: its output is only the error text, which says nothing
+    # about test names or builds.
+    $buildBroke = (-not $cmdMode) -and -not $aborted -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
+    if (-not $rust -and -not $cmdMode) { $badName = (-not $aborted) -and ($out -match 'no such test file') }
     if ($badName) {
         if (-not $rust) { Write-Host "a -Test name is not a file in shell\tests: nothing was tested" }
     } elseif ($buildBroke) {
