@@ -14,7 +14,7 @@
 #                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
 #   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
 #                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
-#   - vm-profiles-check.sh the `guests` mode (RUY-125) against a fake Profiles1: each assertion can FAIL
+#   - vm-profiles-check.sh the `guests` mode (RUY-125) and the guest role of `create` (RUY-728) against a fake Profiles1: each assertion can FAIL
 #   - vm-input-check.sh    the `players` mode (RUY-121): no probe or a refused CreateProfile fails, the probe gets the
 #                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
 #                          reply and ListPlayers parsing (test-vm-input-probe.py); the `seathold` mode (RUY-627): the
@@ -878,7 +878,8 @@ try:
     with open(state_path) as f:
         st = json.load(f)
 except FileNotFoundError:
-    st = {"active": "", "next_id": 2, "next_uid": 50000, "guests": [], "users": {}}
+    st = {"active": "", "next_id": 2, "next_uid": 50000, "guests": [], "users": {},
+          "profiles": [["p1", "Check Admin", "#3a5bd9", "admin", True]], "profile_users": {}}
 
 def save():
     with open(state_path, "w") as f:
@@ -903,7 +904,11 @@ def wipe():
         remove(g["id"])
 
 if tool == "getent":
-    db, key = args[0], args[1]
+    db, key = args[0], (args[1] if len(args) > 1 else "")
+    if db == "passwd" and not key:  # every user, as `getent passwd` does
+        for n in list(st["users"]) + list(st["profile_users"]):
+            print("ruya-%s:x:1:1::/var/home/ruya-%s:/usr/sbin/nologin" % (n, n))
+        sys.exit(0)
     name = key[5:] if key.startswith("ruya-") else ""
     if db == "passwd" and name in st["users"]:
         uid = st["users"][name]
@@ -959,8 +964,24 @@ elif method == "RemoveGuest":
         reply("s", "ok")
     else:
         reply("s", "unknown-profile")
+elif method == "CreateProfile":
+    # rest = admin_id, admin_pin, name, role, pin. A guest role is refused; the bugs make it
+    # answer ok (guest_ok) or make the Unix user while still answering not-allowed (guest_user).
+    role = rest[3]
+    if role == "guest" and bug not in ("guest_ok", "guest_user"):
+        reply("ssuu", "not-allowed", "", 0, 0)
+    else:
+        st["next_id"] += 1
+        pid = "p%d" % st["next_id"]
+        if role == "guest" and bug == "guest_user":
+            st["profile_users"][pid] = 1000 + st["next_id"]
+            reply("ssuu", "not-allowed", "", 0, 0)
+        else:
+            st["profile_users"][pid] = 1000 + st["next_id"]
+            st["profiles"].append([pid, rest[2], "#3a5bd9", role, False])
+            reply("ssuu", "ok", pid, 0, 0)
 elif method == "ListProfiles":
-    rows = [["p1", "Check Admin", "#3a5bd9", "admin", True]]
+    rows = list(st["profiles"])
     if bug == "listed":
         rows += [[g["id"], "Guest", "#d9483a", "guest", False] for g in st["guests"]]
     reply("a(ssssb)", rows)
@@ -973,10 +994,10 @@ for t in busctl getent; do
     printf '#!/bin/sh\nexec python3 "$PROF_PY" "$PROF_STATE" "$PROF_HOMES" %s "$@"\n' "$t" > "$tmp/prof-bin/$t"
     chmod +x "$tmp/prof-bin/$t"
 done
-runprof() { # FAKE_BUG comes from the caller's prefix
+runprof() { # [mode, default guests]; FAKE_BUG comes from the caller's prefix
     rm -rf "$tmp/prof"; mkdir -p "$tmp/prof/home"
     PROF_PY="$tmp/fake-profiles.py" PROF_STATE="$tmp/prof/state.json" PROF_HOMES="$tmp/prof/home" \
-        RUYA_HOME_ROOT="$tmp/prof/home" RUYA_ETC_ROOT="$tmp/prof/etc" PATH="$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" guests 2>&1
+        RUYA_HOME_ROOT="$tmp/prof/home" RUYA_ETC_ROOT="$tmp/prof/etc" PATH="$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" "${1:-guests}" 2>&1
 }
 out="$(runprof)"; rc=$?
 expect_contains "a good service passes" "$out" "ALL CHECKS PASSED"
@@ -994,6 +1015,21 @@ for case in \
     out="$(FAKE_BUG="$bug" runprof)"; rc=$?
     expect_contains "guests, bug $bug: caught" "$out" "$needle"
     [ "$rc" = 1 ] && pass "guests, bug $bug: exit 1" || fail "guests, bug $bug: exit $rc"
+done
+# create (RUY-728): a profile with role guest must answer not-allowed and make no user
+echo "vm-profiles-check.sh create: the guest role is refused and makes no user"
+out="$(runprof create)"; rc=$?
+expect_contains "create, a good service: the guest is not-allowed" "$out" "PASS: CreateProfile role guest: not-allowed"
+expect_contains "create, a good service: no user made" "$out" "PASS: CreateProfile role guest made no user"
+expect_lacks "create, a good service: no FAIL" "$out" "FAIL"
+[ "$rc" = 0 ] && pass "create, a good service: exit 0" || fail "create, a good service: exit $rc"
+for case in \
+    "guest_ok|FAIL: CreateProfile role guest answered 'ok'" \
+    "guest_user|FAIL: CreateProfile role guest made the user(s)"; do
+    bug="${case%%|*}"; needle="${case#*|}"
+    out="$(FAKE_BUG="$bug" runprof create)"; rc=$?
+    expect_contains "create, bug $bug: caught" "$out" "$needle"
+    [ "$rc" = 1 ] && pass "create, bug $bug: exit 1" || fail "create, bug $bug: exit $rc"
 done
 # --- vm-input-check.sh uinput (RUY-1063): the probe and its module, the two profiles, a probe FAIL fails ----------
 echo "vm-input-check.sh uinput: the probe gets both profiles and vm_uinput_trust.py next to it"

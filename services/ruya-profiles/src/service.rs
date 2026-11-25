@@ -319,11 +319,11 @@ impl<A: Accounts> ProfileService<A> {
         {
             return (Outcome::of(Status::Invalid), None);
         }
-        // Admins must have a PIN; others may.
-        let pin_ok = match role {
-            Role::Admin => pin::is_valid(new_pin),
-            Role::Guest => false,
-            Role::Standard => new_pin.is_empty() || pin::is_valid(new_pin),
+        // Admins must have a PIN; others may (a guest never gets here: the early return above).
+        let pin_ok = if role == Role::Admin {
+            pin::is_valid(new_pin)
+        } else {
+            new_pin.is_empty() || pin::is_valid(new_pin)
         };
         if !pin_ok {
             return (Outcome::of(Status::Invalid), None);
@@ -658,6 +658,13 @@ mod tests {
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "G2", "guest", "1111", now)
+                .0
+                .status,
+            Status::NotAllowed
+        );
+        // The role is checked before the name (RUY-728): the mock answers the same.
+        assert_eq!(
+            svc.create_profile("p1", "1234", "", "guest", "", now)
                 .0
                 .status,
             Status::NotAllowed
