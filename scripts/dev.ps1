@@ -250,6 +250,7 @@ function Invoke-QmlShards([string[]]$Files, [string]$LogDir, [int]$Shards, [int]
     $queue = New-Object System.Collections.Queue
     foreach ($f in ($Files | Sort-Object { (Get-Item -LiteralPath $_).Length } -Descending)) { $queue.Enqueue($f) }
     $running = @()
+    $missing = @()
     $res = [pscustomobject]@{ Passed = 0; Failed = 0; Skipped = 0; Files = 0; Bad = @(); Lines = @() }
     $clock = [Diagnostics.Stopwatch]::StartNew()
     while ($queue.Count -gt 0 -or $running.Count -gt 0) {
@@ -258,6 +259,13 @@ function Invoke-QmlShards([string[]]$Files, [string]$LogDir, [int]$Shards, [int]
             $base = [IO.Path]::GetFileNameWithoutExtension($f)
             $log = Join-Path $LogDir "$base.txt"
             $cmd = & $MakeCommand $f $log
+            # RUY-994: a failed build leaves no program. Start-Process would only write an error and leave no process
+            # to wait for, so the file would sit until $TimeoutSec: fail it at once, naming the program (once).
+            if (-not (Test-Path -LiteralPath $cmd.Exe)) {
+                $res.Files++
+                if ($missing -notcontains $cmd.Exe) { $missing += $cmd.Exe; $res.Bad += "$($cmd.Exe) not found: the build failed" }
+                continue
+            }
             $p = Start-Process -FilePath $cmd.Exe -ArgumentList $cmd.Args -PassThru -WindowStyle Hidden `
                 -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err"
             $null = $p.Handle    # keeps the exit code readable after the process ended (Windows PowerShell 5.1)
@@ -350,6 +358,16 @@ function Test-QmlShardRunner {
         -and ($bad -notmatch 'tst_ok')
     if (-not $ok) { Write-Host "    got: files $($r.Files), passed $($r.Passed), failed $($r.Failed), skipped $($r.Skipped), bad:`n$bad" -ForegroundColor Yellow }
     Record "shard runner self-check (a failed, a crashed and a hung file are named by log; the totals add up)" $ok
+
+    # RUY-994: a program that is not there (the build failed) is a named failure at once, not a wait for the limit.
+    $gone = Join-Path $fx "build\tst_gone.exe"
+    $makeGone = { param($file, $log) @{ Exe = $gone; Args = @("-input", "`"$file`"") } }.GetNewClosure()
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $g = Invoke-QmlShards $all (Join-Path $fx "logs-gone") 2 30 $makeGone
+    $goneSec = $clock.Elapsed.TotalSeconds
+    $goneOk = ($g.Files -eq 5) -and ($g.Bad.Count -eq 1) -and ($g.Bad[0] -eq "$gone not found: the build failed") -and ($g.Passed -eq 0) -and ($goneSec -lt 10)
+    if (-not $goneOk) { Write-Host ("    got: files $($g.Files), bad $($g.Bad.Count): $($g.Bad -join ' | '), {0:N1} s" -f $goneSec) -ForegroundColor Yellow }
+    Record "shard runner self-check (a missing test program is one FAILED naming the file, in seconds, not a wait for the limit)" $goneOk
 
     # The same for CI's twin, scripts/run-qml-tests.sh (Git's bash), with a stand-in test program.
     $bash = "$env:ProgramFiles\Git\bin\bash.exe"
@@ -789,9 +807,10 @@ function Update-LUpdateProject {
     $json = Join-Path $dir "ruya-shell_lupdate_project.json"
     $in = Join-Path $dir "ruya-shell_lupdate_project.Release.cmake"
     $cml = Join-Path $Repo "shell\CMakeLists.txt"
-    $stale = (-not (Test-Path $json)) -or (-not (Test-Path $in)) -or ((Get-Item $cml).LastWriteTime -gt (Get-Item $json).LastWriteTime)
+    # RUY-994: a build that ran out of disk leaves a 0-byte json or .Release.cmake with a fresh time: empty is stale.
+    $stale = (-not (Test-Path $json)) -or (-not (Test-Path $in)) -or ((Get-Item $json).Length -eq 0) -or ((Get-Item $in).Length -eq 0) -or ((Get-Item $cml).LastWriteTime -gt (Get-Item $json).LastWriteTime)
     if (-not $stale) { return $json }
-    if ((Test-Path (Join-Path $ShellBuild "CMakeCache.txt")) -and ((-not (Test-Path $in)) -or (Get-Item $cml).LastWriteTime -gt (Get-Item $in).LastWriteTime)) {
+    if ((Test-Path (Join-Path $ShellBuild "CMakeCache.txt")) -and ((-not (Test-Path $in)) -or (Get-Item $in).Length -eq 0 -or (Get-Item $cml).LastWriteTime -gt (Get-Item $in).LastWriteTime)) {
         & $script:CMake -S (Join-Path $Repo "shell") -B $ShellBuild | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "    CMake reconfigure failed (exit $LASTEXITCODE)" -ForegroundColor Red; return $json }
     }
@@ -801,6 +820,48 @@ function Update-LUpdateProject {
     if ($LASTEXITCODE -ne 0) { Write-Host "    lupdate project generation failed (exit $LASTEXITCODE)" -ForegroundColor Red }
     elseif (Test-Path $json) { (Get-Item $json).LastWriteTime = Get-Date }
     return $json
+}
+
+# RUY-994: Update-LUpdateProject on a scratch build folder with a stand-in cmake (no Qt, no real build): a
+# 0-byte json is regenerated, a 0-byte .Release.cmake also triggers the reconfigure, a good pair is left alone.
+function Test-LUpdateProjectSelfCheck {
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lupdate-" + [guid]::NewGuid().ToString("N"))
+    $Repo = $fx; $ShellBuild = Join-Path $fx "shell\build-win"; $QtDir = Join-Path $fx "qt"    # the callee sees these (dynamic scope)
+    $dir = Join-Path $ShellBuild ".lupdate"
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    Set-Content -LiteralPath (Join-Path $fx "shell\CMakeLists.txt") -Value "x"
+    Set-Content -LiteralPath (Join-Path $ShellBuild "CMakeCache.txt") -Value "x"
+    $json = Join-Path $dir "ruya-shell_lupdate_project.json"
+    $in = Join-Path $dir "ruya-shell_lupdate_project.Release.cmake"
+    $calls = Join-Path $fx "calls.txt"
+    $saved = $script:CMake
+    # The stand-in writes what the real calls write: -B reconfigures the .Release.cmake, -P the json.
+    $script:CMake = {
+        if ($args -contains "-B") { Add-Content -LiteralPath $calls "configure"; Set-Content -LiteralPath $in -Value "cfg" }
+        else { Add-Content -LiteralPath $calls "generate"; Set-Content -LiteralPath $json -Value "{}" }
+        $global:LASTEXITCODE = 0
+    }.GetNewClosure()
+    try {
+        $later = (Get-Date).AddMinutes(10)
+        $cases = @(
+            @{ Name = "0-byte json"; Json = ""; In = "cfg"; Calls = "generate" },
+            @{ Name = "0-byte .Release.cmake"; Json = "{}"; In = ""; Calls = "configure,generate" },
+            @{ Name = "good pair"; Json = "{}"; In = "cfg"; Calls = "" })
+        $ok = $true
+        foreach ($c in $cases) {
+            Remove-Item -LiteralPath $calls -ErrorAction SilentlyContinue
+            [IO.File]::WriteAllText($json, $c.Json); [IO.File]::WriteAllText($in, $c.In)
+            foreach ($f in $json, $in) { (Get-Item $f).LastWriteTime = $later }    # newer than CMakeLists.txt: only the size says stale
+            $null = Update-LUpdateProject
+            $got = if (Test-Path $calls) { (Get-Content -LiteralPath $calls) -join "," } else { "" }
+            if ($got -ne $c.Calls) { $ok = $false; Write-Host "    $($c.Name): ran '$got', wanted '$($c.Calls)'" -ForegroundColor Yellow }
+            if ($c.Json -eq "" -and (Get-Item $json).Length -eq 0) { $ok = $false; Write-Host "    $($c.Name): json still empty" -ForegroundColor Yellow }
+        }
+    } finally {
+        $script:CMake = $saved
+        Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+    }
+    Record "lupdate project self-check (a 0-byte json is regenerated, a 0-byte .Release.cmake is reconfigured first, a good pair is left alone)" $ok
 }
 
 # The rules live in scripts\lint-translations.ps1 (shared with CI).
@@ -1328,6 +1389,7 @@ function Test-ScriptSelfChecks {
     Test-RegexAnchors
     Test-AppTable
     Test-TranslationSelfCheck
+    Test-LUpdateProjectSelfCheck
     Test-BusPolicies
 }
 
