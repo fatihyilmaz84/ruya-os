@@ -218,19 +218,17 @@ fn set_aside_age(name: &str) -> Option<(i64, u32)> {
     Some((unix.parse().ok()?, n.parse().ok()?))
 }
 
-/// Moves the damaged ledger `path` aside as `ledger.corrupt-<unix>` (never over an earlier one)
-/// and keeps the newest `MAX_SET_ASIDE` of them. Returns where it went.
+/// Moves the damaged ledger `path` aside as `ledger.corrupt-<unix>` and keeps the newest
+/// `MAX_SET_ASIDE` of them. Returns where it went.
+///
+/// The name's number never goes backwards when the clock does (before NTP, say): the file always
+/// gets an age above every kept one, so the prune never deletes the newest evidence. That is
+/// `unix` when it is later than the newest kept one, else the newest one's second with the next
+/// `-<n>`. Such a name is free by construction, so nothing earlier is overwritten.
 fn set_aside(path: &Path, unix: i64) -> io::Result<PathBuf> {
     let dir = path
         .parent()
         .ok_or_else(|| io::Error::other("a ledger has a folder"))?;
-    let mut aside = dir.join(format!("ledger.corrupt-{unix}"));
-    let mut n = 0;
-    while aside.exists() {
-        n += 1;
-        aside = dir.join(format!("ledger.corrupt-{unix}-{n}"));
-    }
-    fs::rename(path, &aside)?;
     let mut kept: Vec<((i64, u32), PathBuf)> = fs::read_dir(dir)?
         .flatten()
         .filter_map(|e| {
@@ -238,6 +236,18 @@ fn set_aside(path: &Path, unix: i64) -> io::Result<PathBuf> {
             Some((age, e.path()))
         })
         .collect();
+    let name = match kept.iter().map(|(age, _)| *age).max() {
+        Some((newest, n)) if unix <= newest => format!("ledger.corrupt-{newest}-{}", n + 1),
+        _ => format!("ledger.corrupt-{unix}"),
+    };
+    let aside = dir.join(name);
+    fs::rename(path, &aside)?;
+    if let Some(age) = aside
+        .file_name()
+        .and_then(|n| set_aside_age(&n.to_string_lossy()))
+    {
+        kept.push((age, aside.clone()));
+    }
     kept.sort();
     let excess = kept.len().saturating_sub(MAX_SET_ASIDE);
     for (_, old) in kept.into_iter().take(excess) {
@@ -833,6 +843,41 @@ mod tests {
             "the newest MAX_SET_ASIDE are kept"
         );
         assert!(!path.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_clock_running_backwards_never_deletes_the_newest_set_aside() {
+        let root = tmp("asides-clock");
+        let dir = root.join("p1");
+        fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("{e}"));
+        let path = dir.join("ledger.tsv");
+        for (name, body) in [
+            ("ledger.corrupt-100", "a\n"),
+            ("ledger.corrupt-200", "b\n"),
+            ("ledger.corrupt-300", "c\n"),
+        ] {
+            fs::write(dir.join(name), body).unwrap_or_else(|e| panic!("{e}"));
+        }
+        // Before NTP the clock says 50, then 40: each file just set aside is the newest.
+        for (body, unix) in [("d\n", 50), ("e\n", 40)] {
+            fs::write(&path, body).unwrap_or_else(|e| panic!("{e}"));
+            assert!(set_aside(&path, unix).is_ok());
+        }
+        let kept = set_asides(&dir);
+        let bodies: Vec<String> = kept
+            .iter()
+            .map(|n| fs::read_to_string(dir.join(n)).unwrap_or_default())
+            .collect();
+        assert_eq!(bodies, ["c\n", "d\n", "e\n"], "{kept:?}");
+        assert_eq!(
+            kept,
+            [
+                "ledger.corrupt-300",
+                "ledger.corrupt-300-1",
+                "ledger.corrupt-300-2"
+            ]
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
