@@ -15,7 +15,11 @@
 #   2. `allow` appears only in `user="root"` and `user="ruya-shell"` policies, plus:
 #      - `user="ruya-link"` (ADR-029): every allow names `send_destination` AND `send_member`
 #        (never a whole destination or interface), and never `own`;
-#      - a service user (ruya-library, ruya-input) may `allow own` only.
+#      - a service user (ruya-library, ruya-input) may `allow own`, plus one declared signal allow per entry of
+#        image/security-baseline.json "service_signals" (ADR-045 amendment, owner 2026-11-25, RUY-1196): exactly the
+#        attributes send_destination, send_type="signal", send_path, send_interface, send_member, all exact (no
+#        wildcard, none empty), equal to an entry of that user, and the member is a <signal> of that interface in
+#        api/dbus/<interface>.xml. Nothing else, never a method_call.
 #   3. No other policy kind (group, at_console, mandatory, other users).
 #   4. Signals (RUY-594): a service's signals are broadcasts, so for every bus name the file allows, the default
 #      context has `deny receive_sender="<name>" receive_type="signal"` and BOTH `user="root"` and `user="ruya-shell"`
@@ -91,6 +95,46 @@ function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
     return @{ Doors = $doors; Problems = $problems }
 }
 
+# The declared service signals (image/security-baseline.json "service_signals", RUY-1196): a list of
+# {user, destination, path, interface, member}: the one signal a service user may send to another service.
+function Get-ServiceSignals([string]$BaselinePath) {
+    $list = @()
+    if (-not (Test-Path $BaselinePath)) { return $list }
+    $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
+    if ($null -eq $json.service_signals) { return $list }
+    foreach ($s in @($json.service_signals)) {
+        $list += @{ user = [string]$s.user; destination = [string]$s.destination; path = [string]$s.path; interface = [string]$s.interface; member = [string]$s.member }
+    }
+    return $list
+}
+
+# Why a service user's allow is refused, or nothing when it is a declared service signal (rule 2).
+function Test-ServiceSignalAllow($Rule, [string]$User, $Signals, [string]$ApiDir) {
+    $attrs = (@($Rule.Attributes | ForEach-Object { $_.Name } | Sort-Object)) -join ","
+    if ($attrs -ne "send_destination,send_interface,send_member,send_path,send_type") {
+        return "may only allow own or a declared signal (send_destination, send_type, send_path, send_interface, send_member and nothing else)"
+    }
+    if ($Rule.GetAttribute("send_type") -ne "signal") { return "may only send a signal: send_type must be `"signal`"" }
+    foreach ($a in "send_destination", "send_path", "send_interface", "send_member") {
+        $v = $Rule.GetAttribute($a)
+        if ([string]::IsNullOrWhiteSpace($v) -or $v.Contains("*")) { return "needs an exact $a, not empty or a wildcard" }
+    }
+    $dest = $Rule.GetAttribute("send_destination"); $path = $Rule.GetAttribute("send_path")
+    $iface = $Rule.GetAttribute("send_interface"); $member = $Rule.GetAttribute("send_member")
+    $declared = @($Signals | Where-Object { $_.user -eq $User -and $_.destination -eq $dest -and $_.path -eq $path -and $_.interface -eq $iface -and $_.member -eq $member })
+    if ($declared.Count -eq 0) { return "is not declared in security-baseline.json service_signals" }
+    $xml = Join-Path $ApiDir "$iface.xml"
+    if (-not (Test-Path $xml)) { return "sends $iface.$member, but there is no $xml" }
+    $settings = New-Object System.Xml.XmlReaderSettings
+    $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
+    $settings.XmlResolver = $null
+    $doc = New-Object System.Xml.XmlDocument
+    $reader = [System.Xml.XmlReader]::Create($xml, $settings)
+    try { $doc.Load($reader) } finally { $reader.Dispose() }
+    if ($null -eq $doc.SelectSingleNode("//interface[@name='$iface']/signal[@name='$member']")) { return "sends $member, which is not a <signal> of $iface in $xml" }
+    return $null
+}
+
 # Why a default-context allow is refused, or nothing when it is a public door's allow: exactly
 # send_destination + send_interface (+ send_type="method_call"), or receive_sender + receive_interface +
 # receive_type="signal", for a listed name and interface, after that name's deny in the same policy.
@@ -112,7 +156,7 @@ function Test-DoorAllow($Rule, $Doors, $DeniedNames, $DeniedRecv) {
     return $null
 }
 
-function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors) {
+function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors, $Signals) {
     $errs = New-Object System.Collections.Generic.List[string]
     $settings = New-Object System.Xml.XmlReaderSettings
     $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
@@ -170,7 +214,12 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors) {
                     if ($r.HasAttribute($a) -and ([string]::IsNullOrWhiteSpace($v) -or $v.Contains("*"))) { $errs.Add("ruya-link $a must be an exact name, not empty or a wildcard ($($r.OuterXml))") }
                 }
             } elseif ($user -in $ownerOnlyUsers) {
-                if (-not $r.HasAttribute("own") -or $r.Attributes.Count -ne 1) { $errs.Add("$user may only allow own ($($r.OuterXml))") }
+                if ($r.HasAttribute("own")) {
+                    if ($r.Attributes.Count -ne 1) { $errs.Add("$user may only allow own ($($r.OuterXml))") }
+                } else {
+                    $why = Test-ServiceSignalAllow $r $user $Signals $ApiDir
+                    if ($why) { $errs.Add("$user $why ($($r.OuterXml))") }
+                }
             }
         }
     }
@@ -204,12 +253,12 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors) {
     return $errs
 }
 
-function Test-BusPolicies([string]$Dir, [string]$ApiDir, $Doors) {
+function Test-BusPolicies([string]$Dir, [string]$ApiDir, $Doors, $Signals) {
     $files = @(Get-ChildItem -Path $Dir -Filter "*.conf" -File -ErrorAction SilentlyContinue)
     if ($files.Count -eq 0) { Write-Host "FAIL: no policy files in $Dir"; return 1 }
     $bad = 0
     foreach ($f in $files) {
-        $e = @(Test-BusPolicyFile $f.FullName $ApiDir $Doors)
+        $e = @(Test-BusPolicyFile $f.FullName $ApiDir $Doors $Signals)
         foreach ($m in $e) { Write-Host "FAIL: $($f.Name): $m"; $bad++ }
     }
     return $bad
@@ -218,10 +267,11 @@ function Test-BusPolicies([string]$Dir, [string]$ApiDir, $Doors) {
 $policyDir = Join-Path $Root "image/rootfs/usr/share/dbus-1/system.d"
 $apiDir = Join-Path $Root "api/dbus"
 $publicDoors = Get-PublicDoors (Join-Path $Root "image/security-baseline.json") $apiDir
+$serviceSignals = @(Get-ServiceSignals (Join-Path $Root "image/security-baseline.json"))
 $bad = 0
 foreach ($m in $publicDoors.Problems) { Write-Host "FAIL: $m"; $bad++ }
-$bad += Test-BusPolicies $policyDir $apiDir $publicDoors.Doors
-if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default (public doors: $(@($publicDoors.Doors.Keys) -join ', '))" }
+$bad += Test-BusPolicies $policyDir $apiDir $publicDoors.Doors $serviceSignals
+if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default (public doors: $(@($publicDoors.Doors.Keys) -join ', '); service signals: $($serviceSignals.Count))" }
 
 if ($SelfTest) {
     $good = @'
@@ -229,12 +279,17 @@ if ($SelfTest) {
   <policy user="root"><allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
   <policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/></policy>
   <policy user="ruya-link"><allow send_destination="org.x.A1" send_member="Ping"/></policy>
+  <policy user="ruya-library"><allow send_destination="org.x.A1" send_type="signal" send_path="/org/x/B1" send_interface="org.x.B1" send_member="Wanted"/></policy>
   <policy context="default"><deny own="org.x.A1"/><deny send_destination="org.x.A1"/><deny receive_sender="org.x.A1" receive_type="signal"/><allow send_destination="org.x.A1" send_interface="org.x.A1.Pub" send_type="method_call"/><allow receive_sender="org.x.A1" receive_interface="org.x.A1.Pub" receive_type="signal"/></policy>
 </busconfig>
 '@
     # The contract of org.x.A1: Put is root only, Get is not; org.x.A1.Pub is public (tagged), the door the
     # fixture opens to every user (security-baseline.json public_bus_doors, ADR-022).
     $api = '<node><interface name="org.x.A1"><method name="Put"><annotation name="org.ruyaos.Caller" value="root"/></method><method name="Get"/></interface><interface name="org.x.A1.Pub"><method name="Hi"><annotation name="org.ruyaos.Stability" value="experimental"/></method></interface></node>'
+    # The signal a service user (ruya-library) may send to org.x.A1 (security-baseline.json service_signals, RUY-1196):
+    # org.x.B1.Wanted is a <signal> of the contract api/dbus/org.x.B1.xml, org.x.B1.Call is a method.
+    $apiB = '<node><interface name="org.x.B1"><signal name="Wanted"/><method name="Call"/></interface></node>'
+    $sigAllow = '<allow send_destination="org.x.A1" send_type="signal" send_path="/org/x/B1" send_interface="org.x.B1" send_member="Wanted"/>'
     $doorAllow = '<allow send_destination="org.x.A1" send_interface="org.x.A1.Pub" send_type="method_call"/>'
     $doorRecv = '<allow receive_sender="org.x.A1" receive_interface="org.x.A1.Pub" receive_type="signal"/>'
     $cases = @(
@@ -272,6 +327,15 @@ if ($SelfTest) {
         @{ Name = "a door's receive allow of a non-public interface"; From = $doorRecv; To = $doorRecv.Replace('org.x.A1.Pub', 'org.x.A1'); Expect = 1 },
         @{ Name = "a door's receive allow without receive_type"; From = $doorRecv; To = $doorRecv.Replace(' receive_type="signal"', ''); Expect = 1 },
         @{ Name = "a door's allow for a name that is not a door"; From = ""; To = ""; NoDoor = $true; Expect = 1 },
+        @{ Name = "a service signal without send_type"; From = $sigAllow; To = $sigAllow.Replace(' send_type="signal"', ''); Expect = 1 },
+        @{ Name = "a service allow of a method_call"; From = $sigAllow; To = $sigAllow.Replace('send_type="signal"', 'send_type="method_call"'); Expect = 1 },
+        @{ Name = "a service signal with a wildcard member"; From = $sigAllow; To = $sigAllow.Replace('send_member="Wanted"', 'send_member="*"'); SigMember = "*"; Expect = 1 },
+        @{ Name = "a service signal with a wildcard path (declared the same in the baseline)"; From = $sigAllow; To = $sigAllow.Replace('/org/x/B1', '/org/x/*'); SigPath = "/org/x/*"; Expect = 1 },
+        @{ Name = "a service signal with a further attribute"; From = $sigAllow; To = $sigAllow.Replace('/>', ' send_requested_reply="true"/>'); Expect = 1 },
+        @{ Name = "a service signal the contract does not declare"; From = $sigAllow; To = $sigAllow.Replace('Wanted', 'Nope'); SigMember = "Nope"; Expect = 1 },
+        @{ Name = "a service signal that is a method in the contract"; From = $sigAllow; To = $sigAllow.Replace('Wanted', 'Call'); SigMember = "Call"; Expect = 1 },
+        @{ Name = "a service signal with no baseline entry"; From = ""; To = ""; NoSignals = $true; Expect = 1 },
+        @{ Name = "a service signal on another path than the baseline's"; From = $sigAllow; To = $sigAllow.Replace('/org/x/B1', '/org/x/Other'); Expect = 1 },
         @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {
@@ -284,8 +348,12 @@ if ($SelfTest) {
         $ad = Join-Path $dir "api/dbus"
         New-Item -ItemType Directory -Force $ad | Out-Null
         [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
+        [IO.File]::WriteAllText((Join-Path $ad "org.x.B1.xml"), $apiB)
         $doors = if ($c.NoDoor) { @{} } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
-        $n = Test-BusPolicies $pd $ad $doors 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
+        $member = if ($c.SigMember) { $c.SigMember } else { "Wanted" }
+        $sigPath = if ($c.SigPath) { $c.SigPath } else { "/org/x/B1" }
+        $signals = if ($c.NoSignals) { @() } else { @(@{ user = "ruya-library"; destination = "org.x.A1"; path = $sigPath; interface = "org.x.B1"; member = $member }) }
+        $n = Test-BusPolicies $pd $ad $doors $signals 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
         $failed = [bool]($n -gt 0)
         $want = ($c.Expect -gt 0)
         if ($failed -ne $want) { Write-Host "FAIL: self-test: lint $(if ($want) {'accepted'} else {'refused'}) $($c.Name)"; $bad++ }

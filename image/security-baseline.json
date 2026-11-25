@@ -62,6 +62,16 @@
     "_comment": "The only bus names whose policy may allow anything in the default context (ADR-022: a sandboxed app's one door), and the interfaces it may open there: send (method_call) to them and receive their signals, nothing else. Every listed interface must have every element tagged org.ruyaos.Stability in api/dbus/<name>.xml. Read by scripts/lint-bus-policies.ps1 (host) and vm-security-check.sh busrecv (the policy as installed).",
     "org.ruyaos.Platform1": ["org.ruyaos.Platform1.Lifecycle"]
   },
+  "service_signals": [
+    {
+      "user": "ruya-library",
+      "destination": "org.ruyaos.Session1",
+      "path": "/org/ruyaos/Library1",
+      "interface": "org.ruyaos.Library1",
+      "member": "ProfileScanWanted",
+      "reason": "Library1.Rescan asks root ruya-session for a profile's Steam scan (ADR-045 amendment, owner 2026-11-25). dbus-broker checks a broadcast's send rules against each receiver's names, so without this allow Session1's default deny drops the signal. The only signal a service user may send to another service; read by scripts/lint-bus-policies.ps1 (rule 2)."
+    }
+  ],
   "ports": [
     {
       "port": "tcp:any:22",
