@@ -453,6 +453,52 @@ function Test-RevertCheckPiping {
     Record "revert-check self-check (CAUGHT / NOT CAUGHT is the same plain and piped through Select-Object -Last 3; paths resolve against the caller, RUY-765)" $ok
 }
 
+# RUY-752: a revert-check run that is killed cannot restore its mutation in a `finally`, so the next run applies
+# the pending record it left. With a stand-in -Runner the record lives beside the fixture file.
+function Test-RevertCheckRestore {
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-revert-restore-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fx | Out-Null
+    $target = Join-Path $fx "target.txt"
+    $record = Join-Path $fx "revert-check-pending.json"
+    $original = "value=good`n"
+    $script = Join-Path $PSScriptRoot "revert-check.ps1"
+    $ok = $true
+    $writeRecord = { [IO.File]::WriteAllText($record, (@{ path = $target; bytes = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($original)) } | ConvertTo-Json -Compress)) }.GetNewClosure()
+    $plain = { "Totals: 1 passed, 0 failed" }
+    # A normal run leaves no record behind, whatever the verdict; the record is there while the file is mutated
+    # (the stand-in "fails" a test named after what it saw, which the verdict lists).
+    $seen = { if (Test-Path -LiteralPath $record) { "FAIL!  : record_present_while_mutated" } else { "FAIL!  : no_record_while_mutated" } }.GetNewClosure()
+    [IO.File]::WriteAllText($target, $original)
+    $lines = @(& $script -File $target -Old "value=good" -New "value=good" -Runner $seen *>&1 | Out-String -Stream)
+    if (($lines -join "`n") -notmatch 'record_present_while_mutated') { $ok = $false; Write-Host "    no pending record while the file was mutated" -ForegroundColor Yellow }
+    $bad = { "FAIL!  : tst_fixture::test_value()" }
+    foreach ($case in @(@{ Name = "CAUGHT"; Runner = $bad; Old = "value=good" }, @{ Name = "NOT CAUGHT"; Runner = $plain; Old = "value=good" }, @{ Name = "exit 2"; Runner = $plain; Old = "value=absent" })) {
+        $null = & $script -File $target -Old $case.Old -New "value=bad" -Runner $case.Runner *>&1 | Out-String
+        if ((Test-Path -LiteralPath $record) -or [IO.File]::ReadAllText($target) -ne $original) { $ok = $false; Write-Host "    $($case.Name) run left a record or a changed file" -ForegroundColor Yellow }
+    }
+    Record "revert-check record self-check (a record is written before the mutation; CAUGHT, NOT CAUGHT and exit 2 runs leave none, RUY-752)" $ok
+    # A killed run: a record, and the file still mutated. The next run restores it (also before it looks for -Old)
+    # and says so.
+    $ok = $true
+    [IO.File]::WriteAllText($target, "value=bad`n")
+    & $writeRecord
+    $lines = @(& $script -File $target -Old "value=good" -New "value=bad" -Runner $bad *>&1 | Out-String -Stream)
+    $text = $lines -join "`n"
+    if ([IO.File]::ReadAllText($target) -ne $original -or (Test-Path -LiteralPath $record) -or $text -notmatch 'restored a mutation left by a killed revert-check run' -or $text -notmatch '(?m)^CAUGHT') {
+        $ok = $false; Write-Host "    killed run: the file or the record was not restored (output:`n$text)" -ForegroundColor Yellow
+    }
+    Record "revert-check restore self-check (the pending record of a killed run restores the mutated file at the next start, RUY-752)" $ok
+    # A record whose file is already original is only removed.
+    $ok = $true
+    & $writeRecord
+    $lines = @(& $script -File $target -Old "value=good" -New "value=good" -Runner $plain *>&1 | Out-String -Stream)
+    if ([IO.File]::ReadAllText($target) -ne $original -or (Test-Path -LiteralPath $record) -or ($lines -join "`n") -match 'restored a mutation left') {
+        $ok = $false; Write-Host "    stale record: not just removed (output:`n$($lines -join "`n"))" -ForegroundColor Yellow
+    }
+    Record "revert-check stale record self-check (a record whose file is already original is only removed, RUY-752)" $ok
+    Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+}
+
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
 function Run-QmlTests([string]$ShotsDir, [string]$InputFile, [string[]]$ShotFiles = @()) {
     if (-not $ShotsDir -and -not $InputFile) { Run-QmlShards; return }
@@ -1272,6 +1318,8 @@ function Test-ScriptSelfChecks {
     Test-QmlShardRunner
     Step "Revert check self-check (RUY-654)"
     Test-RevertCheckPiping
+    Step "Revert check restore self-check (RUY-752)"
+    Test-RevertCheckRestore
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-QmlNameParsing

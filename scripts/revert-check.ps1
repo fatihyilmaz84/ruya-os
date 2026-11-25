@@ -5,6 +5,8 @@
 #   2. runs `dev.ps1 shell` (it rebuilds the changed file, then lints and runs the Qt Quick tests),
 #   3. prints the tests that failed, and ALWAYS restores the file (and touches it so the next build recompiles),
 #   4. runs `dev.ps1 build` again so the build directory matches the restored source.
+# A run that is killed (an outer `timeout`) cannot restore: step 1 first writes output\revert-check-pending.json
+# (the file and its original bytes) and the next run of this script applies it before doing anything else (RUY-752).
 # Exit code 0 = the mutation was caught (at least one test failed), 1 = nothing failed (the test cannot fail),
 # 2 = the mutation could not be applied (or a -Test name is not a test file). Run it from the checkout (worktree) that holds the change.
 #
@@ -41,6 +43,42 @@ $Repo = Split-Path -Parent $PSScriptRoot
 # file must exist (nothing is ever created) and belong to the checkout this script and its dev.ps1 build.
 $here = (Get-Location -PSProvider FileSystem).ProviderPath
 $Path = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($File)) { $File } else { Join-Path $here $File }))
+
+# RUY-752: the restore in the `finally` below cannot run when this process is killed (an outer `timeout`, a closed
+# terminal), which left a mutation in the file. So the mutation is announced in a pending record first (the file's
+# path and its original bytes, base64) and the record is deleted after the restore. The next run starts by applying
+# a record it finds: a file that still differs from the saved bytes is restored, one that already equals them just
+# loses the record. The record lives in the checkout's git-ignored output\ (every worktree has its own); a stand-in
+# -Runner (self-checks) keeps it beside its fixture file, so a nested self-check never touches the record of the
+# real run that is executing `dev.ps1 docs`.
+$recordDir = if ($Runner) { Split-Path -Parent $Path } else { Join-Path $Repo "output" }
+$recordPath = Join-Path $recordDir "revert-check-pending.json"
+if (Test-Path -LiteralPath $recordPath -PathType Leaf) {
+    $left = $null
+    try {
+        $left = Get-Content -Raw -LiteralPath $recordPath | ConvertFrom-Json
+        $leftBytes = [Convert]::FromBase64String([string]$left.bytes)
+        if (-not [string]$left.path) { throw "the record names no file" }
+    } catch {
+        Write-Host "dropping an unreadable $recordPath ($($_.Exception.Message))"
+        $left = $null
+    }
+    if ($left) {
+        $leftPath = [string]$left.path
+        try {
+            if (-not (Test-Path -LiteralPath $leftPath -PathType Leaf) -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($leftPath)) -ne [string]$left.bytes) {
+                [IO.File]::WriteAllBytes($leftPath, $leftBytes)
+                (Get-Item -LiteralPath $leftPath).LastWriteTime = Get-Date
+                Write-Host "restored a mutation left by a killed revert-check run: $leftPath"
+            }
+        } catch {
+            # The record stays, so the next start retries.
+            Write-Host "could not restore ${leftPath}: $($_.Exception.Message)"; exit 2
+        }
+    }
+    Remove-Item -LiteralPath $recordPath -Force
+}
+
 if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Write-Host "no such file: $Path"; exit 2 }
 $owner = Split-Path -Parent $Path
 while ($owner -and -not (Test-Path -LiteralPath (Join-Path $owner ".git"))) { $owner = Split-Path -Parent $owner }
@@ -65,6 +103,9 @@ $rel = [IO.Path]::GetFullPath($Path).Substring([IO.Path]::GetFullPath($Repo).Tri
 $crate = if ($rel -match '^services\\([^\\]+)\\') { $Matches[1] } else { $null }
 $cmdMode = $Mode -ne "default"
 $rust = [bool]$crate -and -not $cmdMode
+# The record goes down before the first byte of the file changes.
+New-Item -ItemType Directory -Path $recordDir -Force | Out-Null
+[IO.File]::WriteAllText($recordPath, (@{ path = $Path; bytes = [Convert]::ToBase64String($bytes) } | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
 try {
     $mutated = $text.Substring(0, $at) + $New + $text.Substring($at + $Old.Length)
     [IO.File]::WriteAllText($Path, $mutated, (New-Object Text.UTF8Encoding($false)))
@@ -153,6 +194,7 @@ try {
 } finally {
     [IO.File]::WriteAllBytes($Path, $bytes)
     (Get-Item -LiteralPath $Path).LastWriteTime = Get-Date
+    Remove-Item -LiteralPath $recordPath -Force -ErrorAction SilentlyContinue
     if ($Runner) {
         Write-Host "== restored ${File} =="
     } elseif ($cmdMode) {
