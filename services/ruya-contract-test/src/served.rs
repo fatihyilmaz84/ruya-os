@@ -9,7 +9,8 @@
 //! - comments (`//`, `///`, nested `/* */`) and string literals hide what they contain: a server
 //!   that is commented out, or an attribute quoted in a string or a test, is not a server.
 //! - only an attribute counts: `fn interface(`, `.interface(` calls and `#[proxy(interface = ..)]`
-//!   (a client) are not servers.
+//!   (a client) are not servers; neither is `#[cfg_attr(.., interface(name = ".."))]` (no crate
+//!   writes a server that way).
 //! - fail closed: an `interface` attribute whose `name` is not a plain string literal (a `const`)
 //!   is an error, never a silent skip.
 
@@ -108,7 +109,9 @@ fn lex(source: &str) -> Result<Vec<Token>, String> {
         } else if ch == '\'' {
             // A character literal (`'x'`, `'\n'`, `'\''`) is dropped; anything else is a lifetime.
             if c.get(i + 1) == Some(&'\\') {
-                i += 2;
+                // Past the quote, the backslash and the escaped character (which may be a
+                // quote), then on to the closing quote: `'\''`, `'\\'`, `'\x41'`, `'\u{1F600}'`.
+                i += 3;
                 while i < c.len() && c[i] != '\'' {
                     i += 1;
                 }
@@ -352,6 +355,26 @@ mod tests {
     fn character_literals_and_lifetimes_do_not_confuse_the_scan() {
         let source = "fn f<'a>(x: &'a str) -> char { if x == \"\" { '\"' } else { '\\'' } }\n\
                       #[interface(name = \"org.ruyaos.X1\")]";
+        assert_eq!(names(source), ["org.ruyaos.X1"]);
+        // Each escaped form must leave the lexer outside any string, so the server after it is
+        // found (RUY-612 review: `'\''` once swallowed the next quote and hid it).
+        for literal in [
+            "['\\'','\"']",
+            "['\\\\','\"']",
+            "['\\x41','\"']",
+            "['\\u{1F600}','\"']",
+            "['\\n','\"']",
+        ] {
+            let source = format!(
+                "const Q: [char; 2] = {literal};\n\
+                 fn t(s: &str) -> &str {{ s.trim_matches('\"') }}\n\
+                 #[interface(name = \"org.ruyaos.X1\")]"
+            );
+            assert_eq!(names(&source), ["org.ruyaos.X1"], "{literal}");
+        }
+        let source = "fn f<'a>(x: &'a str) {}\n#[interface(name = \"org.ruyaos.X1\")]";
+        assert_eq!(names(source), ["org.ruyaos.X1"]);
+        let source = "struct S<'a>(&'a str); #[interface(name = \"org.ruyaos.X1\")]";
         assert_eq!(names(source), ["org.ruyaos.X1"]);
     }
 
