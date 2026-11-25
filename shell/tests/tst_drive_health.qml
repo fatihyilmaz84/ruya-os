@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 import "SettingsNav.js" as SettingsNav
 
 // The internal drives' SMART state (RUY-737; DriveHealth, System information's storage.drives) against
@@ -151,10 +152,11 @@ Item {
             openSystemPane()
             goTo("healthDrive_0")
             const row = find("healthDrive_0")
+            const tracked = LiveRows.track(row)
             setDrives([drive("Disk A", "warning")])
             tryCompare(row, "markText", "Check soon")
             compare(row.value, "")
-            verify(find("healthDrive_0") === row, "the same row, not a new one")
+            LiveRows.verifySame(tc, tracked, "a new state")
             verify(row.activeFocus, "focus stays")
         }
 

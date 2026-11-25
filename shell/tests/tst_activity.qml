@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 
 // The Activity pages (T-247): what the active profile played, on the mock ledger, with the
 // controller keys only (arrows, Return = Accept, Escape = Back). The date is fixed
@@ -517,16 +518,10 @@ Item {
             return Usage.history.filter(h => h.kind === "session").map(h => "activitySession_" + h.appId + "_" + h.start)
         }
 
-        // The delegates with this name that are in the list's Column now. Unlike find(), which searches the QObject
-        // tree and so also sees a delegate that only waits for its deferred delete, this is what the page shows.
+        // The delegates with this name that are in the list's Column now, what the page shows (LiveRows.js: find()
+        // also returns a delegate that only waits for its deferred delete).
         function listRows(name) {
-            const column = find("activityClear").parent
-            const rows = []
-            for (let i = 0; i < column.children.length; ++i) {
-                if (column.children[i].objectName === name)
-                    rows.push(column.children[i])
-            }
-            return rows
+            return LiveRows.children(find("activityClear").parent, name)
         }
 
         // The Activity page is gone or hidden (its fade-out ended): only then does it stop watching.

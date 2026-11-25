@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "LiveRows.js" as LiveRows
 
 // Settings -> Controllers, the controller page and the Button test (RUY-39 / T-368) against the
 // Input mock's three pads (a DualSense over Bluetooth, an Xbox pad over USB, a Pro Controller over
@@ -250,10 +251,10 @@ Item {
             openPane()
             keyClick(Qt.Key_Down)
             verify(padRow(pro).activeFocus)
-            const before = padRow(pro)
+            const before = LiveRows.track(padRow(pro))
             Input.mockAddDevice({ id: pro, name: "Pro Controller", family: "nintendo", connection: "bluetooth", battery: 50 })
             tryCompare(padRow(pro), "detail", "Bluetooth · Battery 50 %")
-            verify(padRow(pro) === before, "the same row")
+            LiveRows.verifySame(tc, before, "a battery change")
             verify(padRow(pro).activeFocus, "the focus did not move")
         }
 
