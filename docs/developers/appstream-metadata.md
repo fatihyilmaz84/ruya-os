@@ -9,7 +9,7 @@ The AppStream file (`metainfo.xml`) is how the console knows your game's name, p
 - **One file** per app, installed to `/app/share/metainfo/<app-id>.metainfo.xml`, with `<component type="desktop-application">`.
 - **The id** is the Flatpak app id and the name of your desktop entry without `.desktop` (see [Getting started](getting-started.md)).
 - **Required** (the Store shows an app without them, badly): `<name>`, `<summary>`, `<description>`, `<developer>`, `<metadata_license>`, `<project_license>`, `<launchable type="desktop-id">`, `<content_rating>`, at least one `<release>`.
-- **Games add** `<categories><category>Game</category></categories>` here, **and** `Categories=Game;` in the *desktop entry*. They are two files: the Games row of the shell reads the desktop entry, the Store reads the metainfo.
+- **Games add** `<categories><category>Game</category></categories>` here, **and** `Categories=Game;` in the *desktop entry*. They are two files: the Games row of the shell reads the desktop entry, the Store reads the metainfo (it keeps the `Game` name, but shows nothing for it yet).
 - **Say what controllers do** with `<supports><control>gamepad</control></supports>` and the `x-ruya-controller` key below.
 - **Say what the game contains** with an OARS content rating. Do not leave it out (see below).
 - **Only the default language** of name, summary and description is read today; translated strings (`xml:lang`) are ignored. Write the default text in English.
@@ -101,7 +101,7 @@ Replace the licence, the developer, the URLs and the `org.ruyaos` id with yours.
 | `x-ruya-min-api-level` | The lowest API level the app needs, an integer (default 0; missing, negative or not a number counts as 0). The Store hides an app above the console's `RUYA_API_LEVEL` and its page says "Needs a newer RuyaOS" with Install off | built (`ruya-store`, RUY-156) |
 | `x-ruya-launch-mode` | How the shell starts the app | **planned**: nothing reads it yet; set `fullscreen` |
 | `<screenshots>` with `<image>` and `<caption>` | The picture row on the app page and its full-screen viewer. At most 10, the `type="default"` one first, then file order. The size rule is under the table | built (`ruya-store`, RUY-523) |
-| `<releases>` | The newest `<release>` (by `timestamp`, else `date`; on a tie the first in the file) gives the page's Version and Updated rows. Its `<description>` (`<p>`, `<li>`) is the "What's new" text, shown only while an update is ready to install | built (`ruya-store`, RUY-523) |
+| `<releases>` | The newest `<release>` (by `timestamp`, else `date`; on a tie the first in the file) gives the page's Updated row and, for an app that is not installed yet, its Version row (its `version` attribute; an installed app shows its installed version). Its `<description>` (`<p>`, `<li>`) is the "What's new" text, shown only while an update is ready to install | built (`ruya-store`, RUY-523) |
 | `<project_license>` | The page's Licence row, shown as you wrote it (an SPDX expression, nothing is checked or translated) | built (`ruya-store`, RUY-523) |
 | `<categories>` | The page's Categories row: the first three of your `<category>` names that the console has a word for (list under the table); the others are not shown | built (`ruya-store`, RUY-523) |
 | `<url>`, `<branding>` | Flathub and other stores; the console does not show them yet | not used yet |
@@ -109,12 +109,12 @@ Replace the licence, the developer, the URLs and the `org.ruyaos` id with yours.
 
 Only apps of type `desktop-application`, `desktop`, `console-application` (or no type) are listed; runtimes and add-ons are skipped.
 
-**Screenshot size rule.** Put a `width` attribute on every `<image>`: an image without one is never picked by size. Per `<screenshot>` the console picks two pictures:
+**Screenshot size rule (as of 2026-11-25; the numbers may change with a note here).** Put a `width` attribute on every `<image>` and give its text as a URL the console can reach: an image without a width is never picked by size, and an `<image xml:lang="...">` is ignored. Per `<screenshot>` the console picks two pictures:
 
 - **The picture** (the full-screen viewer): the widest `<image>` that is **at most 1920 px wide**. If none has a width in that range, the `type="source"` image is used as it is, whatever its size; failing that, the first `<image>`. So give at least one image of 1920 px or less; a wider `source` image is only a fallback.
 - **The thumbnail** (the picture row): the narrowest `<image>` that is **at least 400 px wide**; if there is none, the picture itself.
 
-A screenshot with no `<image>` is left out. A screenshot that breaks the rule is not dropped, it falls back as above. The `<caption>` is the default-language one. The sample's single 1920x1080 `source` image follows the rule (it is both the picture and the thumbnail); for a lighter row add a second `<image type="thumbnail" width="752" height="423">`.
+A screenshot with no `<image>` is left out. A screenshot that breaks the rule is not dropped, it falls back as above. The `<caption>` is the default-language one. The sample's single 1920x1080 `source` image follows the rule (it is both the picture and the thumbnail); to give the row its own smaller picture, add a second `<image type="thumbnail">` with a `width` from 400 to 1919.
 
 **Releases.** The date is `date="YYYY-MM-DD"` (a time after it is ignored) or `timestamp` in Unix seconds, which wins when both are given. A release with neither counts as the oldest. Only the newest release is read; older ones are ignored.
 
