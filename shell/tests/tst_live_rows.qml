@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import RuyaShell
 import "LiveRows.js" as LiveRows
 
 // LiveRows.js (RUY-1189): "this row is the object it was" read from the container's live children, because
