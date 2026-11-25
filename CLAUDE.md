@@ -59,7 +59,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
   - Third-party apps run only in Flatpak sandboxes, never as root or as `ruya-shell`.
   - Services keep their systemd hardening.
   - Services reachable from a sandbox (Platform1) hold no capabilities; a privileged read for them goes through a bus-less helper that returns data, never a path (ADR-022 decision 4).
-  - D-Bus policies stay restrictive: the shell and root only, plus `ruya-link` under its per-method allow-list (ADR-029, owner 2026-11-10) and every user to the public interfaces of `Platform1` only (ADR-022; the `public_bus_doors` list, enforced by `lint-bus-policies.ps1`).
+  - D-Bus policies stay restrictive: the shell and root only, plus `ruya-link` under its per-method allow-list (ADR-029, owner 2026-11-10) and every user to the public interfaces of `Platform1` only (ADR-022; the `public_bus_doors` list, enforced by `lint-bus-policies.ps1`), plus signal-only allows a service user needs to notify another service, each listed in `security-baseline.json` `service_signals` with its exact interface and member (ADR-045 amendment, owner 2026-11-25).
 - **Honesty in the log.** Tickets, comments and handoffs report what actually happened, failures and undone work included.
 
 ## Working style
