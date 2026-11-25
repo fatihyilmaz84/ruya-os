@@ -224,12 +224,13 @@ void MockProfilesBackend::createProfile(const QString &adminId, const QString &a
     const bool firstBoot = m_entries.isEmpty();
     if (!isValidRole(role))
         return reply(QStringLiteral("invalid"));
+    // RUY-716: no new kept guests (temporary guests come from "Who's playing?"). Before the name
+    // check, in the service's order (RUY-728): a blank name with role guest is not-allowed.
+    if (role == QLatin1String("guest"))
+        return reply(QStringLiteral("not-allowed"));
     const QString trimmed = name.trimmed();
     if (!isValidName(trimmed))
         return reply(QStringLiteral("invalid"));
-    // RUY-716: no new kept guests (temporary guests come from "Who's playing?").
-    if (role == QLatin1String("guest"))
-        return reply(QStringLiteral("not-allowed"));
     // Admins must have a PIN; others may.
     bool pinOk = false;
     if (role == QLatin1String("admin"))

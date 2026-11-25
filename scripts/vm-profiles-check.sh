@@ -6,7 +6,9 @@
 # No argument = state: what the service lists and what is on disk.
 # create: on an empty store, creates an admin "Check Admin" (PIN 1234) and a standard profile
 # "Check Kid" over the bus as root (no UI), then prints the state and the modes of the account
-# files useradd rewrote (T-126: the unit's UMask must not leak into them).
+# files useradd rewrote (T-126: the unit's UMask must not leak into them). It also asks for a
+# profile with role guest (RUY-716, RUY-728): FAIL (exit 1) unless the answer is not-allowed and
+# no new ruya-p* user appeared.
 # guests (RUY-125, after create): temporary guests with PASS/FAIL lines and exit 1 on a failure:
 # three CreateGuest are ok and a fourth not-allowed, each user has a uid in 50000-59999 and the
 # comment "RuyaOS profile (guest)" and gid == uid, ListProfiles never lists one, VerifyPin with a wrong PIN leaves
@@ -15,6 +17,26 @@
 set -u
 svc=org.ruyaos.Profiles1
 path=/org/ruyaos/Profiles1
+
+fails=0
+pass() { echo "PASS: $*"; }
+fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
+call() { busctl --system --json=short call "$svc" "$path" "$svc" "$@"; }
+# field <n> < reply: data[n] of a busctl --json reply ("" when it is not one)
+field() {
+    python3 -c 'import json, sys
+try: print(json.load(sys.stdin)["data"][int(sys.argv[1])])
+except Exception: print("")' "$1" | tr -d '\r'
+}
+# first_fields < reply: the first member of every struct in data[0], one per line
+first_fields() {
+    python3 -c 'import json, sys
+try:
+    for row in json.load(sys.stdin)["data"][0]: print(row[0])
+except Exception: pass' | tr -d '\r'
+}
+# profile_users: the Unix users of every profile and guest (ruya-p*), sorted, one per line
+profile_users() { getent passwd | tr -d '\r' | awk -F: '$1 ~ /^ruya-p/ { print $1 }' | sort; }
 
 case "${1:-state}" in
 introspect)
@@ -31,10 +53,17 @@ create)
     echo "--- CreateProfile: standard profile, with the admin ($admin) PIN"
     busctl --system call "$svc" "$path" "$svc" CreateProfile sssss "$admin" 1234 "Check Kid" standard ""
     echo "--- CreateProfile: role guest (RUY-716, no new kept guests): expect not-allowed, no user made"
-    busctl --system call "$svc" "$path" "$svc" CreateProfile sssss "$admin" 1234 "Check Guest" guest ""
+    before="$(profile_users)"
+    out="$(call CreateProfile sssss "$admin" 1234 "Check Guest" guest "")"
+    echo "$out"
+    st="$(echo "$out" | field 0)"
+    if [ "$st" = not-allowed ]; then pass "CreateProfile role guest: not-allowed"; else fail "CreateProfile role guest answered '$st', want not-allowed: $out"; fi
+    made="$(comm -13 <(echo "$before") <(profile_users) | tr '\n' ' ')"
+    if [ -z "${made// /}" ]; then pass "CreateProfile role guest made no user"; else fail "CreateProfile role guest made the user(s) $made"; fi
     bash "$0" state
     echo "--- account files (expect 644 passwd/group, 0 shadow/gshadow)"
     stat -c '%a %U:%G %n' /etc/passwd /etc/group /etc/shadow /etc/gshadow
+    if [ "$fails" != 0 ]; then echo "$fails CHECK(S) FAILED"; exit 1; fi
     ;;
 lifecycle)
     # T-118: after `create`, rename and delete the standard profile (p2) as the admin (p1, PIN 1234),
@@ -58,23 +87,6 @@ guests)
     admin_pin="${ADMIN_PIN:-1234}"
     homes="${RUYA_HOME_ROOT:-/var/home}"
     etc="${RUYA_ETC_ROOT:-/etc}"
-    fails=0
-    pass() { echo "PASS: $*"; }
-    fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
-    call() { busctl --system --json=short call "$svc" "$path" "$svc" "$@"; }
-    # field <n> < reply: data[n] of a busctl --json reply ("" when it is not one)
-    field() {
-        python3 -c 'import json, sys
-try: print(json.load(sys.stdin)["data"][int(sys.argv[1])])
-except Exception: print("")' "$1" | tr -d '\r'
-    }
-    # first_fields < reply: the first member of every struct in data[0], one per line
-    first_fields() {
-        python3 -c 'import json, sys
-try:
-    for row in json.load(sys.stdin)["data"][0]: print(row[0])
-except Exception: pass' | tr -d '\r'
-    }
     active() {
         busctl --system --json=short get-property "$svc" "$path" "$svc" ActiveProfile | python3 -c 'import json, sys
 try: print(json.load(sys.stdin)["data"])

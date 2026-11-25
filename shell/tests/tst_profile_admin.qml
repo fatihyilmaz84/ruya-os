@@ -244,6 +244,9 @@ Item {
             // RUY-716: no new kept guests, whatever the PIN
             compare(create("p1", "1234", "Guest", "guest", "")[0], "not-allowed")
             compare(create("p1", "1234", "G2", "guest", "1111")[0], "not-allowed")
+            // RUY-728: the role is checked before the name, as in the service (role, guest, name)
+            compare(create("p1", "1234", "", "guest", "")[0], "not-allowed", "a blank name with role guest")
+            compare(create("p1", "1234", "", "superuser", "")[0], "invalid", "a blank name with an unknown role")
             compare(create("p1", "1234", "  ", "standard", "")[0], "invalid", "blank name")
             compare(create("p1", "1234", "X", "superuser", "")[0], "invalid", "unknown role")
 
