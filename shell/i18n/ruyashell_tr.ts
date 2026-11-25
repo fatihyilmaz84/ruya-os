@@ -4710,17 +4710,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 imzalı · anahtar %2</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Signed by key %1</source>
         <translation>anahtar %1 imzalı</translation>
     </message>
     <message>
-        <location line="-1"/>
-        <source>Signed by %1</source>
-        <translation>%1 tarafından imzalandı</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Changed since signed</source>
         <translation>İmzadan sonra değişmiş</translation>
     </message>
