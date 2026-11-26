@@ -1109,26 +1109,51 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-data.png")
         }
 
-        // RUY-1178: a drive's Options menu open over a pane that has scan results; English and Turkish.
-        function test_zz_screenshots_menu() {
-            if (!shotsDir)
-                skip("set RUYA_SHOTS_DIR to save screenshots")
+        // RUY-1178: a drive's Options menu open over a pane with scan results, or while the drive scans (the Rescan note).
+        // The language is set before the pane is built, so the rows behind the menu are in it too.
+        function shootDriveMenu(lang, scanning, file) {
+            DeviceSettings.language = lang
+            Storage.mockHoldScan(scanning)
             Storage.mockPlug(["vol-stick", "vol-card"])
             tryVerify(() => volume("vol-card") !== undefined)
             openStoragePane()
-            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null && find("storageScan_vol-card_none") !== null, 3000)
+            if (scanning)
+                tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "the stick is being read")
+            else
+                tryVerify(() => find("storageScan_vol-stick_cat:games") !== null && find("storageScan_vol-card_none") !== null, 3000)
             tryCompare(addedSpy, "count", 2, 5000)       // the service announces a drive after a settle window
             tryVerify(() => Notifications.model.count === 2, 2000, "both toasts are up")
-            for (const lang of ["en", "tr"]) {
-                DeviceSettings.language = lang
-                openDriveMenu("vol-stick")
-                tryVerify(() => menuRowIds().join() === "packages,rescan,eject", 2000)
-                clearToasts()                            // "Drive inserted" would cover the menu
-                wait(800)
-                grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu" + (lang === "tr" ? "-tr" : "") + ".png")
-                keyClick(Qt.Key_Escape)
-                tryVerify(() => !menu().shown, 2000)
-            }
+            openDriveMenu("vol-stick")
+            tryVerify(() => menuRowIds().join() === "packages,rescan,eject", 2000)
+            compare(menu().note !== "", scanning, "the note is there only while the drive is read")
+            clearToasts()                                // "Drive inserted" would cover the menu
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/" + file + ".png")
+            Storage.mockHoldScan(false)
+        }
+
+        function test_zz_screenshots_menu() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            shootDriveMenu("en", false, "27-settings-storage-menu")
+        }
+
+        function test_zz_screenshots_menu_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            shootDriveMenu("tr", false, "27-settings-storage-menu-tr")
+        }
+
+        function test_zz_screenshots_menu_scanning() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            shootDriveMenu("en", true, "27-settings-storage-menu-scanning")
+        }
+
+        function test_zz_screenshots_menu_scanning_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            shootDriveMenu("tr", true, "27-settings-storage-menu-scanning-tr")
         }
 
         function test_zz_screenshots_turkish() {

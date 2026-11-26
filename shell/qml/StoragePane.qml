@@ -166,9 +166,8 @@ SettingsPane {
 
     function syncRows() {
         // Where focus is now, to put it on a neighbour if its row goes away (Eject, or a drive that is unplugged
-        // while its menu is open: the menu has the focus then and the row only its `focus`).
-        const menuOpen = pane.optionsOpenFor !== ""
-        const before = pane.activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
+        // while its menu is open: SettingsPane.focusedRowIndex follows the row then).
+        const before = pane.focusedRowIndex()
         const list = desiredRows()
         for (let i = rowModel.count - 1; i >= 0; --i) {
             const key = rowModel.get(i).rowKey
@@ -194,20 +193,9 @@ SettingsPane {
         // (Qt.callLater keeps only the newest arguments of a pending call: a second sync after the
         // focused row went must not cancel the refocus the first one asked for.)
         if (before >= 0)
-            Qt.callLater(pane.refocus, before)
+            Qt.callLater(pane.refocusNear, before)
         // Rows created or removed: lay them out now, so the view follows the focused row (SettingsPane.reflow).
         reflow()
-    }
-
-    // After a list update: if the focused row vanished, focus the row now at its place (or the
-    // last one).
-    function refocus(index) {
-        if (!pane.activeFocus || index < 0)
-            return
-        const rows = focusableRows()
-        if (rows.length > 0 && !rows.some(r => r.activeFocus))
-            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
-        ensureFocusedVisible()
     }
 
     // The scan: one drive at a time, the one with the focus first, then the others. A drive is asked
@@ -397,7 +385,7 @@ SettingsPane {
         // Rescan stays in the menu while its drive is read, and does nothing then: the menu says why.
         note: id => pane.rescanBlocked(id) ? qsTr("Rescan is not available while this drive is being read.") : "",
         run: (id, action) => pane.runVolumeOption(id, action),
-        // Gone (unplugged) or no longer a mounted removable drive: the menu closes, the focus settles by `refocus`.
+        // Gone (unplugged) or no longer a mounted removable drive: the menu closes, the focus settles by `refocusNear`.
         // (Eject runs after the menu has closed, and a drive being ejected has no menu: `hasOptions`.)
         exists: id => { const v = pane.volumeById(id); return v !== undefined && v.removable && v.mounted }
     })
