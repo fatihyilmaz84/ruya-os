@@ -1121,6 +1121,7 @@ Item {
                 DeviceSettings.language = lang
                 openDriveMenu("vol-stick")
                 tryVerify(() => menuRowIds().join() === "packages,rescan,eject", 2000)
+                clearToasts()                            // "Drive inserted" would cover the menu
                 wait(800)
                 grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu" + (lang === "tr" ? "-tr" : "") + ".png")
                 keyClick(Qt.Key_Escape)
