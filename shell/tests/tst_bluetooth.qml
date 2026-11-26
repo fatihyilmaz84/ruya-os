@@ -1285,6 +1285,24 @@ Item {
             compare(find("page_controller").padId, tc.matchedPad)
         }
 
+        // RUY-1230: a device that leaves while its controller page covers Settings: Back lands on the row now at its
+        // place (the pane's `focus` row is gone, so SettingsPane has to take the place from before the page opened).
+        function test_a_device_that_leaves_while_its_page_covers_settings_hands_the_focus_to_a_neighbour() {
+            openBluetoothPane()
+            addMatchedPad()
+            tryVerify(() => find("btDev_AA:00:00:00:00:04") !== null, 2000)
+            const names = find("paneBluetooth").focusableRows().map(r => r.objectName)
+            const at = names.indexOf("btDev_AA:00:00:00:00:04")
+            verify(at > 0 && at < names.length - 1, "the pad's row is between others: " + names.join(","))
+            optionOf("AA:00:00:00:00:04", "settings")
+            tryCompare(tc.shell, "currentPage", "controller")
+            Bluetooth.forget("AA:00:00:00:00:04")
+            tryVerify(() => find("btDev_AA:00:00:00:00:04") === null, 2000, "the row is gone")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find(names[at + 1]).activeFocus, 2000, "the row now at its place, not the first row")
+        }
+
         // Pair again, Connect, Disconnect, Rename… and Forget… run what the loose rows ran: each on the mock.
         function test_each_row_runs_its_action_on_the_mock() {
             openBluetoothPane()

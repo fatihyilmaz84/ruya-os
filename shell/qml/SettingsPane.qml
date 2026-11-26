@@ -210,19 +210,25 @@ FocusScope {
     // A list that rows come and go in (a device or network that leaves, Forget): take `focusedRowIndex()` BEFORE the model
     // changes and call `Qt.callLater(refocusNear, index)` after it. If the focused row vanished, the focus goes to the row
     // now at its place, else the last one (02 section 1.7), not to the first row as `settleFocus` would.
-    // `focusedRowIndex()` also covers an open Options menu, which holds the focus while its row is the pane's `focus`.
+    // `focusedRowIndex()` also covers an open Options menu, which holds the focus while its row is the pane's `focus`,
+    // and a pane that does not have the focus (a page covers Settings, RUY-1230): its `focus` row is the one that counts,
+    // and `refocusNear` then moves only that (04 T-356), `settleFocus` takes it from there when the pane is back.
     function focusedRowIndex() {
-        const menuOpen = optionsOpenFor !== ""
-        return activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
+        const held = activeFocus && optionsOpenFor === ""
+        return restingRows().findIndex(r => held ? r.activeFocus : r.focus)
     }
 
     function refocusNear(index) {
-        if (!activeFocus || index < 0)
+        if (index < 0)
             return
-        const rows = focusableRows()
-        if (rows.length > 0 && !rows.some(r => r.activeFocus))
-            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
-        ensureFocusedVisible()
+        const rows = restingRows()
+        if (activeFocus) {
+            if (rows.length > 0 && !rows.some(r => r.activeFocus))
+                rows[Math.min(index, rows.length - 1)].forceActiveFocus()
+            ensureFocusedVisible()
+        } else if (rows.length > 0 && !rows.some(r => r.focus)) {
+            rows[Math.min(index, rows.length - 1)].focus = true
+        }
     }
 
     // The pane's focused row: when it hides or is disabled, settle at once. relayout() also settles,
@@ -299,6 +305,21 @@ FocusScope {
         for (let i = 0; i < column.children.length; ++i) {
             const row = column.children[i] as SettingControl
             if (row && row.visible && row.enabled)
+                found.push(row)
+        }
+        return found
+    }
+
+    // The rows the pane's `focus` can rest on: `focusableRows`, but while a page covers Settings the pane is neither
+    // visible nor enabled, so no row is, and a row's own `visible` and `enabled` cannot be read: every row counts.
+    // `settleFocus` moves the focus on when it is back, if the row chosen from this list cannot hold it.
+    function restingRows() {
+        if (visible && enabled)
+            return focusableRows()
+        const found = []
+        for (let i = 0; i < column.children.length; ++i) {
+            const row = column.children[i] as SettingControl
+            if (row)
                 found.push(row)
         }
         return found

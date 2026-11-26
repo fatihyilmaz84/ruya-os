@@ -396,6 +396,24 @@ Item {
             verify(find("paneStorage").activeFocus)
         }
 
+        // RUY-1230: the drive is unplugged while its Packages page covers Settings: the pane's `focus` row is gone, and
+        // Back lands on the row at its place (the last row), not on the first.
+        function test_unplugging_a_drive_while_its_packages_page_covers_settings() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            openDriveMenu("vol-stick")
+            chooseOption("packages")
+            tryCompare(tc.shell, "currentPage", "installSources")
+            Storage.mockReset()                          // the stick is gone
+            tryVerify(() => volume("vol-stick") === undefined, 2000, "unplugged")
+            tryVerify(() => find("storageVol_vol-stick") === null, 2000, "its row is gone")
+            compare(tc.shell.currentPage, "installSources", "the page stays, it only has no packages now")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus lands on the row at its place, not the first row")
+        }
+
         // Ejecting from the menu: it closes at once (the drive counts as gone), the focus is on the drive's row until
         // the drive leaves, then on the row at its place.
         function test_ejecting_from_the_menu_closes_it_and_the_focus_settles() {
