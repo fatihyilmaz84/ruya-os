@@ -492,18 +492,27 @@ SettingsPane {
             required property bool removable
             required property bool mounted
             objectName: entryKind === "volume" ? "storageVol_" + volId : "storageScan_" + volId + "_" + sub
-            // A volume whose Accept says why it can't be used (a toast): its filesystem is not supported.
-            readonly property bool showsUnsupportedReason: entryKind === "volume" && !mounted
-            // The console's own disk: mounted, not removable, nothing to do on it.
-            readonly property bool isFixedDisk: entryKind === "volume" && mounted && !removable
-            // A fact (no hint for A) for what was found on a drive and for the console's own disk (RUY-1233).
-            kind: entryKind === "scan" || isFixedDisk ? "info" : "item"
-            // A mounted removable drive has several actions and none main: Accept opens its menu. A drive that is
-            // not supported has none (it says why on Accept), nor has one that is being ejected.
-            hasOptions: entryKind === "volume" && removable && mounted && pane.ejectingId !== volId
+            // What A does on this row, decided here once (RUY-1240; kind, hint, menu and Accept all read it):
+            //  "scan"        what was found on a drive: a fact.
+            //  "fixed"       the console's own disk (mounted, not removable): a fact, nothing to do on it (RUY-1233).
+            //  "ejecting"    a drive that is being ejected: a fact until it leaves, it has no menu and A does nothing.
+            //  "unsupported" a drive whose filesystem is not supported: A says why (a toast, RUY-1225).
+            //  "menu"        a mounted removable drive: several actions and none main, A opens its menu.
+            readonly property string rowMode: {
+                if (entryKind === "scan")
+                    return "scan"
+                if (!mounted)
+                    return "unsupported"
+                if (!removable)
+                    return "fixed"
+                return pane.ejectingId === volId ? "ejecting" : "menu"
+            }
+            // A fact has no hint for A; every other mode is a row A acts on.
+            kind: rowMode === "unsupported" || rowMode === "menu" ? "item" : "info"
+            hasOptions: rowMode === "menu"
             acceptOpensOptions: hasOptions
-            // A on it says why (a toast), so the hint names that and not "Select".
-            acceptVerb: showsUnsupportedReason ? qsTr("Why") : ""
+            // A on an unsupported drive says why, so the hint names that and not "Select".
+            acceptVerb: rowMode === "unsupported" ? qsTr("Why") : ""
             anchored: entryKind === "volume" && pane.optionsOpenFor === volId
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
@@ -512,7 +521,7 @@ SettingsPane {
             label: name
             value: valueText
             onActivated: {
-                if (showsUnsupportedReason)
+                if (rowMode === "unsupported")
                     Notifications.show(pane.unsupportedText(), "warning")
             }
             onOptionsRequested: pane.optionsRequested("storage", volId, driveRow)
