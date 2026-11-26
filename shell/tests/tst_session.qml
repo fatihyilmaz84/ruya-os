@@ -24,13 +24,22 @@ Item {
 
     // The record's state when each FrozenChanged(false) arrives (RUY-1235: "stopping" already on a stop).
     property var statesAtThaw: []
+    // The record's state when AppExited of `exitWatch` arrives (RUY-1235: "stopping" already on a Kill).
+    property string exitWatch: ""
+    property string stateAtExit: ""
+    function stateOf(instance) {
+        const r = Session.running.find(a => a.instance === instance)
+        return r ? r.state : "unlisted"
+    }
     Connections {
         target: Session
         function onFrozenChanged(instance, frozen) {
-            if (frozen)
-                return
-            const r = Session.running.find(a => a.instance === instance)
-            host.statesAtThaw = host.statesAtThaw.concat([r ? r.state : "unlisted"])
+            if (!frozen)
+                host.statesAtThaw = host.statesAtThaw.concat([host.stateOf(instance)])
+        }
+        function onAppExited(instance) {
+            if (instance === host.exitWatch)
+                host.stateAtExit = host.stateOf(instance)
         }
     }
 
@@ -52,6 +61,8 @@ Item {
             freezeSpy.clear()
             thawSpy.clear()
             host.statesAtThaw = []
+            host.exitWatch = ""
+            host.stateAtExit = ""
         }
 
         // Launches and returns the instance of an "ok" launch.
@@ -409,18 +420,10 @@ Item {
             tryVerify(() => Session.instanceOf("org.example.Steam", "p2").state === "running")
             const game = Session.mockStartChild(steam, "steam:70")
             tryVerify(() => Session.running.length === 2)
-            let stateAtExit = ""
-            const seen = (instance) => {
-                if (instance === game) {
-                    const r = Session.running.find(a => a.instance === game)
-                    stateAtExit = r ? r.state : "unlisted"
-                }
-            }
-            Session.appExited.connect(seen)
+            host.exitWatch = game
             Session.kill(steam)
             tryCompare(exited, "count", 2)
-            Session.appExited.disconnect(seen)
-            compare(stateAtExit, "stopping")
+            compare(host.stateAtExit, "stopping")
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
         }
