@@ -389,6 +389,21 @@ Item {
             verify(find("sysSave").activeFocus)
         }
 
+        // RUY-1234: the texts the page makes in functions (the save message, the note) follow the language of the open
+        // page too; the heading, label and value rows are in test_turkish_rows_update_in_place.
+        function test_the_message_and_the_note_follow_the_language_while_the_page_is_open() {
+            openSystemInfo()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("sysSaveMessage").visible, 2000)
+            compare(find("sysSaveMessage").text, "No USB drive found. Plug one in and try again.")
+            verify(find("sysNote").text.indexOf("nothing is sent anywhere") > 0)
+            DeviceSettings.language = "tr"
+            tryCompare(find("sysSaveMessage"), "text", "USB sürücü bulunamadı. Bir tane takıp yeniden deneyin.")
+            verify(find("sysNote").text.indexOf("hiçbir yere gönderilmez") > 0)
+            compare(find("sysAddresses").label, "Ağ adreslerini ekle")
+            verify(find("sysSave").activeFocus, "focus stays on its row")
+        }
+
         function test_the_report_is_saved_without_addresses_by_default() {
             Network.mockSetCable(false)
             Network.connectWifi("wifi-home", Network.mockPassword())

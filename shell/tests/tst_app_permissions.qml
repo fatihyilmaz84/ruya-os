@@ -239,6 +239,39 @@ Item {
             compare(row("permServicesNote").text, "Apps can't reach the console's own services.")
         }
 
+        // RUY-1234: the page's model holds keys only and every text is a binding, so an open page follows a change of the
+        // UI language: an admin's switch, its warning and Reset ...
+        function test_an_open_page_follows_the_language_for_an_admin() {
+            signInAdmin()
+            openApp(editor)
+            compare(row("permSwitch_home-files").label, "Reads and writes files in your home folder")
+            compare(row("permNote_home-files").text, "The app may lose its saves or settings outside its own folder.")
+            DeviceSettings.language = "tr"
+            tryCompare(row("permSwitch_home-files"), "label", "Ana klasörünüzdeki dosyaları okur ve yazar")
+            compare(row("permNote_home-files").text, "Uygulama, kendi klasörü dışındaki kayıtlarını veya ayarlarını kaybedebilir.")
+            compare(row("permReset").label, "Uygulamanın varsayılanlarına sıfırla")
+            compare(row("permServicesNote").text, "Uygulamalar konsolun kendi hizmetlerine erişemez.")
+            verify(row("permSwitch_home-files").activeFocus, "focus stays on its row")
+            DeviceSettings.language = "en"
+            tryCompare(row("permSwitch_home-files"), "label", "Reads and writes files in your home folder")
+            compare(row("permReset").label, "Reset to the app's defaults")
+        }
+
+        // ... and a Standard profile's fact rows, their reason and the admin note.
+        function test_an_open_page_follows_the_language_for_a_standard_profile() {
+            signIn("p2", "")
+            openApp(puzzle)
+            const audio = row("permFact_audio")
+            compare(audio.value, "Allowed")
+            compare(audio.detail, "Not controllable yet: sound and microphone share one connection")
+            DeviceSettings.language = "tr"
+            tryCompare(audio, "value", "İzin verildi")
+            compare(audio.label, "Ses ve mikrofon")
+            compare(audio.detail, "Henüz denetlenemiyor: ses ve mikrofon aynı bağlantıyı kullanıyor")
+            compare(row("permAdminNote").text, "Bunları yalnızca bir yönetici değiştirebilir.")
+            verify(audio.activeFocus, "focus stays on its row")
+        }
+
         function test_reset_gives_everything_back() {
             signInAdmin()
             openApp(editor)
