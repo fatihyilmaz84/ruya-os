@@ -74,6 +74,9 @@ signals:
     // status: "ok" | "invalid" | "not-found" (or "failed" when the call failed); `instance` on "ok".
     void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
     void appStarted(const QString &instance, const QString &appId);
+    // The instance entered "stopping" (RUY-1235), whoever asked for the stop: Stop, Kill, the system going
+    // down, a parent's Stop or Kill. It comes before the FrozenChanged(false) of the same stop.
+    void appStopping(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 };

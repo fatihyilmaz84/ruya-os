@@ -263,6 +263,15 @@ pub struct FrozenChange {
     pub frozen: bool,
 }
 
+/// An instance that entered `stopping`, for the adapter to announce (`AppStopping`, RUY-1235):
+/// one per entry, whoever asked for the stop (Stop, Kill, `stop_all`, a parent's Stop or Kill).
+/// The adapter sends these before the `FrozenChange`s of the same call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoppingNotice {
+    pub instance: String,
+    pub app_id: String,
+}
+
 #[derive(Debug)]
 struct Instance {
     unit: String,
@@ -324,6 +333,8 @@ pub struct Session<S, D> {
     instances: Vec<Instance>,
     /// `frozen` changes not yet taken by the adapter (`take_frozen_changes`).
     frozen_changes: Vec<FrozenChange>,
+    /// Entries into `stopping` not yet taken by the adapter (`take_stopping`).
+    stopping: Vec<StoppingNotice>,
     /// The last sound request per profile user (`app_audio`: frozen apps, running apps), kept
     /// while it has a frozen app (T-466).
     audio_sent: HashMap<String, (Vec<String>, Vec<String>)>,
@@ -353,6 +364,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             pulse_dir: None,
             instances: Vec::new(),
             frozen_changes: Vec::new(),
+            stopping: Vec::new(),
             audio_sent: HashMap::new(),
             last_active: None,
             adopted_all: true,
@@ -621,14 +633,30 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// of the OS (there is no scope of it yet). A later reason replaces an earlier one (a Kill
     /// after a Stop is "killed").
     fn cancel_launch(&mut self, at: usize, reason: ExitReason) {
-        let inst = &mut self.instances[at];
-        inst.cancelled = Some(reason);
-        let was_stopping = inst.state == State::Stopping;
-        inst.state = State::Stopping;
-        if !was_stopping {
-            let user = inst.user.clone();
+        self.instances[at].cancelled = Some(reason);
+        if self.enter_stopping(at) {
+            let user = self.instances[at].user.clone();
             self.sync_audio(&user, false);
         }
+    }
+
+    /// The instance at `at` is `stopping` from now on. True when it was not before: its entry is
+    /// then queued for `AppStopping` (`take_stopping`), unless it is hidden (the shell never heard
+    /// of it). Every stop of a known record goes through here (only an orphan `adopt_listed` finds
+    /// starts out `stopping`, hidden), so each entry is announced once.
+    fn enter_stopping(&mut self, at: usize) -> bool {
+        let inst = &mut self.instances[at];
+        if inst.state == State::Stopping {
+            return false;
+        }
+        inst.state = State::Stopping;
+        if !inst.hidden {
+            self.stopping.push(StoppingNotice {
+                instance: inst.unit.clone(),
+                app_id: inst.app_id.clone(),
+            });
+        }
+        true
     }
 
     /// Does the record at `at` wait for its scope (a Steam game launched by `launch_steam_game`)?
@@ -758,8 +786,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         if let (false, Some(deadline)) = (self.instances[at].hidden, deadline) {
             let deadline_ms = u64::try_from(deadline.as_millis()).unwrap_or(u64::MAX);
             if self.tell(at, LifecycleEvent::Stopping { deadline_ms }, now) {
+                self.enter_stopping(at);
                 let inst = &mut self.instances[at];
-                inst.state = State::Stopping;
                 inst.save = SaveWait::Waiting {
                     since: now,
                     in_grace: kind == StopKind::PowerOff,
@@ -791,8 +819,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         let user = inst.user.clone();
         let status = match self.spawner.stop(&inst.unit) {
             Ok(()) => {
-                inst.state = State::Stopping;
                 inst.stop_asked = Some(grace_from.unwrap_or_else(|| clock.now()));
+                self.enter_stopping(at);
                 Status::Ok
             }
             Err(err) => {
@@ -926,11 +954,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         inst.kill_sent = true;
         // A save wait ends here: the kill replaces its SIGTERM (`saved` sends none).
         inst.save = SaveWait::Off;
-        let was_stopping = inst.state == State::Stopping;
-        inst.state = State::Stopping;
         inst.stop_asked.get_or_insert_with(|| clock.now());
-        if !was_stopping {
-            let user = inst.user.clone();
+        if self.enter_stopping(at) {
+            let user = self.instances[at].user.clone();
             self.sync_audio(&user, false);
         }
         Status::Ok
@@ -1192,6 +1218,13 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// The `frozen` changes since the last call, in order, for `FrozenChanged`.
     pub fn take_frozen_changes(&mut self) -> Vec<FrozenChange> {
         std::mem::take(&mut self.frozen_changes)
+    }
+
+    /// The entries into `stopping` since the last call, in order, for `AppStopping` (RUY-1235).
+    /// The adapter sends them before the `frozen` changes it takes in the same turn, so a stop's
+    /// `AppStopping` comes before the `FrozenChanged(false)` of its thaw.
+    pub fn take_stopping(&mut self) -> Vec<StoppingNotice> {
+        std::mem::take(&mut self.stopping)
     }
 
     /// The listing of the running app units as a closure for the caller to run without the
@@ -3494,6 +3527,103 @@ mod tests {
         assert!(s.stop_all(Instant::now()).is_empty());
         assert!(!s.any_left(&[]));
         assert!(s.spawner.calls().is_empty());
+        assert!(s.take_stopping().is_empty());
+    }
+
+    // ---- AppStopping: every entry into "stopping" is announced once (RUY-1235) ---------------
+
+    fn stopping_notice(instance: &str, app_id: &str) -> StoppingNotice {
+        StoppingNotice {
+            instance: instance.to_owned(),
+            app_id: app_id.to_owned(),
+        }
+    }
+
+    #[test]
+    fn stop_all_queues_one_stopping_notice_per_app_frozen_or_running_and_a_second_none() {
+        let mut s = session();
+        let t0 = Instant::now();
+        let frozen = run_as(&mut s, APP, "p1");
+        let running = run_as(&mut s, PUZZLE, "p1");
+        assert_eq!(s.freeze(&frozen, Some("p1"), t0), Status::Ok);
+        assert!(s.take_stopping().is_empty(), "a freeze is no stop");
+        s.stop_all(t0);
+        assert_eq!(
+            s.take_stopping(),
+            [
+                stopping_notice(&frozen, APP),
+                stopping_notice(&running, PUZZLE)
+            ]
+        );
+        // Already stopping: a second StopAll, a Stop and a Kill queue nothing.
+        s.stop_all(t0);
+        assert_eq!(s.stop(&frozen, t0), Status::Ok);
+        assert_eq!(s.kill(&running, Some("p1"), t0), Status::Ok);
+        assert!(s.take_stopping().is_empty());
+    }
+
+    #[test]
+    fn stop_and_kill_queue_their_stopping_notice_once() {
+        let mut s = session();
+        let t0 = Instant::now();
+        let closed = run_as(&mut s, APP, "p1");
+        let killed = run_as(&mut s, PUZZLE, "p1");
+        assert_eq!(s.stop(&closed, t0), Status::Ok);
+        assert_eq!(s.take_stopping(), [stopping_notice(&closed, APP)]);
+        assert_eq!(s.stop(&closed, t0), Status::Ok);
+        assert!(s.take_stopping().is_empty(), "a second Stop");
+        assert_eq!(s.kill(&killed, Some("p1"), t0), Status::Ok);
+        assert_eq!(s.take_stopping(), [stopping_notice(&killed, PUZZLE)]);
+        assert_eq!(s.kill(&killed, Some("p1"), t0), Status::Ok);
+        assert!(s.take_stopping().is_empty(), "a second Kill");
+    }
+
+    #[test]
+    fn a_failed_kill_queues_no_stopping_notice() {
+        // The kill could not be sent: the app still runs, so nothing says it is stopping.
+        let mut s = Session::new(
+            FakeSpawner::new().with_app(APP).failing_kill(),
+            ProfileSnapshot::new(["p1".to_owned()]),
+            vec![],
+        );
+        let unit = run_as(&mut s, APP, "p1");
+        assert_eq!(s.kill(&unit, Some("p1"), Instant::now()), Status::Failed);
+        assert!(s.take_stopping().is_empty());
+    }
+
+    #[test]
+    fn a_parents_stop_or_kill_queues_its_childrens_notices_first() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.take_stopping(),
+            [
+                stopping_notice(&child, STEAM),
+                stopping_notice(&steam, STEAM)
+            ]
+        );
+
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        assert_eq!(s.kill(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(
+            s.take_stopping(),
+            [
+                stopping_notice(&child, STEAM),
+                stopping_notice(&steam, STEAM)
+            ]
+        );
+
+        // A game still waiting for its scope is ended in the core: its notice comes all the same.
+        let (mut s, steam, child) = steam_with_starting_game();
+        s.take_stopping();
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.take_stopping(),
+            [
+                stopping_notice(&child, STEAM),
+                stopping_notice(&steam, STEAM)
+            ]
+        );
     }
 
     // Steam's games as child instances (ADR-041, RUY-1052).

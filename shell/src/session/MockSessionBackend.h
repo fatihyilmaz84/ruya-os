@@ -43,7 +43,7 @@
 // startChild is the seam for a Steam game's scope: a running child record under a running instance (item
 // "steam:<appid>", parent that instance, the parent's app id and profile), announced with AppStarted;
 // endChild ends it with AppExited "quit". Stop and Kill on a parent end its children first ("stop <child>"
-// / "kill <child>" logged before the parent's). Freeze and Thaw of a parent reach its running children
+// / "kill <child>" logged before the parent's; a frozen child is thawed first, "thaw <child>"). Freeze and Thaw of a parent reach its running children
 // first, as the service does (ADR-041 point 7, RUY-1054): "freeze <child>" / "thaw <child>" are logged
 // before the parent's.
 //
@@ -54,6 +54,11 @@
 // "running", AppStarted). Without that it ends with AppExited "launch-failed" (-1) after the child launch
 // wait (ChildLaunchWaitMs, setChildLaunchWait). Stop or Kill of a starting child logs nothing and ends it
 // with "quit" / "killed" (-1); Stop or Kill of its parent ends it with "launch-failed".
+//
+// AppStopping (RUY-1235) follows ruya-session: every record that becomes "stopping" (Stop, Kill, stopAll,
+// a parent's Stop or Kill, a starting child ended) announces it once, children before their parent, and
+// a stop sends every AppStopping before the FrozenChanged(false) of its thaws; every AppExited comes after.
+// stopAll replays the system going down: a Stop of every run in one go.
 class MockSessionBackend final : public SessionBackend
 {
     Q_OBJECT
@@ -75,6 +80,8 @@ public:
     void instanceOfPid(int pid) override;
 
     void reset();
+    // The system goes down (ruya-session's StopAll): every run is stopped as Stop would, in one go.
+    void stopAll();
     // The signed-in profile changed (T-165): the apps of the one before are frozen.
     void activeProfileChanged();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
@@ -116,8 +123,12 @@ private:
     bool awaitsScope(int index) const;
     // Stop or Kill of such a game: ended with `reason` and exit code -1, no call logged.
     void endStartingChild(int index, const QString &reason);
-    // Stop or Kill (`verb`) of a parent: its children end first, with `code` and `reason` (ADR-041).
-    void endChildren(const QString &instance, const QString &verb, int code, const QString &reason);
+    // The instances of the children of `instance`, in the order they started (ADR-041).
+    QStringList childrenOf(const QString &instance) const;
+    // The record at `index` is "stopping" from now on; AppStopping follows when it was not before (RUY-1235).
+    void enterStopping(int index);
+    // Stop of each of `instances` and its children, signalled in ruya-session's order (RUY-1235).
+    void stopRuns(const QStringList &instances);
     void setRunning(const QString &instance);
     void exitApp(const QString &instance, int code, const QString &reason);
     // The status of a freeze or thaw of `instance` before anything is done.

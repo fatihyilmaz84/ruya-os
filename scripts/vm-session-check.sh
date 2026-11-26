@@ -411,6 +411,26 @@ judge_secs() {
     return 1
 }
 # --- judge_secs end
+# --- judge_stop_order begin (test-vm-checks.sh sources these lines)
+# judge_stop_order <signal log> <instance> (RUY-1235): the Stop of a frozen app sends AppStopping first,
+# then the FrozenChanged(false) of its thaw, and AppExited last (lines of `busctl --json=short monitor`).
+# PASS in that order; a FAIL names the missing signal or the wrong order.
+judge_stop_order() {
+    local at_stop at_thaw at_exit
+    at_stop="$(grep -n -F '"member":"AppStopping"' "$1" | grep -F "\"$2\"" | head -1 | cut -d: -f1)"
+    at_thaw="$(grep -n -F '"member":"FrozenChanged"' "$1" | grep -F "\"$2\",false" | head -1 | cut -d: -f1)"
+    at_exit="$(grep -n -F '"member":"AppExited"' "$1" | grep -F "\"$2\"" | head -1 | cut -d: -f1)"
+    [ -n "$at_stop" ] || { bad "no AppStopping for $2 after its Stop"; return 1; }
+    [ -n "$at_thaw" ] || { bad "no FrozenChanged(false) for $2 after its Stop"; return 1; }
+    [ -n "$at_exit" ] || { bad "no AppExited for $2 after its Stop"; return 1; }
+    if [ "$at_stop" -lt "$at_thaw" ] && [ "$at_thaw" -lt "$at_exit" ]; then
+        ok "the Stop of $2 sent AppStopping, then FrozenChanged(false), then AppExited"
+        return 0
+    fi
+    bad "the Stop of $2 sent its signals out of order (lines: AppStopping $at_stop, FrozenChanged(false) $at_thaw, AppExited $at_exit)"
+    return 1
+}
+# --- judge_stop_order end
 # --- judge_clean_end begin (test-vm-checks.sh sources these lines)
 # judge_clean_end <what> <uid> (RUY-888), the journal on stdin: a FAIL when it shows that systemd had to
 # kill an app of that user's manager ("user@<uid>.service: Killing process ... with signal SIGKILL") or
@@ -1381,9 +1401,11 @@ check)
     case "$(freeze_app "$inst")" in 's "ok"') ok "frozen again before Stop";; *) bad "Freeze before Stop";; esac
 
     echo "--- Stop"
+    sleep 1; : > "$work/signals.log"   # the Freeze and Thaw lines above must not count for the Stop's order
     t0="$(date +%s)"
     case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; esac
     wait_sig "\"member\":\"AppExited\".*$sleeper.*\"quit\"" 20 && ok "AppExited with reason quit after $(( $(date +%s) - t0 )) s" || bad "no AppExited quit within 20 s"
+    judge_stop_order "$work/signals.log" "$inst"
     gone "sleep 3000" && ok "Stop ended the app itself, not only the unit (its scope is gone)" || bad "the app's process is still there after Stop"
     journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: scope gone" \
         && ok "the run ended with its scope (journal: scope gone)" || bad "no 'scope gone' line for $inst in the journal"

@@ -237,24 +237,24 @@ void MockSessionBackend::endChild(const QString &instance)
         exitApp(instance, 0, QStringLiteral("quit"));
 }
 
-void MockSessionBackend::endChildren(const QString &instance, const QString &verb, int code, const QString &reason)
+QStringList MockSessionBackend::childrenOf(const QString &instance) const
 {
-    // ADR-041: Stop and Kill on a parent end its children first, each before the parent.
     QStringList children;
     for (const RunningApp &r : std::as_const(m_running)) {
         if (r.parent == instance)
             children.append(r.instance);
     }
-    for (const QString &child : std::as_const(children)) {
-        const int c = indexOf(child);
-        if (awaitsScope(c) || m_endingAs.contains(child)) {
-            if (!m_endingAs.contains(child))
-                endStartingChild(c, QStringLiteral("launch-failed"));   // nothing of it to reach (RUY-1067)
-            continue;
-        }
-        m_calls.append(verb + QLatin1Char(' ') + child);
-        exitApp(child, code, reason);
-    }
+    return children;
+}
+
+void MockSessionBackend::enterStopping(int index)
+{
+    if (m_running.at(index).state == QLatin1String("stopping"))
+        return;                                 // announced once per entry, as ruya-session does
+    m_running[index].state = QStringLiteral("stopping");
+    const QString instance = m_running.at(index).instance;
+    const QString appId = m_running.at(index).appId;
+    QTimer::singleShot(0, this, [this, instance, appId] { emit appStopping(instance, appId); });
 }
 
 void MockSessionBackend::setRunning(const QString &instance)
@@ -291,36 +291,79 @@ void MockSessionBackend::stop(const QString &instance)
     else if (i < 0)
         status = QStringLiteral("unknown-instance");
     QTimer::singleShot(0, this, [this, instance, status] { emit stopFinished(instance, status); });
-    if (status != QLatin1String("ok") || m_running.at(i).state == QLatin1String("stopping"))
-        return;
-    if (awaitsScope(i)) {
-        endStartingChild(i, QStringLiteral("quit"));
-        return;
+    if (status == QLatin1String("ok"))
+        stopRuns({instance});
+}
+
+void MockSessionBackend::stopAll()
+{
+    QStringList runs;
+    for (const RunningApp &r : std::as_const(m_running)) {
+        if (r.parent.isEmpty())
+            runs.append(r.instance);            // a child is stopped with its parent
     }
-    if (m_running.at(i).frozen) {
-        // Like ruya-session: a frozen app is thawed before it is asked to quit.
-        m_calls.append(QStringLiteral("thaw ") + instance);
-        setFrozen(i, false);
-    }
-    endChildren(instance, QStringLiteral("stop"), 0, QStringLiteral("quit"));
-    m_calls.append(QStringLiteral("stop ") + instance);
-    m_running[indexOf(instance)].state = QStringLiteral("stopping");
-    if (m_ignoreStop) {
-        // The game does not close: the service's backstop kills it (RUY-736), unless Kill came first.
-        QTimer::singleShot(BackstopMs, this, [this, instance] { exitApp(instance, 9, QStringLiteral("killed")); });
-        return;
-    }
-    const int delay = m_stopDelayMs >= 0 ? m_stopDelayMs : m_startMs / 3;
-    QTimer::singleShot(delay, this, [this, instance] {
-        if (!m_stubbornStop) {
-            exitApp(instance, 0, QStringLiteral("quit"));
-            return;
+    stopRuns(runs);
+}
+
+void MockSessionBackend::stopRuns(const QStringList &instances)
+{
+    // As ruya-session sends a stop's signals (RUY-1235): every instance asked is "stopping" first, children
+    // before their parent (AppStopping), then the thaws of the frozen ones (FrozenChanged(false)) and the
+    // stops; the runs end later. An instance stopping already is left alone.
+    QStringList asked;                          // what is stopped below, children before their parent
+    QStringList children;                       // of those, the children of an instance asked
+    for (const QString &instance : instances) {
+        const int i = indexOf(instance);
+        if (i < 0 || m_running.at(i).state == QLatin1String("stopping"))
+            continue;
+        if (awaitsScope(i)) {
+            endStartingChild(i, QStringLiteral("quit"));
+            continue;
         }
-        // Killed after the grace, and still listed (T-458): the service said "killed" but the record stays.
-        const int j = indexOf(instance);
-        if (j >= 0)
-            emit appExited(instance, m_running.at(j).appId, 137, QStringLiteral("killed"));
-    });
+        for (const QString &child : childrenOf(instance)) {   // ADR-041: the children first
+            const int c = indexOf(child);
+            if (m_endingAs.contains(child) || m_running.at(c).state == QLatin1String("stopping"))
+                continue;
+            if (awaitsScope(c)) {
+                endStartingChild(c, QStringLiteral("launch-failed"));   // nothing of it to reach (RUY-1067)
+                continue;
+            }
+            enterStopping(c);
+            asked.append(child);
+            children.append(child);
+        }
+        enterStopping(i);
+        asked.append(instance);
+    }
+    for (const QString &instance : std::as_const(asked)) {
+        const int i = indexOf(instance);
+        if (m_running.at(i).frozen) {
+            // Like ruya-session: a frozen app is thawed before it is asked to quit.
+            m_calls.append(QStringLiteral("thaw ") + instance);
+            setFrozen(i, false);
+        }
+        m_calls.append(QStringLiteral("stop ") + instance);
+        if (children.contains(instance)) {
+            QTimer::singleShot(0, this, [this, instance] { exitApp(instance, 0, QStringLiteral("quit")); });
+            continue;
+        }
+        if (m_ignoreStop) {
+            // The game does not close: the service's backstop kills it (RUY-736), unless Kill came first.
+            QTimer::singleShot(BackstopMs, this, [this, instance] { exitApp(instance, 9, QStringLiteral("killed")); });
+            continue;
+        }
+        const int delay = m_stopDelayMs >= 0 ? m_stopDelayMs : m_startMs / 3;
+        QTimer::singleShot(delay, this, [this, instance] {
+            if (!m_stubbornStop) {
+                exitApp(instance, 0, QStringLiteral("quit"));
+                return;
+            }
+            // Killed after the grace, and still listed (T-458): the service said "killed" but the record stays.
+            const int j = indexOf(instance);
+            if (j >= 0)
+                emit appExited(instance, m_running.at(j).appId, 137, QStringLiteral("killed"));
+        });
+    }
 }
 
 void MockSessionBackend::kill(const QString &instance)
@@ -343,9 +386,23 @@ void MockSessionBackend::kill(const QString &instance)
         endStartingChild(i, QStringLiteral("killed"));
         return;
     }
-    endChildren(instance, QStringLiteral("kill"), 9, QStringLiteral("killed"));
+    // ADR-041: a parent's children are killed first; each is "stopping" (AppStopping) before any end.
+    QStringList killed;
+    for (const QString &child : childrenOf(instance)) {
+        const int c = indexOf(child);
+        if (awaitsScope(c) || m_endingAs.contains(child)) {
+            if (!m_endingAs.contains(child))
+                endStartingChild(c, QStringLiteral("launch-failed"));   // nothing of it to reach (RUY-1067)
+            continue;
+        }
+        m_calls.append(QStringLiteral("kill ") + child);
+        enterStopping(c);
+        killed.append(child);
+    }
     m_calls.append(QStringLiteral("kill ") + instance);
-    m_running[indexOf(instance)].state = QStringLiteral("stopping");
+    enterStopping(indexOf(instance));
+    for (const QString &child : std::as_const(killed))
+        QTimer::singleShot(0, this, [this, child] { exitApp(child, 9, QStringLiteral("killed")); });
     QTimer::singleShot(0, this, [this, instance] {
         if (!m_stubbornStop) {
             exitApp(instance, 9, QStringLiteral("killed"));
@@ -363,7 +420,7 @@ void MockSessionBackend::endStartingChild(int index, const QString &reason)
     // the OS, it is "stopping" until the next tick, then AppExited with exit code -1. A Kill after a Stop
     // makes it "killed".
     const QString instance = m_running.at(index).instance;
-    m_running[index].state = QStringLiteral("stopping");
+    enterStopping(index);
     const bool queued = m_endingAs.contains(instance);
     m_endingAs.insert(instance, reason);
     if (queued)
