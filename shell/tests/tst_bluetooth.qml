@@ -785,6 +785,7 @@ Item {
         // T-359: the Rename keyboard's title is a name from outside: one line, as wide as the keys at most, and a
         // too long alias is cut before the end of the address ("WWWW... (00:05)"), never after it (04 section 3).
         function test_rename_title_of_a_long_alias_keeps_the_address_tail() {
+            failOnWarning(/Binding loop detected for property "text"/)   // RUY-1220: the row's label tail cut
             Bluetooth.mockTwoPads()
             tryVerify(() => Bluetooth.devices.length === 5, 2000)
             const wide = "W".repeat(48)
@@ -815,6 +816,7 @@ Item {
         // RUY-21: an elided Settings row and the title of its menu keep the last 5 characters of the address of a
         // like-named pad.
         function test_settings_rows_keep_the_address_tail_when_the_name_is_cut() {
+            failOnWarning(/Binding loop detected for property "text"/)   // RUY-1220: labelWanted read the cut label
             Bluetooth.mockTwoPads()
             tryVerify(() => Bluetooth.devices.length === 5, 2000)
             const wide = "W".repeat(60)

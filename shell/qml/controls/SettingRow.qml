@@ -141,18 +141,28 @@ SettingControl {
         duration: Theme.focusMs
     }
 
-    // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end.
-    // Built only for a row that has one: most rows of a pane never hold.
+    // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end, and with it the
+    // AcceptHold (a Timer and a NumberAnimation) that drives it: accept on release and a long press, as on the cards (a
+    // tap does the main action, a hold opens the menu). Built only for a row that has one: most rows of a pane never hold.
     Loader {
+        id: holdLoader
         anchors { right: parent.right; rightMargin: Theme.spaceXs * row.u; verticalCenter: parent.verticalCenter }
         active: row.holdsAccept
         sourceComponent: HoldRing {
             objectName: "rowHoldRing"
             u: row.u
-            shown: hold.ringShown
-            progress: hold.ringProgress
+            shown: acceptHold.ringShown
+            progress: acceptHold.ringProgress
+            readonly property AcceptHold hold: AcceptHold {
+                id: acceptHold
+                objectName: "rowHold"
+                onTapped: row.accept()
+                onLongPressed: row.optionsRequested()
+            }
         }
     }
+    // The row's AcceptHold; null for a row that does not hold Accept (the one place that reads the loader).
+    readonly property var hold: holdLoader.item?.hold ?? null
 
     function accept() {
         if (isFact)
@@ -161,15 +171,7 @@ SettingControl {
         activated()
     }
 
-    // Accept on release and a long press (AcceptHold, as on the cards): a tap does the main action, a hold opens the menu.
-    AcceptHold {
-        id: hold
-        objectName: "rowHold"
-        active: row.holdsAccept
-        onTapped: row.accept()
-        onLongPressed: row.optionsRequested()
-    }
-    onActiveFocusChanged: if (!activeFocus) hold.cancel()
+    onActiveFocusChanged: if (!activeFocus) hold?.cancel()
 
     function acceptPressed(event) {
         if (isFact)
@@ -177,7 +179,7 @@ SettingControl {
         if (acceptOpensOptions && hasOptions) {
             if (!event.isAutoRepeat)
                 optionsRequested()              // the Shell plays the select sound
-        } else if (!hold.press(event)) {
+        } else if (!(holdsAccept && hold.press(event))) {
             accept()
         }
     }

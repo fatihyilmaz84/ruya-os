@@ -106,6 +106,20 @@ Item {
             compare(hintTexts(plain), "accept Select|back Back")
         }
 
+        // RUY-1220: only a row that holds Accept owns an AcceptHold (a Timer and a NumberAnimation); most rows never do.
+        function test_only_a_row_that_holds_accept_owns_an_accept_hold() {
+            for (const row of [plain, opensMenu, fact]) {
+                verify(!row.holdsAccept, row.objectName)
+                compare(findChild(row, "rowHold"), null, row.objectName + " owns no AcceptHold")
+                compare(row.hold, null)
+            }
+            for (const row of [withMenu, verbed]) {
+                verify(row.holdsAccept, row.objectName)
+                verify(findChild(row, "rowHold") !== null, row.objectName + " owns its AcceptHold")
+                verify(row.hold !== null)
+            }
+        }
+
         // RUY-1177: an item row can name its own verb on A (a network's "Connect"); the Options hint still follows it.
         function test_an_item_row_can_name_its_verb() {
             compare(hintTexts(verbed), "accept Connect|options Options|back Back")
