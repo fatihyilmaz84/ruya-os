@@ -105,6 +105,26 @@ Item {
 
         function volume(id) { return Storage.volumes.find(v => v.id === id) }
 
+        function menu() { return find("optionsMenu") }
+        function menuRowIds() { return menu().rows.map(r => r.id) }
+
+        // Accept on a mounted removable drive opens its Options menu (RUY-1178: several actions, none main).
+        function openDriveMenu(id) {
+            goTo("storageVol_" + id)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => menu().shown, 2000, "A opens the menu of " + id)
+            tryVerify(() => menu().activeFocus, 2000, "the menu has the focus")
+        }
+
+        // Down to the row of this action in the open menu, then Accept: the menu closes first, then the action runs.
+        function chooseOption(action) {
+            for (let i = 0; i < 8 && menu().rows[menu().current].id !== action; ++i)
+                keyClick(Qt.Key_Down)
+            compare(menu().rows[menu().current].id, action)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !menu().shown, 2000, "the menu closed")
+        }
+
         function answerFor(op, id) {
             return host.answers.find(a => a.op === op && a.id === id)
         }
@@ -125,13 +145,18 @@ Item {
             Storage.mockPlugStick()
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
-            goTo("storageEject_vol-stick")
+            openDriveMenu("vol-stick")
             Storage.mockHoldEject(true)                  // an unmount that takes a while
-            keyClick(Qt.Key_Return)
+            chooseOption("eject")
             tryVerify(() => Storage.mockEjectCalls() === 1, 2000, "one eject sent")
-            keyClick(Qt.Key_Return)                      // a second Accept, a key repeat
+            tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000, "the menu gave the focus back to the drive's row")
+            keyClick(Qt.Key_Return)                      // a second Accept, a key repeat: the drive being ejected has no menu
+            wait(100)                                    // a menu would have opened by now
+            verify(!menu().shown, "no menu for a drive that is being ejected")
             keyClick(Qt.Key_Return)
+            find("paneStorage").ejectVolume("vol-stick") // and the pane itself asks once
             wait(100)                                    // a second call would have arrived by now
+            compare(tc.shell.currentPage, "settings", "no row of a stale menu ran (Packages would have opened a page)")
             compare(Storage.mockEjectCalls(), 1, "still one eject")
             Storage.mockHoldEject(false)                 // the answer comes
             tryVerify(() => volume("vol-stick") === undefined, 2000, "ejected")
@@ -277,7 +302,7 @@ Item {
                     + " free of " + Storage.formatBytes(64000000000))
             tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus stays on its row")
             verify(find("paneStorage").activeFocus)
-            tryVerify(() => find("storageEject_vol-stick").visible, 2000, "the stick can be ejected")
+            tryVerify(() => find("storageVol_vol-stick").hasOptions, 2000, "the stick has its menu (Eject)")
             wait(150)                                    // a duplicate toast would have come by now
             compare(toastCount("Drive inserted: Ruya Stick"), 1, "once")
             compare(addedSpy.count, 1)
@@ -295,14 +320,14 @@ Item {
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
             clearToasts()
-            goTo("storageVol_vol-stick")
-            keyClick(Qt.Key_Return)                      // Accept offers Eject
-            tryVerify(() => find("storageEject_vol-stick").activeFocus, 2000, "focus moves to the Eject row")
-            compare(find("storageEject_vol-stick").label, "Eject Ruya Stick")
-            keyClick(Qt.Key_Return)
+            openDriveMenu("vol-stick")                   // Accept opens the drive's menu: Packages, Rescan, Eject
+            tryVerify(() => menuRowIds().join() === "packages,rescan,eject", 2000)
+            compare(menu().title, "Ruya Stick")
+            compare(menu().rows.map(r => r.label).join("|"), "Packages on this drive|Rescan|Eject")
+            compare(menu().rows.map(r => r.divider === true).join(), "false,false,true", "Eject comes last, after a divider")
+            chooseOption("eject")
             tryVerify(() => volume("vol-stick") === undefined, 2000, "the volume is gone")
             tryVerify(() => find("storageVol_vol-stick") === null, 2000, "its row is gone")
-            tryVerify(() => find("storageEject_vol-stick") === null)
             tryVerify(() => toastTexts().includes("Safe to remove"), 2000, "safe to remove")
             tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus moves to a valid row")
             verify(find("paneStorage").activeFocus)
@@ -314,16 +339,17 @@ Item {
             Storage.mockSetBusy("vol-stick", true)
             openStoragePane()
             clearToasts()
-            goTo("storageEject_vol-stick")
-            keyClick(Qt.Key_Return)
+            openDriveMenu("vol-stick")
+            chooseOption("eject")
             tryVerify(() => toastTexts().includes("Ruya Stick is still in use. Close what uses it and try again."),
                       2000, "the message is shown")
             verify(!toastTexts().includes("Safe to remove"))
             verify(volume("vol-stick") !== undefined, "still listed")
             verify(find("storageVol_vol-stick") !== null)
-            tryVerify(() => find("storageEject_vol-stick").activeFocus, 2000, "focus stays on the row")
+            tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000, "focus stays on the drive's row")
             Storage.mockSetBusy("vol-stick", false)      // closed meanwhile: it works now
-            keyClick(Qt.Key_Return)
+            openDriveMenu("vol-stick")                   // the menu is back once the answer has come
+            chooseOption("eject")
             tryVerify(() => volume("vol-stick") === undefined, 2000)
             tryVerify(() => toastTexts().includes("Safe to remove"), 2000)
         }
@@ -332,7 +358,7 @@ Item {
             openStoragePane()
             goTo("storageVol_vol-old")
             compare(find("storageVol_vol-old").value, "Not supported")
-            verify(!find("storageEject_vol-old").visible, "nothing to eject on an unmounted drive")
+            verify(!find("storageVol_vol-old").hasOptions, "no menu on a drive that is not supported")
             keyClick(Qt.Key_Return)
             tryVerify(() => toastTexts().includes("This drive's format is not supported. Format it as exFAT on a computer to use it here."),
                       2000, "the reason is shown")
@@ -348,10 +374,73 @@ Item {
             Storage.mockPlugStick()
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
-            goTo("storageEject_vol-stick")
+            goTo("storageVol_vol-stick")
             Storage.eject("vol-stick")
-            tryVerify(() => find("storageEject_vol-stick") === null, 2000)
+            tryVerify(() => find("storageVol_vol-stick") === null, 2000)
             tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus moves to a valid row")
+        }
+
+        // RUY-1178: the drive is unplugged while its menu is open: the menu closes and the pane's rule puts the
+        // focus on the row now at that place.
+        function test_unplugging_a_drive_closes_its_menu() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            openDriveMenu("vol-stick")
+            verify(find("storageVol_vol-stick").anchored, "the drive's row keeps its look while its menu is open")
+            Storage.mockReset()                          // the stick is gone
+            tryVerify(() => volume("vol-stick") === undefined, 2000, "unplugged")
+            tryVerify(() => !menu().shown, 2000, "the menu closed")
+            tryVerify(() => find("storageVol_vol-stick") === null, 2000, "its row is gone")
+            tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus lands on a valid row")
+            verify(find("paneStorage").activeFocus)
+        }
+
+        // Ejecting from the menu: it closes at once (the drive counts as gone), the focus is on the drive's row until
+        // the drive leaves, then on the row at its place.
+        function test_ejecting_from_the_menu_closes_it_and_the_focus_settles() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            openDriveMenu("vol-stick")
+            Storage.mockHoldEject(true)
+            chooseOption("eject")
+            tryVerify(() => Storage.mockEjectCalls() === 1, 2000)
+            tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000, "back on the drive's row while it unmounts")
+            Storage.mockHoldEject(false)
+            tryVerify(() => find("storageVol_vol-stick") === null, 2000, "its row is gone")
+            tryVerify(() => find("storageVol_vol-old").activeFocus, 2000, "focus moves to a valid row")
+            verify(find("paneStorage").activeFocus)
+        }
+
+        // Only a mounted removable drive has a menu: the console's own disk and an unsupported drive keep their rows' behaviour.
+        function test_only_a_mounted_removable_drive_has_a_menu() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            verify(find("storageVol_vol-stick").hasOptions)
+            verify(!find("storageVol_vol-internal").hasOptions, "the console's own disk")
+            verify(!find("storageVol_vol-old").hasOptions, "an unsupported drive")
+            goTo("storageVol_vol-internal")
+            keyClick(Qt.Key_Return)
+            wait(100)
+            verify(!menu().shown, "Accept on the console's own disk opens nothing")
+            keyClick(Qt.Key_Menu)
+            wait(100)
+            verify(!menu().shown, "nor does Start")
+            verify(find("storageVol_vol-internal").activeFocus)
+            verify(!toastTexts().includes("This drive's format is not supported. Format it as exFAT on a computer to use it here."), "and says nothing")
+            compare(find("paneStorage").surfaceOptions.rows("vol-internal").length, 0)
+            compare(find("paneStorage").surfaceOptions.rows("vol-old").length, 0)
+            compare(find("paneStorage").surfaceOptions.exists("vol-internal"), false)
+            // the menu of the stick, and the hint that says so
+            goTo("storageVol_vol-stick")
+            compare(shownHints(), "accept Options|back Back")
+            keyClick(Qt.Key_Menu)                        // Start opens it too
+            tryVerify(() => menu().shown, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !menu().shown, 2000, "Back closes it")
+            tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000, "focus is back on the drive")
         }
 
         function test_an_older_reply_arriving_late_is_dropped() {
@@ -549,7 +638,7 @@ Item {
             compare(find("storageScan_vol-stick_other").value, "3.7 GB")
             compare(find("storageScan_vol-stick_wait"), null, "no Scanning row once it is done")
             compare(scanRowNames("vol-stick").join(), "cat:games,cat:backups,cat:captures,cat:pictures,other")
-            // Under the drive's own row and above its Eject row, in the order of the service.
+            // Under the drive's own row, in the order of the service.
             verify(find("storageVol_vol-stick").y < find("storageScan_vol-stick_cat:games").y)
             // A step in from the drive's row, and still inside the pane.
             const vol = find("storageVol_vol-stick")
@@ -557,7 +646,9 @@ Item {
             verify(games.x > vol.x, "indented")
             compare(games.x + games.width, vol.x + vol.width, "ends where the drive's row ends")
             verify(find("storageScan_vol-stick_cat:games").y < find("storageScan_vol-stick_cat:backups").y)
-            verify(find("storageScan_vol-stick_other").y < find("storageEject_vol-stick").y)
+            // No loose per-drive rows (Packages, Rescan, Eject) any more: they are in the drive's menu.
+            for (const prefix of ["storageEject_", "storageRescan_", "storagePackages_"])
+                compare(find(prefix + "vol-stick"), null, "no loose " + prefix + " row")
             // The internal disk is not scanned (the "This console" rows tell its story).
             compare(find("storageScan_vol-internal_wait"), null)
             compare(Storage.mockScanCalls().join(), "vol-stick")
@@ -671,8 +762,8 @@ Item {
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
             tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000)
-            goTo("storageEject_vol-stick")
-            keyClick(Qt.Key_Return)
+            openDriveMenu("vol-stick")
+            chooseOption("eject")
             tryVerify(() => volume("vol-stick") === undefined, 2000, "the drive is gone")
             compare(Storage.mockCancelCalls().join(), "vol-stick", "its scan was cancelled")
             compare(Storage.mockScanCalls().length, 1, "and not started again")
@@ -717,67 +808,74 @@ Item {
             tryVerify(() => scanState("vol-stick") === "done", 3000)
         }
 
-        // The Rescan row walks a finished drive again (a write that changed no property of the volume).
+        // Rescan, in the drive's menu, walks a finished drive again (a write that changed no property of the volume).
         function test_rescan_row_rescans() {
             Storage.mockPlugStick()
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
             tryVerify(() => scanState("vol-stick") === "done", 3000)
             compare(Storage.mockScanCalls().length, 1)
-            const rescan = find("storageRescan_vol-stick")
-            verify(rescan !== null, "a Rescan row")
-            compare(rescan.label, "Rescan Ruya Stick")
-            compare(rescan.kind, "action")
-            verify(rescan.y > find("storageScan_vol-stick_other").y, "under the results")
-            verify(rescan.y < find("storageEject_vol-stick").y, "above Eject")
-            goTo("storageRescan_vol-stick")
-            const tracked = LiveRows.track(rescan)
+            const vol = find("storageVol_vol-stick")
+            openDriveMenu("vol-stick")
+            tryVerify(() => menuRowIds().includes("rescan"), 2000)
+            compare(menu().rows.find(r => r.id === "rescan").label, "Rescan")
+            compare(menu().note, "", "a finished drive can be rescanned: nothing to say")
+            const tracked = LiveRows.track(vol)
             Storage.mockHoldScan(true)
-            keyClick(Qt.Key_Return)
+            chooseOption("rescan")
             tryVerify(() => Storage.mockScanCalls().length === 2, 3000, "asked again")
             tryVerify(() => scanState("vol-stick") === "running", 3000)
             tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "Scanning... again")
             LiveRows.verifySame(tc, tracked, "a rescan starts")
-            verify(rescan.activeFocus, "focus stays on the row")
-            keyClick(Qt.Key_Return)                      // while it scans: nothing more is asked
+            verify(vol.activeFocus, "focus is back on the drive's row")
+            // while it scans: Rescan stays in the menu, says why it does nothing, and asks nothing more
+            openDriveMenu("vol-stick")
+            compare(menu().note, "Rescan is not available while this drive is being read.")
+            chooseOption("rescan")
             wait(100)
             compare(Storage.mockScanCalls().length, 2)
             Storage.mockHoldScan(false)
             tryVerify(() => scanState("vol-stick") === "done", 3000)
             tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
-            verify(rescan.activeFocus, "focus stays on the row when the results are back")
+            verify(vol.activeFocus, "focus stays on the row when the results are back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
         }
 
-        // RUY-651: Rescan is one forced call (no CancelScan), each row names its drive, a plain
-        // cancel keeps a fresh result, and the hint bar offers Back only while that drive scans.
+        // RUY-651: Rescan is one forced call (no CancelScan), the menu is the drive's own (its title names it), a plain
+        // cancel keeps a fresh result, and the menu's note says so only while that drive scans (RUY-1178).
         function test_rescan_is_one_call_and_names_its_drive() {
             Storage.mockPlug(["vol-stick", "vol-card"])
             tryVerify(() => volume("vol-card") !== undefined)
             openStoragePane()
             tryVerify(() => scanState("vol-stick") === "done" && scanState("vol-card") === "done", 3000)
-            compare(find("storageRescan_vol-stick").label, "Rescan Ruya Stick")
-            compare(find("storageRescan_vol-card").label, "Rescan Camera Card")
-            compare(find("storageEject_vol-card").label, "Eject Camera Card")
             const before = Storage.mockScanCalls().length
-            goTo("storageRescan_vol-card")
-            compare(shownHints(), "accept Select|back Back", "a finished drive can be rescanned")
+            openDriveMenu("vol-card")
+            compare(menu().title, "Camera Card")
+            compare(menu().note, "", "a finished drive can be rescanned")
             Storage.mockHoldScan(true)
-            keyClick(Qt.Key_Return)
+            chooseOption("rescan")
             tryVerify(() => scanState("vol-card") === "running", 3000)
             compare(Storage.mockRescanCalls().join(), "vol-card", "one forced call")
             compare(Storage.mockScanCalls().length, before + 1)
             compare(Storage.mockCancelCalls().length, 0, "no CancelScan before it")
             compare(scanState("vol-stick"), "done", "the other drive's result is untouched")
-            verify(find("storageRescan_vol-card").activeFocus, "focus stays on the row")
-            compare(shownHints(), "back Back", "no Accept hint while that drive scans")
-            goTo("storageRescan_vol-stick")
-            compare(shownHints(), "accept Select|back Back", "the other drive's row still offers it")
+            verify(find("storageVol_vol-card").activeFocus, "focus is back on the drive's row")
+            openDriveMenu("vol-card")
+            verify(menu().note.length > 0, "the menu says Rescan is unavailable while that drive scans")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !menu().shown, 2000)
+            openDriveMenu("vol-stick")
+            compare(menu().title, "Ruya Stick")
+            compare(menu().note, "", "the other drive's menu still offers it")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !menu().shown, 2000)
             Storage.mockHoldScan(false)
             tryVerify(() => scanState("vol-card") === "done", 3000)
-            goTo("storageRescan_vol-card")
-            compare(shownHints(), "accept Select|back Back", "back once the scan is done")
+            openDriveMenu("vol-card")
+            compare(menu().note, "", "back once the scan is done")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !menu().shown, 2000)
         }
 
         function test_rescan_of_one_drive_leaves_another_pending_scan_alone() {
@@ -817,8 +915,8 @@ Item {
             compare(pane.busyDelays.join(), "1500,3000,6000,10000", "the real steps")
             pane.busyDelays = [150, 300, 600, 1200]          // the same shape, quick
             Storage.mockScanElsewhere("vol-card")        // another client scans; the Rescan is refused
-            goTo("storageRescan_vol-stick")
-            keyClick(Qt.Key_Return)
+            openDriveMenu("vol-stick")
+            chooseOption("rescan")
             tryCompare(pane, "busyRetryInterval", 150)
             tryCompare(pane, "busyRetryInterval", 300, 3000)
             tryCompare(pane, "busyRetryInterval", 600, 3000)
@@ -868,9 +966,8 @@ Item {
             compare(find("storageApps").kind, "info")
             compare(find("storageSystem").kind, "info")
             compare(find("storageVol_vol-stick").kind, "item")
-            compare(find("storageEject_vol-stick").kind, "action")
             goTo("storageVol_vol-stick")
-            compare(shownHints(), "accept Select|back Back", "a drive's own row does something")
+            compare(shownHints(), "accept Options|back Back", "a drive's own row opens its menu")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000)
             compare(shownHints(), "back Back", "a result row does nothing on Accept")
@@ -882,8 +979,6 @@ Item {
             wait(100)
             compare(hit, 0, "Accept on a result row emits nothing")
             verify(row.activeFocus, "and focus stays")
-            goTo("storageEject_vol-stick")
-            compare(shownHints(), "accept Select|back Back", "Eject does something")
             goTo("storageApps")
             compare(shownHints(), "back Back")
             keyClick(Qt.Key_Escape)
@@ -950,7 +1045,7 @@ Item {
                 grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-scanning" + (lang === "tr" ? "-tr" : "") + ".png")
                 Storage.mockHoldScan(false)
                 tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
-                goTo("storageRescan_vol-card")        // the Rescan row under the one line
+                goTo("storageVol_vol-card")
                 wait(800)
                 grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-empty" + (lang === "tr" ? "-tr" : "") + ".png")
                 // An unreadable drive: scanned again after the volume changes.
@@ -1012,6 +1107,58 @@ Item {
             openStoragePane()
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-data.png")
+        }
+
+        // RUY-1178: a drive's Options menu open over a pane with scan results, or while the drive scans (the Rescan note).
+        // The language is set before the pane is built, so the rows behind the menu are in it too. (`shots` finds a
+        // function by the `shotsDir + "/` line in its own body, so each one saves its own file.)
+        function openDriveMenuForShot(lang, scanning) {
+            DeviceSettings.language = lang
+            Storage.mockHoldScan(scanning)
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            if (scanning)
+                tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "the stick is being read")
+            else
+                tryVerify(() => find("storageScan_vol-stick_cat:games") !== null && find("storageScan_vol-card_none") !== null, 3000)
+            tryCompare(addedSpy, "count", 2, 5000)       // the service announces a drive after a settle window
+            tryVerify(() => Notifications.model.count === 2, 2000, "both toasts are up")
+            openDriveMenu("vol-stick")
+            tryVerify(() => menuRowIds().join() === "packages,rescan,eject", 2000)
+            compare(menu().note !== "", scanning, "the note is there only while the drive is read")
+            clearToasts()                                // "Drive inserted" would cover the menu
+            wait(800)
+        }
+
+        function test_zz_screenshots_menu() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openDriveMenuForShot("en", false)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu.png")
+        }
+
+        function test_zz_screenshots_menu_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openDriveMenuForShot("tr", false)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-tr.png")
+        }
+
+        function test_zz_screenshots_menu_scanning() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openDriveMenuForShot("en", true)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-scanning.png")
+            Storage.mockHoldScan(false)
+        }
+
+        function test_zz_screenshots_menu_scanning_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openDriveMenuForShot("tr", true)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-scanning-tr.png")
+            Storage.mockHoldScan(false)
         }
 
         function test_zz_screenshots_turkish() {
