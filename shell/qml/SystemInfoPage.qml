@@ -98,7 +98,7 @@ Page {
     // where it belongs. Never a move: a Repeater does not reorder its items on a move, and the
     // order of the rows in the pane is the order in which the items were created.
     function syncRows() {
-        const before = body.activeFocus ? body.focusableRows().findIndex(r => r.activeFocus) : -1
+        const before = body.focusedRowIndex()
         const want = desired()
         const wanted = {}
         for (const w of want)
@@ -112,18 +112,9 @@ Page {
             if (i >= rowModel.count || rowModel.get(i).uid !== want[i].uid)
                 rowModel.insert(i, want[i])
         }
+        // Queued before reflow(): its relayout() settles a lost focus on the first row, and this must land first.
+        Qt.callLater(body.refocusNear, before)
         body.reflow()
-        Qt.callLater(page.refocus, before)
-    }
-
-    // After rows went away: if the focused row is gone, focus the row now at its place.
-    function refocus(index) {
-        if (!body.activeFocus || index < 0)
-            return
-        const list = body.focusableRows()
-        if (list.length > 0 && !list.some(r => r.activeFocus))
-            list[Math.min(index, list.length - 1)].forceActiveFocus()
-        body.ensureFocusedVisible()
     }
 
     Connections {
