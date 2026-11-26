@@ -16,8 +16,10 @@
 # much faster; name the file that holds the new test, since nothing else runs.
 # -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks incl. the translation and bus-policy lints), for a mutation of
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
-# mutation (bash is lib-bash.ps1's Find-Bash, printed on a "runs with" line, never the first `bash` on PATH); -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1` alone (about 4 minutes), for a mutation of that lint
-# or of vm-queue-lib.ps1. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
+# mutation (bash is lib-bash.ps1's Find-Bash, printed on a "runs with" line, never the first `bash` on PATH); -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1 -Quick` alone (RUY-1217: every section but the
+# test-vm-checks.sh run, which is the 4 minutes), for a mutation of that lint, vm-queue-lib.ps1, vm-queue.ps1, lib-bash.ps1 or
+# a vm-*.ps1; any other -File is refused (exit 2, "use -Mode vmchecks"), since only test-vm-checks.sh sees it, and a NOT
+# CAUGHT says test-vm-checks.sh was SKIPPED. The gates (dev.ps1 test, docs, CI) run the full lint. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
 # vmchecks and vmlint also print the child's finding lines (up to 10) before the verdict, so a CAUGHT shows why, or say
 # that the child printed none (RUY-1221; the self-check in dev.ps1 runs both rows on fixture children).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
@@ -92,6 +94,16 @@ if ($owner) {
         Write-Host "$Path is in the checkout $owner, but this script is ${Repo}'s: run $owner\scripts\revert-check.ps1"; exit 2
     }
 } elseif (-not $Runner) { Write-Host "$Path is in no checkout"; exit 2 }
+$rel = [IO.Path]::GetFullPath($Path).Substring([IO.Path]::GetFullPath($Repo).TrimEnd('\').Length).TrimStart('\')
+# RUY-1217: -Mode vmlint runs the lint in its quick mode, which does not run test-vm-checks.sh, so a mutation that only
+# that script (or a vm-*.sh helper it exercises) sees would read NOT CAUGHT whatever the test is worth. The mode takes
+# only the files the quick run reads or runs: the lint, vm-queue-lib.ps1 and vm-queue.ps1 (section 1d), lib-bash.ps1
+# (Find-Bash) and vm-*.ps1 (parsed, vm-iso-check.ps1 run); anything else is -Mode vmchecks (or `docs`, the gates' lint).
+# Refused before -Old is looked for, so a typo in -Old does not hide the advice.
+if ($Mode -eq "vmlint" -and -not $Runner -and $rel -notmatch '^scripts\\(lint-vm-checks|vm-queue-lib|vm-queue|lib-bash|vm-[^\\]+)\.ps1$') {
+    Write-Host "use -Mode vmchecks: the quick lint (-Mode vmlint) does not run test-vm-checks.sh, which is what sees ${rel}; -Mode vmlint takes scripts\lint-vm-checks.ps1, vm-queue-lib.ps1, vm-queue.ps1, lib-bash.ps1 and vm-*.ps1"
+    exit 2
+}
 
 $bytes = [IO.File]::ReadAllBytes($Path)
 $text = [Text.Encoding]::UTF8.GetString($bytes)
@@ -104,7 +116,6 @@ $badName = $false
 # A file under services\<crate>\ is Rust (lead-18: three builders reported NOT CAUGHT for a Rust test that
 # does fail, RUY-540, RUY-546, RUY-573): step 2 then runs `cargo test -p <crate>` (with -Test as name filters)
 # and reads cargo's "test <name> ... FAILED" lines; nothing needs rebuilding afterwards.
-$rel = [IO.Path]::GetFullPath($Path).Substring([IO.Path]::GetFullPath($Repo).TrimEnd('\').Length).TrimStart('\')
 $crate = if ($rel -match '^services\\([^\\]+)\\') { $Matches[1] } else { $null }
 $cmdMode = $Mode -ne "default"
 # The modes whose step 2 is one command run from the checkout root (RUY-1216: vmlint joins vmchecks here, so a
@@ -116,7 +127,7 @@ $bashExe = if ($Mode -eq "vmchecks" -and -not $Runner) { Find-Bash } else { $nul
 if ($Mode -eq "vmchecks" -and -not $Runner -and -not $bashExe) { Write-Host "bash was not found (Git for Windows' bash.exe, or one on PATH that is not the WSL launcher): the VM check scripts cannot be run"; exit 2 }
 $repoCommands = @{
     vmchecks = @{ Label = "bash scripts/test-vm-checks.sh"; Exe = $bashExe; Run = { & $bashExe scripts/test-vm-checks.sh } }
-    vmlint   = @{ Label = "scripts\lint-vm-checks.ps1"; Exe = $null; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") } }
+    vmlint   = @{ Label = "scripts\lint-vm-checks.ps1 -Quick"; Exe = $null; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") -Quick } }
 }
 $rust = [bool]$crate -and -not $cmdMode
 # RUY-1221: the lines of a repoCommands child that say WHY it failed, so a CAUGHT shows its reason. The two real
@@ -233,6 +244,8 @@ try {
         $findings = @(Get-ChildFindings $out)
         if ($findings.Count -gt 0) { $findings | ForEach-Object { Write-Host "    $_" } }
         else { Write-Host "    (no finding lines: the child printed none)" }
+        # what the child says it did not run (the quick lint's SKIPPED line), so a NOT CAUGHT is read with it
+        @($out -split "`r?`n" | Where-Object { $_ -match '^\s*SKIPPED\b' }) | ForEach-Object { Write-Host "    $($_.Trim())" }
     } else {
         ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
     }
@@ -249,7 +262,8 @@ try {
         $caught = $true
         Write-Host "CAUGHT: $($failed.Count) failing test(s):"; $failed | ForEach-Object { Write-Host "    $_" }
     } else {
-        Write-Host "NOT CAUGHT: every test still passed with the change undone. The test cannot fail (or the file is not part of this build)."
+        $skipNote = if ($Mode -eq "vmlint") { " test-vm-checks.sh was SKIPPED (quick lint): a mutation only it sees is not tested here, use -Mode vmchecks." } else { "" }
+        Write-Host "NOT CAUGHT: every test still passed with the change undone. The test cannot fail (or the file is not part of this build).$skipNote"
     }
 } finally {
     [IO.File]::WriteAllBytes($Path, $bytes)

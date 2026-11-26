@@ -13,6 +13,12 @@
 # Exit code 0 = fine, 1 = findings.
 #
 #   .\scripts\lint-vm-checks.ps1
+#   .\scripts\lint-vm-checks.ps1 -Quick     # skips only section 2 (test-vm-checks.sh, the minutes); prints a SKIPPED line
+# -Quick (RUY-1217) is for the loop that edits this lint or vm-queue-lib.ps1 (revert-check.ps1 -Mode vmlint passes it).
+# It is never a gate: dev.ps1 (test) and CI run the full lint. dev.ps1's Test-VmChecks fails unless the output is that
+# of a complete run (no SKIPPED line, the test-vm-checks.sh summary, the full ok line), and lint-quick-callers.ps1
+# fails if any script, workflow or hook but revert-check.ps1 passes the switch.
+param([switch]$Quick)
 $Repo = Split-Path -Parent $PSScriptRoot
 $Scripts = Join-Path $Repo "scripts"
 $problems = New-Object System.Collections.Generic.List[string]
@@ -230,9 +236,13 @@ if (-not $devSetup.Contains($script:PlayCommand)) { $problems.Add("docs/dev-setu
 if (@([regex]::Matches($devSetup, 'wsl -d FedoraLinux-44[^\r\n`]*play-vm-files\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique).Count -gt 1) { $problems.Add("docs/dev-setup.md gives more than one WSL command for play-vm-files.sh") }
 
 # 2. the host tests on canned data
-$r = Run-Native $bash @((Join-Path $Scripts "test-vm-checks.sh") -replace '\\', '/')
-$r.out -split "`n" | ForEach-Object { Write-Host "    $_" }
-if ($r.code -ne 0) { $problems.Add("scripts/test-vm-checks.sh failed (see above)") }
+if ($Quick) {
+    Write-Host "    SKIPPED (-Quick): test-vm-checks.sh" -ForegroundColor Yellow
+} else {
+    $r = Run-Native $bash @((Join-Path $Scripts "test-vm-checks.sh") -replace '\\', '/')
+    $r.out -split "`n" | ForEach-Object { Write-Host "    $_" }
+    if ($r.code -ne 0) { $problems.Add("scripts/test-vm-checks.sh failed (see above)") }
+}
 
 # 3. vm-iso-check.ps1 refuses the development disks (it erases its -Disk). The throw happens before
 # anything else, so no QEMU is started; the control runs use a QemuDir that does not exist, so a disk
@@ -264,5 +274,6 @@ if ($problems.Count -gt 0) {
     Write-Host "    VM check lint: $($problems.Count) finding(s)" -ForegroundColor Red
     exit 1
 }
-Write-Host "    VM check lint: ok ($($bashScripts.Count) shell scripts, VM check host tests, ISO check refusals)"
+if ($Quick) { Write-Host "    VM check lint: ok, QUICK ($($bashScripts.Count) shell scripts, ISO check refusals; test-vm-checks.sh SKIPPED)" }
+else { Write-Host "    VM check lint: ok ($($bashScripts.Count) shell scripts, VM check host tests, ISO check refusals)" }
 exit 0
