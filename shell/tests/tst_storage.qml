@@ -1110,8 +1110,9 @@ Item {
         }
 
         // RUY-1178: a drive's Options menu open over a pane with scan results, or while the drive scans (the Rescan note).
-        // The language is set before the pane is built, so the rows behind the menu are in it too.
-        function shootDriveMenu(lang, scanning, file) {
+        // The language is set before the pane is built, so the rows behind the menu are in it too. (`shots` finds a
+        // function by the `shotsDir + "/` line in its own body, so each one saves its own file.)
+        function openDriveMenuForShot(lang, scanning) {
             DeviceSettings.language = lang
             Storage.mockHoldScan(scanning)
             Storage.mockPlug(["vol-stick", "vol-card"])
@@ -1128,32 +1129,36 @@ Item {
             compare(menu().note !== "", scanning, "the note is there only while the drive is read")
             clearToasts()                                // "Drive inserted" would cover the menu
             wait(800)
-            grabImage(tc.shell).save(shotsDir + "/" + file + ".png")
-            Storage.mockHoldScan(false)
         }
 
         function test_zz_screenshots_menu() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shootDriveMenu("en", false, "27-settings-storage-menu")
+            openDriveMenuForShot("en", false)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu.png")
         }
 
         function test_zz_screenshots_menu_tr() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shootDriveMenu("tr", false, "27-settings-storage-menu-tr")
+            openDriveMenuForShot("tr", false)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-tr.png")
         }
 
         function test_zz_screenshots_menu_scanning() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shootDriveMenu("en", true, "27-settings-storage-menu-scanning")
+            openDriveMenuForShot("en", true)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-scanning.png")
+            Storage.mockHoldScan(false)
         }
 
         function test_zz_screenshots_menu_scanning_tr() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shootDriveMenu("tr", true, "27-settings-storage-menu-scanning-tr")
+            openDriveMenuForShot("tr", true)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-menu-scanning-tr.png")
+            Storage.mockHoldScan(false)
         }
 
         function test_zz_screenshots_turkish() {
