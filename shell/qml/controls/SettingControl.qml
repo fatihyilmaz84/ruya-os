@@ -48,7 +48,9 @@ FocusScope {
     readonly property real labelRight: labelText.x + labelText.width
     // Where the label starts and how wide it wants to be, whole (SettingRow gives the value what is left, RUY-609).
     readonly property real labelLeft: labelText.x
-    readonly property real labelWanted: labelText.implicitWidth
+    // From the metrics, not from `labelText.implicitWidth`: that is the width of the text after the tail cut, which is
+    // made from the room the value leaves, which is made from this (a binding loop on `labelText.text`).
+    readonly property real labelWanted: labelMetrics.advanceWidth + tailMetrics.advanceWidth
 
     // Optional second line under the label (RUY-39, 04 §5): `typeCaption` Regular in `text`, `spaceXxs`
     // under the label, both centred in the row together; one line, elided; appended to the accessible
@@ -228,7 +230,6 @@ FocusScope {
 
     // Not a TailText: its `implicitWidth` is the elided width, but `labelWanted` (SettingRow's room for the value,
     // RUY-609) needs the label's whole width. The same cut at the end of the name, tail kept (TailText's rule).
-    // So on a row with a tail `labelWanted` is also the width the label is cut to, not only what it asks for.
     TextMetrics {
         id: labelMetrics
         font: labelText.font

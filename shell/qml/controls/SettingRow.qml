@@ -122,15 +122,17 @@ SettingControl {
     // menu opening), as the ring itself is cut. The layout never changes, no width is reserved for the ring (04 section 5).
     property real endOpacity: 1
     Connections {
-        target: hold
+        target: row.hold
         function onRingShownChanged() {
-            if (hold.ringShown && Theme.focusMs > 0) {
+            if (row.hold.ringShown && Theme.focusMs > 0) {
                 endFade.restart()
             } else {
                 endFade.stop()
-                row.endOpacity = hold.ringShown ? 0 : 1
+                row.endOpacity = row.hold.ringShown ? 0 : 1
             }
         }
+        function onTapped() { row.accept() }
+        function onLongPressed() { row.optionsRequested() }
     }
     NumberAnimation {
         id: endFade
@@ -141,18 +143,26 @@ SettingControl {
         duration: Theme.focusMs
     }
 
-    // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end.
-    // Built only for a row that has one: most rows of a pane never hold.
+    // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end, and with it the
+    // AcceptHold (a Timer and a NumberAnimation) that drives it: accept on release and a long press, as on the cards (a
+    // tap does the main action, a hold opens the menu). Built only for a row that has one: most rows of a pane never hold.
+    component HeldRing: HoldRing {
+        readonly property AcceptHold hold: AcceptHold { objectName: "rowHold" }
+        shown: hold.ringShown
+        progress: hold.ringProgress
+    }
     Loader {
+        id: holdLoader
         anchors { right: parent.right; rightMargin: Theme.spaceXs * row.u; verticalCenter: parent.verticalCenter }
         active: row.holdsAccept
-        sourceComponent: HoldRing {
+        sourceComponent: HeldRing {
             objectName: "rowHoldRing"
             u: row.u
-            shown: hold.ringShown
-            progress: hold.ringProgress
         }
     }
+    // The row's AcceptHold; null for a row that does not hold Accept (the one place that reads the loader).
+    // Its tapped and long-pressed signals are handled by the Connections above.
+    readonly property AcceptHold hold: (holdLoader.item as HeldRing)?.hold ?? null
 
     function accept() {
         if (isFact)
@@ -161,15 +171,7 @@ SettingControl {
         activated()
     }
 
-    // Accept on release and a long press (AcceptHold, as on the cards): a tap does the main action, a hold opens the menu.
-    AcceptHold {
-        id: hold
-        objectName: "rowHold"
-        active: row.holdsAccept
-        onTapped: row.accept()
-        onLongPressed: row.optionsRequested()
-    }
-    onActiveFocusChanged: if (!activeFocus) hold.cancel()
+    onActiveFocusChanged: if (!activeFocus) hold?.cancel()
 
     function acceptPressed(event) {
         if (isFact)
@@ -177,7 +179,7 @@ SettingControl {
         if (acceptOpensOptions && hasOptions) {
             if (!event.isAutoRepeat)
                 optionsRequested()              // the Shell plays the select sound
-        } else if (!hold.press(event)) {
+        } else if (!(holdsAccept && hold.press(event))) {
             accept()
         }
     }

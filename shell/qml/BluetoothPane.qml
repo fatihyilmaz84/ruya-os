@@ -172,7 +172,7 @@ SettingsPane {
     function pairDevice(id) {
         if (id === busyId)
             return                         // already pairing: a second Accept or a key repeat does nothing
-        const dev = Bluetooth.devices.find(d => d.id === id)
+        const dev = deviceById(id)
         if (dev && dev.keyboard === true)
             askKeyboard(id, dev.name)      // a keyboard types anywhere: a second confirmation (RUY-411)
         else
