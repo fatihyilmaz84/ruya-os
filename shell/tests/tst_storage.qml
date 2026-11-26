@@ -465,7 +465,10 @@ Item {
             verify(find("storageVol_vol-stick").hasOptions)
             verify(!find("storageVol_vol-internal").hasOptions, "the console's own disk")
             verify(!find("storageVol_vol-old").hasOptions, "an unsupported drive")
+            goTo("storageVol_vol-old")
+            compare(shownHints(), "accept Why|back Back", "A on an unsupported drive says why: the hint names it (RUY-1225)")
             goTo("storageVol_vol-internal")
+            compare(shownHints(), "accept Select|back Back", "the console's own disk keeps its hint")
             keyClick(Qt.Key_Return)
             wait(100)
             verify(!menu().shown, "Accept on the console's own disk opens nothing")
@@ -1126,6 +1129,26 @@ Item {
             goTo("storageVol_vol-stick")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-stick.png")
+        }
+
+        // RUY-1225: the unsupported drive focused: its hint says "A Why" (the reason toast is not shown, it is not asked for).
+        function test_zz_screenshots_unsupported() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openStoragePane()
+            goTo("storageVol_vol-old")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-unsupported.png")
+        }
+
+        function test_zz_screenshots_unsupported_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "tr"
+            openStoragePane()
+            goTo("storageVol_vol-old")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-unsupported-tr.png")
         }
 
         function test_zz_screenshots_low_space() {

@@ -12,7 +12,7 @@ import RuyaShell
 // "Packages on this drive" (RUY-98: the list of .play packages on that drive, `packagesRequested`,
 // Install from USB; only while ruya-play is there, RUY-809), "Rescan" and, after a divider, "Eject".
 // The menu closes when the drive is ejected or unplugged. Accept on the console's own disk does
-// nothing; on a drive whose filesystem is not supported it says why it can't be used.
+// nothing; on a drive whose filesystem is not supported it says why it can't be used (hint "A Why", RUY-1225).
 //
 // Under each mounted removable volume (T-331) come the rows of what RuyaOS finds on it, in the
 // style of "This console": "Scanning…" while the service walks the drive, then one row per
@@ -498,6 +498,8 @@ SettingsPane {
             // that is being ejected.
             hasOptions: entryKind === "volume" && removable && mounted && pane.ejectingId !== volId
             acceptOpensOptions: hasOptions
+            // A on it says why (a toast), so the hint names that and not "Select".
+            acceptVerb: entryKind === "volume" && !mounted ? qsTr("Why") : ""
             anchored: entryKind === "volume" && pane.optionsOpenFor === volId
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.

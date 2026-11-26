@@ -1136,7 +1136,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+152"/>
+        <location filename="../qml/BluetoothPane.qml" line="+139"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -2234,7 +2234,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+131"/>
+        <location filename="../qml/ControllersPane.qml" line="+133"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -3769,7 +3769,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NetworkPane</name>
     <message>
-        <location filename="../qml/NetworkPane.qml" line="+66"/>
+        <location filename="../qml/NetworkPane.qml" line="+67"/>
         <source>Wrong password.</source>
         <translation>Yanlış parola.</translation>
     </message>
@@ -5860,7 +5860,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+89"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+91"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -6736,7 +6736,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+329"/>
+        <location filename="../qml/StoragePane.qml" line="+317"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -6761,13 +6761,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-280"/>
-        <location line="+281"/>
+        <location line="-268"/>
+        <location line="+269"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-232"/>
+        <location line="-220"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -6812,12 +6812,17 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+223"/>
         <source>Packages on this drive</source>
         <translation>Bu bellekteki paketler</translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="+142"/>
+        <source>Why</source>
+        <translation>Neden</translation>
+    </message>
+    <message>
+        <location line="-169"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
@@ -6837,7 +6842,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunurken yeniden tarama kullanılamaz.</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+50"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
@@ -6862,13 +6867,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-326"/>
-        <location line="+326"/>
+        <location line="-323"/>
+        <location line="+323"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-337"/>
+        <location line="-334"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -6883,7 +6888,7 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+327"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
@@ -7017,7 +7022,7 @@ Bu geri alınamaz.</translation>
         <translation>Rapor kaydedilemedi.</translation>
     </message>
     <message>
-        <location line="+162"/>
+        <location line="+153"/>
         <source>Save report to USB drive</source>
         <translation>Raporu USB sürücüye kaydet</translation>
     </message>
@@ -7469,7 +7474,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+178"/>
+        <location filename="../qml/SystemPane.qml" line="+168"/>
         <location line="+342"/>
         <source>Beta</source>
         <translation>Beta</translation>

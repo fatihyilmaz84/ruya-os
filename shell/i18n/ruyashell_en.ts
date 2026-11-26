@@ -1140,7 +1140,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+152"/>
+        <location filename="../qml/BluetoothPane.qml" line="+139"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -2238,7 +2238,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+131"/>
+        <location filename="../qml/ControllersPane.qml" line="+133"/>
         <source>No controllers connected.</source>
         <translation>No controllers connected.</translation>
     </message>
@@ -3776,7 +3776,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NetworkPane</name>
     <message>
-        <location filename="../qml/NetworkPane.qml" line="+66"/>
+        <location filename="../qml/NetworkPane.qml" line="+67"/>
         <source>Wrong password.</source>
         <translation>Wrong password.</translation>
     </message>
@@ -5880,7 +5880,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+89"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+91"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6756,7 +6756,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+329"/>
+        <location filename="../qml/StoragePane.qml" line="+317"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -6781,13 +6781,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-280"/>
-        <location line="+281"/>
+        <location line="-268"/>
+        <location line="+269"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-232"/>
+        <location line="-220"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -6832,12 +6832,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not read this drive</translation>
     </message>
     <message>
-        <location line="+235"/>
+        <location line="+223"/>
         <source>Packages on this drive</source>
         <translation>Packages on this drive</translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="+142"/>
+        <source>Why</source>
+        <translation>Why</translation>
+    </message>
+    <message>
+        <location line="-169"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
@@ -6857,7 +6862,7 @@ This can&apos;t be undone.</translation>
         <translation>Rescan is not available while this drive is being read.</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+50"/>
         <source>This console</source>
         <translation>This console</translation>
     </message>
@@ -6882,13 +6887,13 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-326"/>
-        <location line="+326"/>
+        <location line="-323"/>
+        <location line="+323"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-337"/>
+        <location line="-334"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -6903,7 +6908,7 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+327"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
@@ -7037,7 +7042,7 @@ This can&apos;t be undone.</translation>
         <translation>The report could not be saved.</translation>
     </message>
     <message>
-        <location line="+162"/>
+        <location line="+153"/>
         <source>Save report to USB drive</source>
         <translation>Save report to USB drive</translation>
     </message>
@@ -7490,7 +7495,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+178"/>
+        <location filename="../qml/SystemPane.qml" line="+168"/>
         <location line="+342"/>
         <source>Beta</source>
         <translation>Beta</translation>
