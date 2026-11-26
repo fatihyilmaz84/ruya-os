@@ -104,13 +104,14 @@ signals:
     void killFinished(const QString &instance, const QString &status);
     void freezeFinished(const QString &instance, const QString &status);
     void thawFinished(const QString &instance, const QString &status);
+    // The two signals of a record that changes in place: `frozen` after frozenChanged, `state` "stopping" after
+    // appStopping (Session1 AppStopping, RUY-1235: whoever asked for the stop). appStopping is sent just before
+    // the record changes, so a handler sees what held when the stop began.
     void frozenChanged(const QString &instance, bool frozen);
+    void appStopping(const QString &instance, const QString &appId);
     // status: "ok" | "invalid" | "not-found" | "failed"; `instance` is set on "ok" only.
     void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
     void appStarted(const QString &instance, const QString &appId);
-    // The instance entered "stopping" (Session1 AppStopping, RUY-1235), whoever asked for the stop. Sent just
-    // before the record's `state` becomes "stopping", so a handler sees what held when the stop began.
-    void appStopping(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 
