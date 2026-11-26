@@ -306,6 +306,15 @@ Item {
             verify(used.activeFocus, "focus stays after another live value")
         }
 
+        function test_the_focused_row_going_away_hands_the_focus_to_the_row_now_at_its_place() {
+            openSystemInfo()
+            verify(row("memory/available"), "the mock lists Available after In use")
+            goToRow("memory/used")
+            SystemDetails.mockRemove("memory.used_bytes")
+            tryVerify(() => row("memory/used") === null, 2000, "the row is gone")
+            tryVerify(() => row("memory/available").activeFocus, 2000, "Available, now at its place, not the first row")
+        }
+
         function test_the_page_asks_for_live_values_only_while_it_is_visible() {
             SystemDetails.liveIntervalMs = 40
             openSystemInfo()
