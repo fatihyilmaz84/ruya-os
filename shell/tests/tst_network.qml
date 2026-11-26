@@ -314,7 +314,7 @@ Item {
 
         // Forget has no confirmation (as before RUY-1177): the network is forgotten at once, its row stays (it is still in range)
         // and keeps the focus; it is now a new network, so it has no menu.
-        function test_forget_from_the_menu() {
+        function test_forget() {
             openNetworkPane()
             openMenuOf("wifi_wifi-lounge", 0)
             keyClick(Qt.Key_Down)
