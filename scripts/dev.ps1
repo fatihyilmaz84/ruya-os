@@ -703,6 +703,7 @@ function Test-VmLintVerdict {
         @{ Name = "a quick run"; Text = $quick; Code = 0; Good = $false },
         @{ Name = "a quick run beside a test-vm-checks.sh summary"; Text = $full + $quick; Code = 0; Good = $false },
         @{ Name = "a run that stops before the summary line"; Text = "    ok   a thing`n"; Code = 0; Good = $false },
+        @{ Name = "a full ok line without the test-vm-checks.sh summary"; Text = "    VM check lint: ok (29 shell scripts, VM check host tests, ISO check refusals)`n"; Code = 0; Good = $false },
         @{ Name = "a run without the full ok line"; Text = "    vm-check tests: all passed`n    VM check lint: ok`n"; Code = 0; Good = $false }
     )
     $problems = @()
