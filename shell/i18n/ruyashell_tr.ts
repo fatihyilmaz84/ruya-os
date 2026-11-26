@@ -3769,7 +3769,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NetworkPane</name>
     <message>
-        <location filename="../qml/NetworkPane.qml" line="+64"/>
+        <location filename="../qml/NetworkPane.qml" line="+66"/>
         <source>Wrong password.</source>
         <translation>Yanlış parola.</translation>
     </message>
@@ -3865,24 +3865,20 @@ Bu geri alınamaz.</translation>
         <translation>Wi-Fi ağları</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+19"/>
+        <location line="+30"/>
         <source>Connect</source>
         <translation>Bağlan</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Back</source>
-        <translation>Geri</translation>
+        <location line="+1"/>
+        <source>Forget…</source>
+        <translation>Unut…</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="-17"/>
         <source>Scan for networks</source>
         <translation>Ağları tara</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Forget %1</source>
-        <translation>%1 ağını unut</translation>
     </message>
 </context>
 <context>
@@ -5864,7 +5860,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+87"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+89"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>

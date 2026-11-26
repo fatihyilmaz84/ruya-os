@@ -48,6 +48,9 @@ Item {
         function cleanup() {
             clearToasts()
             DeviceSettings.theme = "dreamglass"
+            DeviceSettings.language = "en"
+            host.width = 1280
+            host.height = 720
         }
 
         function clearToasts() {
@@ -109,7 +112,7 @@ Item {
             compare(find("rowNetStatus").kind, "info")
             compare(find("rowScan").kind, "action")
             compare(find("wifi_wifi-lounge").kind, "item")
-            compare(find("forget_wifi-lounge").kind, "action")
+            compare(find("forget_wifi-lounge"), null, "no loose Forget row under a saved network (RUY-1177): it is in its menu")
             const label = find("wifiGroupLabel")
             verify(label.visible, "the label shows with Wi-Fi rows")
             compare(label.text, "Wi-Fi networks")
@@ -132,7 +135,8 @@ Item {
             compare(Sfx.selectCount, selects, "Accept on the fact makes no sound")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "Down skips the label")
-            compare(pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Connect|back Back")
+            compare(pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Connect|options Options|back Back",
+                    "a saved network: A connects, Start opens its menu")
             // Back leaves from the fact too.
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Escape)
@@ -221,15 +225,129 @@ Item {
             compare(Network.primary.kind, "wifi")
         }
 
-        function test_forget() {
+        function menu() { return find("optionsMenu") }
+        function menuRowIds() { return menu().rows.map(r => r.id) }
+
+        // Start on the focused network opens its menu, on the first row.
+        function openMenuOf(name, downs) {
+            goTo(name, downs)
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => menu().shown, 2000, "Start opens the menu of " + name)
+            tryVerify(() => menu().activeFocus, 2000, "the menu has the focus")
+        }
+
+        // 02 §1.7 (RUY-1177): a saved network's Forget is in its menu, after Connect and a divider; a new one has no menu.
+        function test_a_saved_network_has_a_menu_with_connect_and_forget() {
             openNetworkPane()
-            verify(find("forget_wifi-lounge").visible)
-            verify(!find("forget_wifi-home").visible, "only saved networks offer Forget")
-            goTo("forget_wifi-lounge", 5)
+            compare(find("wifi_wifi-lounge").hasOptions, true)
+            verify(find("wifi_wifi-lounge").acceptVerb !== "")
+            openMenuOf("wifi_wifi-lounge", 0)
+            compare(menuRowIds().join("|"), "connect|forget")
+            compare(menu().rows[0].label, "Connect")
+            compare(menu().rows[0].icon, "link")
+            compare(menu().rows[1].label, "Forget…")
+            compare(menu().rows[1].icon, "delete")
+            compare(menu().rows[1].divider, true, "Forget is set apart")
+            compare(menu().title, "Lounge 5G")
+            compare(menu().current, 0)
+            verify(find("wifi_wifi-lounge").anchored, "the row stays marked while its menu is open")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !menu().shown, 2000)
+            tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "Back returns to the row")
+            verify(!find("wifi_wifi-lounge").anchored)
+            compare(network("wifi-lounge").active, false, "nothing was connected")
+        }
+
+        // A held A opens the same menu, with the Hold ring on the way; its release does nothing.
+        function test_a_held_a_opens_the_menu() {
+            openNetworkPane()
+            keyPress(Qt.Key_Return)
+            tryVerify(() => menu().shown && menu().activeFocus, 3000, "the hold opens the menu")
+            keyRelease(Qt.Key_Return)
+            verify(menu().shown, "the release neither closes it nor chooses a row")
+            compare(network("wifi-lounge").active, false, "and does not connect")
+            compare(menuRowIds().join("|"), "connect|forget")
+        }
+
+        // A tap on a saved network still connects (A keeps its main action), with no menu.
+        function test_a_tap_connects_a_saved_network_without_a_menu() {
+            openNetworkPane()
             keyClick(Qt.Key_Return)
-            tryVerify(() => !network("wifi-lounge").known, 2000)
-            tryVerify(() => !find("forget_wifi-lounge").visible)
-            tryVerify(() => find("paneNetwork").activeFocus, 2000, "focus stays in the pane")
+            tryVerify(() => network("wifi-lounge").active, 2000)
+            compare(menu().shown, false)
+        }
+
+        function test_connect_in_the_menu_joins_the_network() {
+            openNetworkPane()
+            openMenuOf("wifi_wifi-lounge", 0)
+            keyClick(Qt.Key_Return)                      // Connect
+            tryVerify(() => !menu().shown, 2000)
+            tryVerify(() => network("wifi-lounge").active, 2000, "it joined")
+            compare(find("wifiPasswordEntry"), null, "no password asked for a saved network")
+            tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "focus is on the row")
+        }
+
+        // The network in use has no Connect (and the service has no Disconnect): Forget alone, with no divider before it.
+        function test_the_network_in_use_has_forget_only() {
+            openNetworkPane()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("wifi_wifi-lounge").current, 2000)
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => menu().shown && menu().activeFocus, 2000)
+            compare(menuRowIds().join("|"), "forget")
+            compare(menu().rows[0].divider, false)
+        }
+
+        // A network that is not saved has no menu: Start does nothing, A still joins it.
+        function test_an_unsaved_network_has_no_menu() {
+            openNetworkPane()
+            goTo("wifi_wifi-cafe", 2)
+            compare(find("wifi_wifi-cafe").hasOptions, false)
+            compare(findChild(find("wifi_wifi-cafe"), "rowHoldRing"), null, "no Hold ring either")
+            compare(find("paneNetwork").hints.map(h => h.text).join("|"), "Connect|Back")
+            keyClick(Qt.Key_Menu)
+            compare(menu().shown, false, "Start opens nothing")
+            verify(find("wifi_wifi-cafe").activeFocus, "and the focus stays")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => network("wifi-cafe").active, 2000, "A joins it as before")
+        }
+
+        // Forget has no confirmation (as before RUY-1177): the network is forgotten at once, its row stays (it is still in range)
+        // and keeps the focus; it is now a new network, so it has no menu.
+        function test_forget_from_the_menu() {
+            openNetworkPane()
+            openMenuOf("wifi_wifi-lounge", 0)
+            keyClick(Qt.Key_Down)
+            compare(menu().rows[menu().current].id, "forget")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !menu().shown, 2000)
+            tryVerify(() => !network("wifi-lounge").known, 2000, "forgotten")
+            tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "focus is on the row, which stays in the list")
+            tryVerify(() => !find("wifi_wifi-lounge").hasOptions, 2000, "a forgotten network has no menu")
+            verify(!find("wifi_wifi-lounge").value.includes("Saved"), "no longer saved")
+            keyClick(Qt.Key_Menu)
+            compare(menu().shown, false)
+        }
+
+        // The network is forgotten behind the open menu's back: the menu closes and the focus is on a row.
+        function test_the_menu_closes_when_its_network_is_forgotten() {
+            openNetworkPane()
+            openMenuOf("wifi_wifi-lounge", 0)
+            Network.forget("wifi-lounge")
+            tryVerify(() => !menu().shown, 2000, "the menu closed")
+            tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "focus returned to the row")
+        }
+
+        // The network leaves the scan list while its menu is open: the menu closes and the focus lands on a row, not nowhere.
+        function test_the_menu_closes_when_its_network_leaves_the_list() {
+            openNetworkPane()
+            openMenuOf("wifi_wifi-lounge", 0)
+            Network.mockClearNetworks()
+            tryVerify(() => !menu().shown, 2000, "the menu closed")
+            tryVerify(() => find("wifi_wifi-lounge") === null, 3000, "its row is gone")
+            // The rows left are the status fact and the scan row: the pane puts the focus on one of them.
+            tryVerify(() => find("rowNetStatus").activeFocus || find("rowScan").activeFocus, 2000, "focus moved to a row that is left")
+            verify(find("paneNetwork").activeFocus)
         }
 
         function test_scan_row() {
@@ -286,5 +404,46 @@ Item {
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/23-settings-network-daylight.png")
         }
+
+        // RUY-1177: a saved network's menu open, and (the first Hold ring on a pane's row) the row with the ring mid-hold, en and tr.
+        function shotSetup(lang) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1920
+            host.height = 1080
+            DeviceSettings.language = lang
+            openNetworkPane()
+            clearToasts()
+        }
+
+        function menuShot(lang) {
+            shotSetup(lang)
+            openMenuOf("wifi_wifi-lounge", 0)
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/network-options-" + lang + ".png")
+        }
+
+        // Hold A: after holdRingDelayMs the ring shows and fills until longPressMs, when the menu opens. The shot is taken
+        // as soon as the ring shows (the window is laid out first), and fails if the menu has opened by then.
+        function ringShot(lang) {
+            shotSetup(lang)
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            const row = find("wifi_wifi-lounge")
+            keyPress(Qt.Key_Return)
+            tryVerify(() => findChild(row, "rowHoldRing").shown, 2000, "the ring shows while A is held")
+            const image = grabImage(tc.shell)
+            const menuOpen = menu().shown
+            keyRelease(Qt.Key_Return)
+            verify(!menuOpen, "the menu had not opened when the ring was grabbed: run it again")
+            image.save(shotsDir + "/network-hold-ring-" + lang + ".png")
+        }
+
+        function test_zz_menu_shot_en() { menuShot("en") }
+        function test_zz_menu_shot_tr() { menuShot("tr") }
+        function test_zz_ring_shot_en() { ringShot("en") }
+        function test_zz_ring_shot_tr() { ringShot("tr") }
     }
 }

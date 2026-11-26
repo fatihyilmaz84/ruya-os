@@ -41,6 +41,14 @@ Item {
             acceptOpensOptions: true
         }
         SettingRow {
+            id: verbed
+            objectName: "verbed"
+            kind: "item"
+            label: "Named verb"
+            hasOptions: true
+            acceptVerb: "Connect"
+        }
+        SettingRow {
             id: fact
             objectName: "fact"
             kind: "info"
@@ -93,6 +101,12 @@ Item {
             compare(host.menuKeys, 1, "Start reached the page above")
             compare(ring(plain), null, "no Hold ring is built for it")
             compare(hintTexts(plain), "accept Select|back Back")
+        }
+
+        // RUY-1177: an item row can name its own verb on A (a network's "Connect"); the Options hint still follows it.
+        function test_an_item_row_can_name_its_verb() {
+            compare(hintTexts(verbed), "accept Connect|options Options|back Back")
+            compare(hintTexts(withMenu), "accept Select|options Options|back Back", "the default is untouched")
         }
 
         // hasOptions: a tap acts on release.
