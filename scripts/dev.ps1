@@ -566,12 +566,16 @@ function Test-RevertCheckCommandModes {
     $helperBash = Find-Bash
     $target = Join-Path $scripts "target.txt"
     $utf8 = New-Object Text.UTF8Encoding($false)
-    # RUY-1217: the vmlint row passes -Quick; a fixture lint run without it reports a finding, so the row that forgets it
-    # turns every case wrong (the value=good case then reads CAUGHT).
+    # RUY-1217: the vmlint row passes the quick switch; a fixture lint run without it reports a finding, so the row that
+    # forgets it turns every case wrong (the value=good case then reads CAUGHT). Like the real one it prints SKIPPED
+    # when quick, and it reads vm-queue-lib.ps1, the file the vmlint row may mutate (any other file is refused).
+    $libTarget = Join-Path $scripts "vm-queue-lib.ps1"
+    [IO.File]::WriteAllText($libTarget, "value=good`n")
     [IO.File]::WriteAllText((Join-Path $scripts "lint-vm-checks.ps1"), @'
 param([switch]$Quick)
-if (-not $Quick) { Write-Host "    fixture lint ran without -Quick"; Write-Host "    VM check lint: 1 finding(s)"; exit 1 }
-$t =[IO.File]::ReadAllText((Join-Path $PSScriptRoot "target.txt"))
+if (-not $Quick) { Write-Host "    fixture lint ran without the quick switch"; Write-Host "    VM check lint: 1 finding(s)"; exit 1 }
+Write-Host "    SKIPPED (-Quick): test-vm-checks.sh"
+$t = [IO.File]::ReadAllText((Join-Path $PSScriptRoot "vm-queue-lib.ps1"))
 Write-Host "    ok   an assertion that FAILs when the thing is broken"
 if ($t -match 'value=bad') { Write-Host "    fixture finding 1"; Write-Host "    fixture finding 2"; Write-Host "    VM check lint: 2 finding(s)"; exit 1 }
 if ($t -match 'value=many') { 1..12 | ForEach-Object { Write-Host "    fixture finding $_" }; Write-Host "    VM check lint: 12 finding(s)"; exit 1 }
@@ -590,14 +594,15 @@ exit 0
     $cases = @(
         @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=bad"; Caught = $true; Want = @('^\s+FAIL fixture assertion\s*$'); Lack = @() },
         @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture assertion') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=bad"; Caught = $true; Want = @('^\s+fixture finding 1\s*$', '^\s+fixture finding 2\s*$'); Lack = @('more finding lines') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=many"; Caught = $true; Want = @('^\s+fixture finding 10\s*$', '\(and 2 more finding lines\)'); Lack = @('fixture finding 11') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture finding') }
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1\s-Quick'; New = "value=bad"; Caught = $true; Want = @('^\s+fixture finding 1\s*$', '^\s+fixture finding 2\s*$', '^\s+SKIPPED \(-Quick\): test-vm-checks\.sh\s*$'); Lack = @('more finding lines') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1\s-Quick'; New = "value=many"; Caught = $true; Want = @('^\s+fixture finding 10\s*$', '\(and 2 more finding lines\)'); Lack = @('fixture finding 11') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1\s-Quick'; New = "value=good"; Caught = $false; Want = @('\(no finding lines', '^\s+SKIPPED \(-Quick\): test-vm-checks\.sh\s*$', 'NOT CAUGHT: .*test-vm-checks\.sh was SKIPPED'); Lack = @('fixture finding') }
     )
     foreach ($case in $cases) {
-        [IO.File]::WriteAllText($target, "value=good`n")
+        $caseFile = if ($case.Mode -eq "vmlint") { $libTarget } else { $target }
+        [IO.File]::WriteAllText($caseFile, "value=good`n")
         $env:PATH = "$shim;$oldPath"
-        try { $text = (& $script -File $target -Old "value=good" -New $case.New -Mode $case.Mode *>&1 | Out-String -Width 4096) }
+        try { $text = (& $script -File $caseFile -Old "value=good" -New $case.New -Mode $case.Mode *>&1 | Out-String -Width 4096) }
         finally { $env:PATH = $oldPath }
         $code = $LASTEXITCODE
         $wantCode = if ($case.Caught) { 0 } else { 1 }
@@ -605,16 +610,39 @@ exit 0
         $problems = @()
         if ($code -ne $wantCode) { $problems += "exit $code, want $wantCode" }
         if ($text -notmatch $verdict) { $problems += "no $verdict line" }
-        if ($text -notmatch "(?m)^== mutated .*target\.txt; $($case.Label) ==") { $problems += "the header does not name the row's command" }
+        if ($text -notmatch "(?m)^== mutated .*$([regex]::Escape((Split-Path -Leaf $caseFile))); $($case.Label) ==") { $problems += "the header does not name the row's command" }
         if ($text -match 'child aborted') { $problems += "the row's command did not run (child aborted)" }
         foreach ($w in $case.Want) { if ($text -notmatch "(?m)$w") { $problems += "missing /$w/" } }
         $wantRuns = '(?m)^\s+runs with ' + [regex]::Escape([string]$helperBash) + '\s*$'
         if ($case.Mode -eq "vmchecks" -and (-not $helperBash -or $text -notmatch $wantRuns)) { $problems += "the vmchecks row does not run the helper's bash ($helperBash)" }
         if ($case.Mode -ne "vmchecks" -and $text -match '(?m)^\s+runs with ') { $problems += "only a row that runs bash prints a 'runs with' line" }
         foreach ($l in @($case.Lack) + 'an assertion that FAILs' + 'WRONG BASH') { if ($l -and $text -match $l) { $problems += "must not print /$l/" } }
-        if ([IO.File]::ReadAllText($target) -ne "value=good`n") { $problems += "the file was not restored" }
+        if ([IO.File]::ReadAllText($caseFile) -ne "value=good`n") { $problems += "the file was not restored" }
         if ($problems) { $ok = $false; Write-Host "    mode=$($case.Mode) $($case.New): $($problems -join '; '), output:`n$text" -ForegroundColor Yellow }
     }
+    # RUY-1217: the quick lint does not run test-vm-checks.sh, so vmlint refuses (exit 2, nothing mutated, no child run)
+    # a file that only that script, or a vm-*.sh helper, would see: the user wants -Mode vmchecks. The lint's own
+    # inputs (the lint, its libraries, the queue, vm-*.ps1) and every file in -Mode vmchecks are not refused.
+    $refuse = Join-Path $scripts "test-vm-checks.sh"
+    $refuseBefore = [IO.File]::ReadAllText($refuse)
+    foreach ($rf in @("test-vm-checks.sh", "vm-sample-check.sh", "play-vm-files.sh", "target.txt")) {
+        $rp = Join-Path $scripts $rf
+        if (-not (Test-Path -LiteralPath $rp)) { [IO.File]::WriteAllText($rp, "value=bad`n") }
+        $rBefore = [IO.File]::ReadAllText($rp)
+        $text = (& $script -File $rp -Old "value=bad" -New "value=worse" -Mode vmlint *>&1 | Out-String -Width 4096)
+        $code = $LASTEXITCODE
+        $problems = @()
+        if ($code -ne 2) { $problems += "exit $code, want 2" }
+        if ($text -notmatch 'use -Mode vmchecks: .* does not run test-vm-checks\.sh') { $problems += "no 'use -Mode vmchecks' message" }
+        if ($text -match '(?m)^== mutated|CAUGHT') { $problems += "the child ran or a verdict was printed" }
+        if ([IO.File]::ReadAllText($rp) -ne $rBefore) { $problems += "the file was changed" }
+        if ($problems) { $ok = $false; Write-Host "    vmlint refusal of ${rf}: $($problems -join '; '), output:`n$text" -ForegroundColor Yellow }
+    }
+    if ([IO.File]::ReadAllText($refuse) -ne $refuseBefore) { $ok = $false; Write-Host "    vmlint refusal changed test-vm-checks.sh" -ForegroundColor Yellow }
+    # the same files are fine for -Mode vmchecks (it runs test-vm-checks.sh): not refused, a verdict is printed
+    $text = (& $script -File $target -Old "value=good" -New "value=bad" -Mode vmchecks *>&1 | Out-String -Width 4096)
+    if ($text -match 'use -Mode vmchecks' -or $text -notmatch '(?m)^CAUGHT') { $ok = $false; Write-Host "    vmchecks must not be refused: $text" -ForegroundColor Yellow }
+    [IO.File]::WriteAllText($target, "value=good`n")
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
     Record "revert-check command modes self-check (each repoCommands row runs its own child; a CAUGHT names the child's finding lines, capped at 10; a NOT CAUGHT says it found none, RUY-1221)" $ok
 }
@@ -653,55 +681,44 @@ function Test-FindBash {
     Record "Find-Bash self-check (never the WSL launcher in System32, whatever the PATH order, RUY-1231)" (-not $problems)
 }
 
-# RUY-1217: the lint's -Quick switch skips the test-vm-checks.sh run, so it is for the loop that edits the lint
-# (revert-check.ps1 -Mode vmlint), never for a gate: dev.ps1 (test, docs), CI and every other script run the full
-# lint. The files that call it are the ones under scripts\ and .github\ (the lint and revert-check.ps1 may name it);
-# a call is the lint's file name followed directly by -Quick, quotes and parentheses aside.
-function Get-QuickCallers([string]$Root) {
-    $own = @("lint-vm-checks.ps1", "revert-check.ps1")
-    $files = @()
-    foreach ($d in @("scripts", ".github")) {
-        $dir = Join-Path $Root $d
-        if (Test-Path -LiteralPath $dir) { $files += @(Get-ChildItem -LiteralPath $dir -Recurse -File -Include *.ps1, *.sh, *.cmd, *.bat, *.yml, *.yaml) }
-    }
-    $pattern = 'lint-vm-checks\.ps1["''`)\s]*-Quick\b'
-    foreach ($f in $files) {
-        if ($f.Directory.Name -eq "scripts" -and $f.Name -in $own) { continue }
-        $n = 0
-        foreach ($l in [IO.File]::ReadAllLines($f.FullName)) {
-            $n++
-            if ($l -match $pattern) { "$($f.FullName.Substring($Root.TrimEnd('\').Length).TrimStart('\')):$n" }
-        }
-    }
+# RUY-1217: the gate proves its own run. The lint's quick mode (it skips test-vm-checks.sh, the minutes) is for the
+# revert-check loop; whatever a call to the lint looks like (a parameter prefix, a splat, a variable), `test` accepts
+# only the output of a COMPLETE run: test-vm-checks.sh ran to its summary line, nothing was skipped and the full
+# summary line ends it. Returns what is wrong, nothing for a good run.
+function Get-VmLintProblem([string]$Text, [int]$Code) {
+    $problems = @()
+    if ($Code -ne 0) { $problems += "exit code $Code" }
+    if ($Text -match 'SKIPPED \(-Quick\)') { $problems += "the lint ran in its quick mode (SKIPPED), which skips test-vm-checks.sh: a gate runs the full lint" }
+    if ($Text -notmatch '(?m)^\s*vm-check tests: (all passed|\d+ failed)\s*$') { $problems += "test-vm-checks.sh did not run to its summary line" }
+    if ($Code -eq 0 -and $Text -notmatch '(?m)^\s*VM check lint: ok \(\d+ shell scripts, VM check host tests, ISO check refusals\)\s*$') { $problems += "the full 'VM check lint: ok (... VM check host tests ...)' line is missing" }
+    return $problems
 }
 
-function Test-QuickCallers {
+function Test-VmLintVerdict {
+    $full = "    ok   a thing`n    vm-check tests: all passed`n    VM check lint: ok (29 shell scripts, VM check host tests, ISO check refusals)`n"
+    $quick = "    SKIPPED (-Quick): test-vm-checks.sh`n    VM check lint: ok, QUICK (29 shell scripts, ISO check refusals; test-vm-checks.sh SKIPPED)`n"
+    $cases = @(
+        @{ Name = "a complete run"; Text = $full; Code = 0; Good = $true },
+        @{ Name = "a complete run that found problems (its own exit code speaks)"; Text = "    vm-check tests: 2 failed`n    scripts/test-vm-checks.sh failed (see above)`n    VM check lint: 1 finding(s)`n"; Code = 1; Good = $false },
+        @{ Name = "a quick run"; Text = $quick; Code = 0; Good = $false },
+        @{ Name = "a quick run beside a test-vm-checks.sh summary"; Text = $full + $quick; Code = 0; Good = $false },
+        @{ Name = "a run that stops before the summary line"; Text = "    ok   a thing`n"; Code = 0; Good = $false },
+        @{ Name = "a run without the full ok line"; Text = "    vm-check tests: all passed`n    VM check lint: ok`n"; Code = 0; Good = $false }
+    )
     $problems = @()
-    $callers = @(Get-QuickCallers (Split-Path -Parent $PSScriptRoot))
-    if ($callers) { $problems += "passes -Quick to lint-vm-checks.ps1 (only revert-check.ps1 may; the gates run the full lint): $($callers -join ', ')" }
-    # The check itself: a fixture tree where dev.ps1 and ci.yml pass it is found, revert-check.ps1 is not, and a
-    # script that only runs the full lint is not.
-    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-quick-callers-" + [guid]::NewGuid().ToString("N"))
-    try {
-        New-Item -ItemType Directory -Force -Path (Join-Path $fx "scripts"), (Join-Path $fx ".github\workflows") | Out-Null
-        $lint = "lint-vm-checks.ps1"
-        [IO.File]::WriteAllText((Join-Path $fx "scripts\dev.ps1"), "function Test-VmChecks {`n    & (Join-Path `$PSScriptRoot `"$lint`") -Quick`n}`n")
-        [IO.File]::WriteAllText((Join-Path $fx ".github\workflows\ci.yml"), "      - run: pwsh -NoProfile -File scripts/$lint -Quick`n")
-        [IO.File]::WriteAllText((Join-Path $fx "scripts\revert-check.ps1"), "Run = { & (Join-Path `$PSScriptRoot `"$lint`") -Quick }`n")
-        [IO.File]::WriteAllText((Join-Path $fx "scripts\other.ps1"), "& (Join-Path `$PSScriptRoot `"$lint`")`n# -Quick is for the revert loop`n")
-        $found = @(Get-QuickCallers $fx | Sort-Object)
-        $want = @(".github\workflows\ci.yml:1", "scripts\dev.ps1:2")
-        if (($found -join "|") -ne ($want -join "|")) { $problems += "the fixture tree: found '$($found -join ' ')', want '$($want -join ' ')'" }
-    } finally { Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue }
-    # The switch itself (about 5 s): the quick run ends fine, says it skipped the host fixtures and did not run them.
-    $lintFile = Join-Path $PSScriptRoot "lint-vm-checks.ps1"
-    $quickOut = (& (Get-Process -Id $PID).Path -NoProfile -File $lintFile -Quick *>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { $problems += "the lint with the quick switch exited $LASTEXITCODE" }
-    if ($quickOut -notmatch '(?m)^\s*SKIPPED \(-Quick\): test-vm-checks\.sh\s*$') { $problems += "the quick run did not print the SKIPPED line for test-vm-checks.sh" }
-    if ($quickOut -match 'vm-check tests:') { $problems += "the quick run ran test-vm-checks.sh" }
+    foreach ($c in $cases) {
+        $got = @(Get-VmLintProblem $c.Text $c.Code)
+        if ($c.Good -and $got) { $problems += "$($c.Name) was refused: $($got -join '; ')" }
+        if (-not $c.Good -and -not $got) { $problems += "$($c.Name) was accepted" }
+    }
     if ($problems) { Write-Host "    $($problems -join "`n    ")" -ForegroundColor Yellow }
-    Record "lint-vm-checks -Quick self-check (only revert-check.ps1 passes it, dev.ps1 test/docs and CI run the full lint; a quick run prints SKIPPED and skips test-vm-checks.sh, RUY-1217)" (-not $problems)
+    Record "VM check lint verdict self-check (test accepts only a complete run: a quick run, a run without the test-vm-checks.sh summary or without the full ok line fails, RUY-1217)" (-not $problems)
+    & (Join-Path $PSScriptRoot "lint-quick-callers.ps1")
+    Record "quick-switch lint (only revert-check.ps1 may pass the lint's quick switch; scripts, .github and .githooks, RUY-1217)" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-quick-callers.ps1") -SelfTest
+    Record "quick-switch lint self-test (a prefix, a variable, a splat and an array argument, in a script, the workflow and the hook, are found; the exempt files and a full call are not)" ($LASTEXITCODE -eq 0)
 }
+
 
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
 function Run-QmlTests([string]$ShotsDir, [string]$InputFile, [string[]]$ShotFiles = @()) {
@@ -1145,8 +1162,13 @@ function Test-AppTable {
 # The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
 function Test-VmChecks {
     Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
-    & (Join-Path $PSScriptRoot "lint-vm-checks.ps1")
-    Record "VM check lint" ($LASTEXITCODE -eq 0)
+    # RUY-1217: the output is read, not only the exit code: only a complete run of the lint counts (Get-VmLintProblem).
+    $lines = @(& (Join-Path $PSScriptRoot "lint-vm-checks.ps1") *>&1 | Out-String -Stream)
+    $code = $LASTEXITCODE
+    $lines | ForEach-Object { Write-Host $_ }
+    $problems = @(Get-VmLintProblem ($lines -join "`n") $code)
+    if ($problems) { Write-Host "    VM check lint is not a complete run: $($problems -join '; ')" -ForegroundColor Yellow }
+    Record "VM check lint" (-not $problems)
 }
 
 # The rules live in scripts\lint-dev-docs.ps1 (shared with CI): the developer guide (T-214).
@@ -1572,8 +1594,8 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckCommandModes
     Step "Find-Bash self-check (RUY-1231)"
     Test-FindBash
-    Step "lint-vm-checks -Quick callers self-check (RUY-1217)"
-    Test-QuickCallers
+    Step "VM check lint verdict and quick-switch lint (RUY-1217)"
+    Test-VmLintVerdict
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-QmlNameParsing

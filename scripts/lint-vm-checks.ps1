@@ -15,8 +15,9 @@
 #   .\scripts\lint-vm-checks.ps1
 #   .\scripts\lint-vm-checks.ps1 -Quick     # skips only section 2 (test-vm-checks.sh, the minutes); prints a SKIPPED line
 # -Quick (RUY-1217) is for the loop that edits this lint or vm-queue-lib.ps1 (revert-check.ps1 -Mode vmlint passes it).
-# It is never a gate: dev.ps1 (test, docs) and CI run the full lint, and a self-check in dev.ps1 fails if any
-# script but revert-check.ps1 mentions it.
+# It is never a gate: dev.ps1 (test) and CI run the full lint. dev.ps1's Test-VmChecks fails unless the output is that
+# of a complete run (no SKIPPED line, the test-vm-checks.sh summary, the full ok line), and lint-quick-callers.ps1
+# fails if any script, workflow or hook but revert-check.ps1 passes the switch.
 param([switch]$Quick)
 $Repo = Split-Path -Parent $PSScriptRoot
 $Scripts = Join-Path $Repo "scripts"
