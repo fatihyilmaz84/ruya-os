@@ -271,6 +271,16 @@ Item {
             tryVerify(() => padRow(xbox).activeFocus, 2000, "the row now at its place")
         }
 
+        function test_a_focused_last_pad_that_goes_hands_the_focus_to_the_pad_before_not_the_first() {
+            openPane()
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(padRow(xbox).activeFocus, "the last pad row")
+            Input.mockRemoveDevice(xbox)
+            tryVerify(() => padRow(xbox) === null, 2000)
+            tryVerify(() => padRow(pro).activeFocus, 2000, "the row before it, not the first row")
+        }
+
         function test_no_pad_says_so_and_offers_pairing() {
             openPane()
             for (const id of [ds, xbox, pro])
