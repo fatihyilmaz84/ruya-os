@@ -1472,6 +1472,21 @@ Item {
             wait(600)
             grabImage(tc.shell).save(dir + "bt-options-" + state + "-" + lang + (h === 720 ? "-720p" : "") + ".png")
         }
+        // The row that needs attention, menu closed: "Not fully paired" in warningText (the menu covers the value).
+        function test_zz_not_fully_paired_row_shot() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1920
+            host.height = 1080
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            openBluetoothPane()
+            tryCompare(find("btDev_bt-pad-old"), "value", "Not fully paired")
+            goTo("btDev_bt-pad-old")
+            wait(600)
+            grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/bt-not-fully-paired-row.png")
+        }
         function test_zz_menu_shot_default_en() { menuShot(shotsDir + "/", "bonded", "en", 1920, 1080) }
         function test_zz_menu_shot_default_tr_720p() { menuShot(shotsDir + "/", "bonded", "tr", 1280, 720) }
         function test_zz_menu_shot_default_en_720p() { menuShot(shotsDir + "/", "bonded", "en", 1280, 720) }
