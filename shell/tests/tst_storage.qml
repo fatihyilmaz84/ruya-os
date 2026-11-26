@@ -150,6 +150,8 @@ Item {
             chooseOption("eject")
             tryVerify(() => Storage.mockEjectCalls() === 1, 2000, "one eject sent")
             tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000, "the menu gave the focus back to the drive's row")
+            compare(find("storageVol_vol-stick").kind, "info", "a drive being ejected is a fact until it leaves (RUY-1240)")
+            compare(shownHints(), "back Back", "A does nothing while it is ejected, so no A hint (RUY-1240)")
             keyClick(Qt.Key_Return)                      // a second Accept, a key repeat: the drive being ejected has no menu
             wait(100)                                    // a menu would have opened by now
             verify(!menu().shown, "no menu for a drive that is being ejected")
@@ -1141,6 +1143,23 @@ Item {
             goTo("storageVol_vol-internal")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-internal.png")
+        }
+
+        // RUY-1240: the stick while it is being ejected: a fact row, the hint bar offers Back only.
+        function test_zz_screenshots_ejecting() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            openDriveMenu("vol-stick")
+            Storage.mockHoldEject(true)
+            chooseOption("eject")
+            tryVerify(() => Storage.mockEjectCalls() === 1, 2000)
+            tryVerify(() => find("storageVol_vol-stick").activeFocus, 2000)
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-ejecting.png")
+            Storage.mockHoldEject(false)
         }
 
         // RUY-1225: the unsupported drive focused: its hint says "A Why" (the reason toast is not shown, it is not asked for).
