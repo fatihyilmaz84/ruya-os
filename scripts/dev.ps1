@@ -473,6 +473,7 @@ function Test-RevertCheckPiping {
     New-Item -ItemType Directory -Path (Join-Path $rustRepo "scripts"), (Join-Path $rustRepo "services\fixturecrate") -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $rustRepo ".git") -Value "gitdir: elsewhere"
     Copy-Item -LiteralPath $script -Destination (Join-Path $rustRepo "scripts\revert-check.ps1")
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "lib-bash.ps1") -Destination (Join-Path $rustRepo "scripts\lib-bash.ps1")
     $rustTarget = Join-Path $rustRepo "services\fixturecrate\lib.rs"
     [IO.File]::WriteAllText($rustTarget, "value=good`n")
     $rustThrow = { if ((Get-Content -Raw -LiteralPath $rustTarget) -match 'value=bad') { throw "fixture cargo died" } else { "test result: ok. 1 passed; 0 failed" } }.GetNewClosure()
@@ -559,6 +560,10 @@ function Test-RevertCheckCommandModes {
     New-Item -ItemType Directory -Path $scripts | Out-Null
     Set-Content -LiteralPath (Join-Path $fx ".git") -Value "gitdir: elsewhere"
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "revert-check.ps1") -Destination (Join-Path $scripts "revert-check.ps1")
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "lib-bash.ps1") -Destination (Join-Path $scripts "lib-bash.ps1")
+    # RUY-1231: the vmchecks row runs the helper's bash, and says which one on a "runs with" line.
+    . (Join-Path $PSScriptRoot "lib-bash.ps1")
+    $helperBash = Find-Bash
     $target = Join-Path $scripts "target.txt"
     $utf8 = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText((Join-Path $scripts "lint-vm-checks.ps1"), @'
@@ -571,6 +576,12 @@ exit 0
 '@, $utf8)
     [IO.File]::WriteAllText((Join-Path $scripts "test-vm-checks.sh"), "#!/bin/bash`necho `"    ok   a check that FAILs when the thing is broken`"`nif grep -q 'value=bad' scripts/target.txt; then echo `"    FAIL fixture assertion`"; echo `"vm-check tests: 1 failed`"; exit 1; fi`necho `"vm-check tests: all passed`"`n", $utf8)
     $script = Join-Path $scripts "revert-check.ps1"
+    # A `bash` first on PATH that only complains: a row that ran `bash` from PATH (the WSL launcher's place) and not
+    # the helper's path prints this and fails (RUY-1231).
+    $shim = Join-Path $fx "shim"
+    New-Item -ItemType Directory -Path $shim | Out-Null
+    [IO.File]::WriteAllText((Join-Path $shim "bash.cmd"), "@echo WRONG BASH: ran bash from PATH`r`n@exit /b 1`r`n")
+    $oldPath = $env:PATH
     $ok = $true
     $cases = @(
         @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=bad"; Caught = $true; Want = @('^\s+FAIL fixture assertion\s*$'); Lack = @() },
@@ -581,7 +592,9 @@ exit 0
     )
     foreach ($case in $cases) {
         [IO.File]::WriteAllText($target, "value=good`n")
-        $text = (& $script -File $target -Old "value=good" -New $case.New -Mode $case.Mode *>&1 | Out-String -Width 4096)
+        $env:PATH = "$shim;$oldPath"
+        try { $text = (& $script -File $target -Old "value=good" -New $case.New -Mode $case.Mode *>&1 | Out-String -Width 4096) }
+        finally { $env:PATH = $oldPath }
         $code = $LASTEXITCODE
         $wantCode = if ($case.Caught) { 0 } else { 1 }
         $verdict = if ($case.Caught) { '(?m)^CAUGHT' } else { '(?m)^NOT CAUGHT' }
@@ -591,12 +604,49 @@ exit 0
         if ($text -notmatch "(?m)^== mutated .*target\.txt; $($case.Label) ==") { $problems += "the header does not name the row's command" }
         if ($text -match 'child aborted') { $problems += "the row's command did not run (child aborted)" }
         foreach ($w in $case.Want) { if ($text -notmatch "(?m)$w") { $problems += "missing /$w/" } }
-        foreach ($l in @($case.Lack) + 'an assertion that FAILs') { if ($l -and $text -match $l) { $problems += "must not print /$l/" } }
+        $wantRuns = '(?m)^\s+runs with ' + [regex]::Escape([string]$helperBash) + '\s*$'
+        if ($case.Mode -eq "vmchecks" -and (-not $helperBash -or $text -notmatch $wantRuns)) { $problems += "the vmchecks row does not run the helper's bash ($helperBash)" }
+        if ($case.Mode -ne "vmchecks" -and $text -match '(?m)^\s+runs with ') { $problems += "only a row that runs bash prints a 'runs with' line" }
+        foreach ($l in @($case.Lack) + 'an assertion that FAILs' + 'WRONG BASH') { if ($l -and $text -match $l) { $problems += "must not print /$l/" } }
         if ([IO.File]::ReadAllText($target) -ne "value=good`n") { $problems += "the file was not restored" }
         if ($problems) { $ok = $false; Write-Host "    mode=$($case.Mode) $($case.New): $($problems -join '; '), output:`n$text" -ForegroundColor Yellow }
     }
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
     Record "revert-check command modes self-check (each repoCommands row runs its own child; a CAUGHT names the child's finding lines, capped at 10; a NOT CAUGHT says it found none, RUY-1221)" $ok
+}
+
+# RUY-1231: the one Find-Bash (lib-bash.ps1) never returns the WSL launcher in System32 (a host script that ran in
+# WSL would break "builders run nothing in WSL"). Fake PATHs and a fake %ProgramFiles% (no Git in it): a PATH that
+# lists only System32\bash.exe finds nothing; one that lists it first and another bash second finds the second; and
+# with the real %ProgramFiles% a System32 bash first on PATH is still not what comes back.
+function Test-FindBash {
+    . (Join-Path $PSScriptRoot "lib-bash.ps1")
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-findbash-" + [guid]::NewGuid().ToString("N"))
+    $sys32 = Join-Path $fx "Windows\System32"
+    $good = Join-Path $fx "tools\bin"
+    $noGit = Join-Path $fx "ProgramFiles"
+    New-Item -ItemType Directory -Force -Path $sys32, $good, $noGit | Out-Null
+    foreach ($d in $sys32, $good) { [IO.File]::WriteAllBytes((Join-Path $d "bash.exe"), [byte[]]@()) }
+    $oldPath = $env:PATH; $oldPf = $env:ProgramFiles
+    $problems = @()
+    try {
+        $env:ProgramFiles = $noGit
+        $env:PATH = $sys32
+        $a = Find-Bash
+        if ($a) { $problems += "only System32\bash.exe on PATH: got '$a', want nothing" }
+        $env:PATH = "$sys32;$good"
+        $b = Find-Bash
+        if ($b -ne (Join-Path $good "bash.exe")) { $problems += "System32 first, another bash second: got '$b', want $(Join-Path $good 'bash.exe')" }
+        $env:ProgramFiles = $oldPf
+        $env:PATH = "$sys32;$oldPath"
+        $c = Find-Bash
+        if ($c -match 'System32') { $problems += "the real %ProgramFiles% with System32 first on PATH: got '$c'" }
+    } finally {
+        $env:PATH = $oldPath; $env:ProgramFiles = $oldPf
+        Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+    }
+    if ($problems) { Write-Host "    $($problems -join "`n    ")" -ForegroundColor Yellow }
+    Record "Find-Bash self-check (never the WSL launcher in System32, whatever the PATH order, RUY-1231)" (-not $problems)
 }
 
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
@@ -1466,6 +1516,8 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckRestore
     Step "Revert check command modes self-check (RUY-1221)"
     Test-RevertCheckCommandModes
+    Step "Find-Bash self-check (RUY-1231)"
+    Test-FindBash
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-QmlNameParsing

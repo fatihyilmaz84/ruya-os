@@ -17,17 +17,7 @@ $Repo = Split-Path -Parent $PSScriptRoot
 $Scripts = Join-Path $Repo "scripts"
 $problems = New-Object System.Collections.Generic.List[string]
 . (Join-Path $Scripts "vm-queue-lib.ps1")
-
-function Find-Bash {
-    foreach ($p in "$env:ProgramFiles\Git\bin\bash.exe", "$env:ProgramFiles\Git\usr\bin\bash.exe") {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
-    # Not the WSL launcher in System32: it would run the script in another distribution.
-    $c = Get-Command bash -ErrorAction SilentlyContinue |
-        Where-Object { $_.Source -notmatch 'System32|WindowsApps' } | Select-Object -First 1
-    if ($c) { return $c.Source }
-    return $null
-}
+. (Join-Path $Scripts "lib-bash.ps1")
 
 # A native tool's complaint on stderr must not end the script (Windows PowerShell 5.1 turns it into an
 # error record).
