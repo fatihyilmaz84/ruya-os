@@ -1450,7 +1450,7 @@ Item {
 
         // RUY-1176: the pane with a paired device's menu open, as the player has it ("default": a connected pad that
         // has a page; "not bonded": Pair again first, its note and the value in warningText), in both languages at both sizes.
-        function menuShot(state, lang, w, h) {
+        function menuShot(dir, state, lang, w, h) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             host.width = w
@@ -1470,16 +1470,16 @@ Item {
             wait(600)
             grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
             wait(600)
-            grabImage(tc.shell).save(shotsDir + "/bt-options-" + state + "-" + lang + (h === 720 ? "-720p" : "") + ".png")
+            grabImage(tc.shell).save(dir + "bt-options-" + state + "-" + lang + (h === 720 ? "-720p" : "") + ".png")
         }
-        function test_zz_menu_shot_default_en() { menuShot("bonded", "en", 1920, 1080) }
-        function test_zz_menu_shot_default_tr_720p() { menuShot("bonded", "tr", 1280, 720) }
-        function test_zz_menu_shot_default_en_720p() { menuShot("bonded", "en", 1280, 720) }
-        function test_zz_menu_shot_default_tr() { menuShot("bonded", "tr", 1920, 1080) }
-        function test_zz_menu_shot_not_bonded_en() { menuShot("not-bonded", "en", 1920, 1080) }
-        function test_zz_menu_shot_not_bonded_tr_720p() { menuShot("not-bonded", "tr", 1280, 720) }
-        function test_zz_menu_shot_not_bonded_en_720p() { menuShot("not-bonded", "en", 1280, 720) }
-        function test_zz_menu_shot_not_bonded_tr() { menuShot("not-bonded", "tr", 1920, 1080) }
+        function test_zz_menu_shot_default_en() { menuShot(shotsDir + "/", "bonded", "en", 1920, 1080) }
+        function test_zz_menu_shot_default_tr_720p() { menuShot(shotsDir + "/", "bonded", "tr", 1280, 720) }
+        function test_zz_menu_shot_default_en_720p() { menuShot(shotsDir + "/", "bonded", "en", 1280, 720) }
+        function test_zz_menu_shot_default_tr() { menuShot(shotsDir + "/", "bonded", "tr", 1920, 1080) }
+        function test_zz_menu_shot_not_bonded_en() { menuShot(shotsDir + "/", "not-bonded", "en", 1920, 1080) }
+        function test_zz_menu_shot_not_bonded_tr_720p() { menuShot(shotsDir + "/", "not-bonded", "tr", 1280, 720) }
+        function test_zz_menu_shot_not_bonded_en_720p() { menuShot(shotsDir + "/", "not-bonded", "en", 1280, 720) }
+        function test_zz_menu_shot_not_bonded_tr() { menuShot(shotsDir + "/", "not-bonded", "tr", 1920, 1080) }
 
         function test_zz_keyboard_confirmation_screenshot() {
             if (!shotsDir)
