@@ -566,8 +566,12 @@ function Test-RevertCheckCommandModes {
     $helperBash = Find-Bash
     $target = Join-Path $scripts "target.txt"
     $utf8 = New-Object Text.UTF8Encoding($false)
+    # RUY-1217: the vmlint row passes -Quick; a fixture lint run without it reports a finding, so the row that forgets it
+    # turns every case wrong (the value=good case then reads CAUGHT).
     [IO.File]::WriteAllText((Join-Path $scripts "lint-vm-checks.ps1"), @'
-$t = [IO.File]::ReadAllText((Join-Path $PSScriptRoot "target.txt"))
+param([switch]$Quick)
+if (-not $Quick) { Write-Host "    fixture lint ran without -Quick"; Write-Host "    VM check lint: 1 finding(s)"; exit 1 }
+$t =[IO.File]::ReadAllText((Join-Path $PSScriptRoot "target.txt"))
 Write-Host "    ok   an assertion that FAILs when the thing is broken"
 if ($t -match 'value=bad') { Write-Host "    fixture finding 1"; Write-Host "    fixture finding 2"; Write-Host "    VM check lint: 2 finding(s)"; exit 1 }
 if ($t -match 'value=many') { 1..12 | ForEach-Object { Write-Host "    fixture finding $_" }; Write-Host "    VM check lint: 12 finding(s)"; exit 1 }
@@ -586,9 +590,9 @@ exit 0
     $cases = @(
         @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=bad"; Caught = $true; Want = @('^\s+FAIL fixture assertion\s*$'); Lack = @() },
         @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture assertion') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=bad"; Caught = $true; Want = @('^\s+fixture finding 1\s*$', '^\s+fixture finding 2\s*$'); Lack = @('more finding lines') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=many"; Caught = $true; Want = @('^\s+fixture finding 10\s*$', '\(and 2 more finding lines\)'); Lack = @('fixture finding 11') },
-        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture finding') }
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=bad"; Caught = $true; Want = @('^\s+fixture finding 1\s*$', '^\s+fixture finding 2\s*$'); Lack = @('more finding lines') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=many"; Caught = $true; Want = @('^\s+fixture finding 10\s*$', '\(and 2 more finding lines\)'); Lack = @('fixture finding 11') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1 -Quick'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture finding') }
     )
     foreach ($case in $cases) {
         [IO.File]::WriteAllText($target, "value=good`n")
@@ -647,6 +651,56 @@ function Test-FindBash {
     }
     if ($problems) { Write-Host "    $($problems -join "`n    ")" -ForegroundColor Yellow }
     Record "Find-Bash self-check (never the WSL launcher in System32, whatever the PATH order, RUY-1231)" (-not $problems)
+}
+
+# RUY-1217: the lint's -Quick switch skips the test-vm-checks.sh run, so it is for the loop that edits the lint
+# (revert-check.ps1 -Mode vmlint), never for a gate: dev.ps1 (test, docs), CI and every other script run the full
+# lint. The files that call it are the ones under scripts\ and .github\ (the lint and revert-check.ps1 may name it);
+# a call is the lint's file name followed directly by -Quick, quotes and parentheses aside.
+function Get-QuickCallers([string]$Root) {
+    $own = @("lint-vm-checks.ps1", "revert-check.ps1")
+    $files = @()
+    foreach ($d in @("scripts", ".github")) {
+        $dir = Join-Path $Root $d
+        if (Test-Path -LiteralPath $dir) { $files += @(Get-ChildItem -LiteralPath $dir -Recurse -File -Include *.ps1, *.sh, *.cmd, *.bat, *.yml, *.yaml) }
+    }
+    $pattern = 'lint-vm-checks\.ps1["''`)\s]*-Quick\b'
+    foreach ($f in $files) {
+        if ($f.Directory.Name -eq "scripts" -and $f.Name -in $own) { continue }
+        $n = 0
+        foreach ($l in [IO.File]::ReadAllLines($f.FullName)) {
+            $n++
+            if ($l -match $pattern) { "$($f.FullName.Substring($Root.TrimEnd('\').Length).TrimStart('\')):$n" }
+        }
+    }
+}
+
+function Test-QuickCallers {
+    $problems = @()
+    $callers = @(Get-QuickCallers (Split-Path -Parent $PSScriptRoot))
+    if ($callers) { $problems += "passes -Quick to lint-vm-checks.ps1 (only revert-check.ps1 may; the gates run the full lint): $($callers -join ', ')" }
+    # The check itself: a fixture tree where dev.ps1 and ci.yml pass it is found, revert-check.ps1 is not, and a
+    # script that only runs the full lint is not.
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-quick-callers-" + [guid]::NewGuid().ToString("N"))
+    try {
+        New-Item -ItemType Directory -Force -Path (Join-Path $fx "scripts"), (Join-Path $fx ".github\workflows") | Out-Null
+        $lint = "lint-vm-checks.ps1"
+        [IO.File]::WriteAllText((Join-Path $fx "scripts\dev.ps1"), "function Test-VmChecks {`n    & (Join-Path `$PSScriptRoot `"$lint`") -Quick`n}`n")
+        [IO.File]::WriteAllText((Join-Path $fx ".github\workflows\ci.yml"), "      - run: pwsh -NoProfile -File scripts/$lint -Quick`n")
+        [IO.File]::WriteAllText((Join-Path $fx "scripts\revert-check.ps1"), "Run = { & (Join-Path `$PSScriptRoot `"$lint`") -Quick }`n")
+        [IO.File]::WriteAllText((Join-Path $fx "scripts\other.ps1"), "& (Join-Path `$PSScriptRoot `"$lint`")`n# -Quick is for the revert loop`n")
+        $found = @(Get-QuickCallers $fx | Sort-Object)
+        $want = @(".github\workflows\ci.yml:1", "scripts\dev.ps1:2")
+        if (($found -join "|") -ne ($want -join "|")) { $problems += "the fixture tree: found '$($found -join ' ')', want '$($want -join ' ')'" }
+    } finally { Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue }
+    # The switch itself (about 5 s): the quick run ends fine, says it skipped the host fixtures and did not run them.
+    $lintFile = Join-Path $PSScriptRoot "lint-vm-checks.ps1"
+    $quickOut = (& (Get-Process -Id $PID).Path -NoProfile -File $lintFile -Quick *>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { $problems += "the lint with the quick switch exited $LASTEXITCODE" }
+    if ($quickOut -notmatch '(?m)^\s*SKIPPED \(-Quick\): test-vm-checks\.sh\s*$') { $problems += "the quick run did not print the SKIPPED line for test-vm-checks.sh" }
+    if ($quickOut -match 'vm-check tests:') { $problems += "the quick run ran test-vm-checks.sh" }
+    if ($problems) { Write-Host "    $($problems -join "`n    ")" -ForegroundColor Yellow }
+    Record "lint-vm-checks -Quick self-check (only revert-check.ps1 passes it, dev.ps1 test/docs and CI run the full lint; a quick run prints SKIPPED and skips test-vm-checks.sh, RUY-1217)" (-not $problems)
 }
 
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
@@ -1518,6 +1572,8 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckCommandModes
     Step "Find-Bash self-check (RUY-1231)"
     Test-FindBash
+    Step "lint-vm-checks -Quick callers self-check (RUY-1217)"
+    Test-QuickCallers
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-QmlNameParsing

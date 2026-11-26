@@ -16,8 +16,9 @@
 # much faster; name the file that holds the new test, since nothing else runs.
 # -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks incl. the translation and bus-policy lints), for a mutation of
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
-# mutation (bash is lib-bash.ps1's Find-Bash, printed on a "runs with" line, never the first `bash` on PATH); -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1` alone (about 4 minutes), for a mutation of that lint
-# or of vm-queue-lib.ps1. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
+# mutation (bash is lib-bash.ps1's Find-Bash, printed on a "runs with" line, never the first `bash` on PATH); -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1 -Quick` alone (RUY-1217: every section but the
+# test-vm-checks.sh run, which is the 4 minutes), for a mutation of that lint or of vm-queue-lib.ps1; a mutation only
+# test-vm-checks.sh sees is -Mode vmchecks, and the gates (dev.ps1 test, docs, CI) run the full lint. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
 # vmchecks and vmlint also print the child's finding lines (up to 10) before the verdict, so a CAUGHT shows why, or say
 # that the child printed none (RUY-1221; the self-check in dev.ps1 runs both rows on fixture children).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
@@ -116,7 +117,7 @@ $bashExe = if ($Mode -eq "vmchecks" -and -not $Runner) { Find-Bash } else { $nul
 if ($Mode -eq "vmchecks" -and -not $Runner -and -not $bashExe) { Write-Host "bash was not found (Git for Windows' bash.exe, or one on PATH that is not the WSL launcher): the VM check scripts cannot be run"; exit 2 }
 $repoCommands = @{
     vmchecks = @{ Label = "bash scripts/test-vm-checks.sh"; Exe = $bashExe; Run = { & $bashExe scripts/test-vm-checks.sh } }
-    vmlint   = @{ Label = "scripts\lint-vm-checks.ps1"; Exe = $null; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") } }
+    vmlint   = @{ Label = "scripts\lint-vm-checks.ps1 -Quick"; Exe = $null; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") -Quick } }
 }
 $rust = [bool]$crate -and -not $cmdMode
 # RUY-1221: the lines of a repoCommands child that say WHY it failed, so a CAUGHT shows its reason. The two real
