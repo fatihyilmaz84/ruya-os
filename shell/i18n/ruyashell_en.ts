@@ -1140,7 +1140,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+147"/>
+        <location filename="../qml/BluetoothPane.qml" line="+152"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -1160,27 +1160,12 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+123"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+91"/>
-        <source>Pair again %1</source>
-        <translation>Pair again %1</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Put it in pairing mode first</source>
-        <translation>Put it in pairing mode first</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Rename %1</source>
-        <translation>Rename %1</translation>
-    </message>
-    <message>
-        <location line="-241"/>
+        <location line="-124"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -1215,7 +1200,7 @@ This can&apos;t be undone.</translation>
         <translation>Pair %1</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+41"/>
         <source>Could not start looking for controllers.</source>
         <translation>Could not start looking for controllers.</translation>
     </message>
@@ -1245,9 +1230,39 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="+139"/>
-        <source>Forget %1</source>
-        <translation>Forget %1</translation>
+        <location line="+111"/>
+        <source>Pair again</source>
+        <translation>Pair again</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnect</source>
+        <translation>Disconnect</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connect</source>
+        <translation>Connect</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Controller settings</source>
+        <translation>Controller settings</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Rename…</source>
+        <translation>Rename…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Forget…</source>
+        <translation>Forget…</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Pair again: put the device in pairing mode first.</source>
+        <translation>Pair again: put the device in pairing mode first.</translation>
     </message>
 </context>
 <context>
@@ -4135,7 +4150,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+50"/>
+        <location filename="../qml/OptionsMenu.qml" line="+53"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -4151,7 +4166,7 @@ This can&apos;t be undone.</translation>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+221"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -5869,12 +5884,17 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+87"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+1"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
@@ -5908,12 +5928,12 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+125"/>
+        <location line="+132"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-96"/>
         <source>My profile</source>
         <translation>My profile</translation>
     </message>
@@ -5983,7 +6003,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+27"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -5993,7 +6013,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+327"/>
+        <location line="+332"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -6374,7 +6394,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+128"/>
         <source>Could not change %1. Try again.</source>
         <comment>A refused installation change; %1 is the game</comment>
         <translation>Could not change %1. Try again.</translation>
@@ -6390,7 +6410,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+544"/>
+        <location line="+542"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6417,7 +6437,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2074"/>
+        <location line="-2103"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6454,7 +6474,7 @@ This can&apos;t be undone.</translation>
         <translation>Same game as the %1 version?</translation>
     </message>
     <message>
-        <location line="+735"/>
+        <location line="+764"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

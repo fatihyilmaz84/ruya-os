@@ -40,6 +40,17 @@ FocusScope {
     property string optionsOpenFor: ""
     signal optionsRequested(string surface, string itemId, Item anchor, string kind)
 
+    // A page whose items own their menu's rows (a Settings pane's devices, RUY-1176) sets this, and the
+    // Shell asks it instead of the Library when the menu was opened by this page (`optionsRequested`; the
+    // item id is the page's own). An object with:
+    //   rows(id)         [{ id, label, icon, divider }] of the item, as OptionsMenu takes them
+    //   title(id)        the menu's title: a string, or { name, tail } for a device's name whose address tail stays whole
+    //   note(id)         the note under the last row ("" for none)
+    //   run(id, action)  a row was chosen (the menu has closed and the focus is on the item)
+    //   exists(id)       whether the item is still there; false closes the menu, the page moves its focus
+    // `rows`, `note` and `exists` are read in bindings: they follow what they read. null: the Library's items.
+    property var surfaceOptions: null
+
     // Where an item with an Options menu sits in this page's list (-1: not a list); GamesPage answers.
     function indexOfItem(itemId) { return -1 }
 

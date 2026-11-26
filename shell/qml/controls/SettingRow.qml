@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
@@ -10,6 +11,13 @@ import RuyaShell
 //    `emphasis: "primary"` makes it the one main verb of a flow (`primaryFill`).
 //  - "info": a fact. No pill, no sound, no signal; A is silent.
 // `kind` is required: a row that forgets it fails when it is created (RUY-575), it never silently looks like an item.
+// A row that has an Options menu (RUY-1176, 02 §1.7 "What Accept does"; the menu itself is the pane's, through
+// `optionsRequested()` and `Page.surfaceOptions`) is one of two kinds:
+//  - `hasOptions`: A does the row's main action and Start opens the menu; so does holding A for `longPressMs`, with
+//    the Hold ring at the row's right end (Accept then acts on release, a tap as before). Hint: A <verb>, Start Options.
+//  - `hasOptions` and `acceptOpensOptions`: several actions and none main; A opens the menu on press (no hold, no
+//    ring) and so does Start. Hint: A Options.
+// While the menu is open the owner sets `anchored`: `selectedFill` and a DemiBold label, no ring.
 // A row with `enabled: false` is a message: flat like a fact, never focused, with an info icon.
 SettingControl {
     id: row
@@ -29,15 +37,25 @@ SettingControl {
     // The room the mark at the right end takes: its box plus the gap to the value.
     readonly property real markWidth: Theme.iconM + Theme.spaceXxs
 
+    // The row has an Options menu; see above. `acceptOpensOptions` makes A open it.
+    property bool hasOptions: false
+    property bool acceptOpensOptions: false
+    // The colour of the value: `warningText` for a state the player must fix (Not fully paired).
+    property color valueColor: Theme.text
+    readonly property bool holdsAccept: hasOptions && !acceptOpensOptions && !isFact
+
     signal activated()
+    // Start, a long A, or A on a row that `acceptOpensOptions`: the pane asks the Shell to open the menu.
+    signal optionsRequested()
 
     flat: isFact || isMessage
     primary: isAction && emphasis === "primary"
     centered: isAction
-    labelWeight: isCurrent ? Theme.weightDemiBold : isAction ? Theme.weightDemiBold : Font.Normal
+    labelWeight: isCurrent || anchored || isAction ? Theme.weightDemiBold : Font.Normal
     labelColor: primary ? Theme.onPrimary : Theme.text
     defaultIconName: isMessage ? "info" : ""
-    hintKind: isFact ? "info" : isPage ? "page" : "item"
+    hintKind: isFact ? "info" : hasOptions && acceptOpensOptions ? "options" : isPage ? "page" : "item"
+    optionsHint: holdsAccept
     detailFallback: isAction ? value : ""
 
     accessibleValue: value
@@ -69,7 +87,7 @@ SettingControl {
         horizontalAlignment: Text.AlignRight
         textFormat: Text.PlainText      // a value may be a name from a drive (a wallpaper): never markup
         text: row.value
-        color: Theme.text
+        color: row.valueColor
         font.pixelSize: Theme.typeBody * row.u
     }
 
@@ -96,12 +114,59 @@ SettingControl {
         color: Qt.alpha(Theme.text, row.dimmed ? Theme.disabledOpacity : 1)
     }
 
+    // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end.
+    // Built only for a row that has one: most rows of a pane never hold.
+    Loader {
+        anchors { right: parent.right; rightMargin: Theme.spaceXs * row.u; verticalCenter: parent.verticalCenter }
+        active: row.holdsAccept
+        sourceComponent: HoldRing {
+            objectName: "rowHoldRing"
+            u: row.u
+            shown: hold.ringShown
+            progress: hold.ringProgress
+        }
+    }
+
     function accept() {
         if (isFact)
             return
         Sfx.select()
         activated()
     }
-    Keys.onReturnPressed: accept()
-    Keys.onEnterPressed: accept()
+
+    // Accept on release and a long press (AcceptHold, as on the cards): a tap does the main action, a hold opens the menu.
+    AcceptHold {
+        id: hold
+        objectName: "rowHold"
+        active: row.holdsAccept
+        onTapped: row.accept()
+        onLongPressed: row.optionsRequested()
+    }
+    onActiveFocusChanged: if (!activeFocus) hold.cancel()
+
+    function acceptPressed(event) {
+        if (isFact)
+            return
+        if (acceptOpensOptions && hasOptions) {
+            if (!event.isAutoRepeat)
+                optionsRequested()              // the Shell plays the select sound
+        } else if (!hold.press(event)) {
+            accept()
+        }
+    }
+    Keys.onReturnPressed: event => acceptPressed(event)
+    Keys.onEnterPressed: event => acceptPressed(event)
+    Keys.onReleased: event => {
+        if (!(holdsAccept && hold.release(event)))
+            event.accepted = false
+    }
+    // Start (the options button) opens the menu of a row that has one; on any other row it bubbles on.
+    Keys.onMenuPressed: event => {
+        if (!hasOptions || isFact) {
+            event.accepted = false
+            return
+        }
+        if (!event.isAutoRepeat)
+            optionsRequested()
+    }
 }

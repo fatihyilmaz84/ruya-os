@@ -1136,7 +1136,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+147"/>
+        <location filename="../qml/BluetoothPane.qml" line="+152"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -1156,27 +1156,12 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+123"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+91"/>
-        <source>Pair again %1</source>
-        <translation>%1 cihazını yeniden eşleştir</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Put it in pairing mode first</source>
-        <translation>Önce eşleştirme moduna alın</translation>
-    </message>
-    <message>
-        <location line="+19"/>
-        <source>Rename %1</source>
-        <translation>%1 adını değiştir</translation>
-    </message>
-    <message>
-        <location line="-241"/>
+        <location line="-124"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -1211,7 +1196,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 cihazını eşleştir</translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+41"/>
         <source>Could not start looking for controllers.</source>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
@@ -1241,9 +1226,39 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="+139"/>
-        <source>Forget %1</source>
-        <translation>%1 cihazını unut</translation>
+        <location line="+111"/>
+        <source>Pair again</source>
+        <translation>Yeniden eşleştir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnect</source>
+        <translation>Bağlantıyı kes</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connect</source>
+        <translation>Bağlan</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Controller settings</source>
+        <translation>Kontrolcü ayarları</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Rename…</source>
+        <translation>Adı değiştir…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Forget…</source>
+        <translation>Unut…</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Pair again: put the device in pairing mode first.</source>
+        <translation>Yeniden eşleştir: önce cihazı eşleştirme moduna alın.</translation>
     </message>
 </context>
 <context>
@@ -4125,7 +4140,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+50"/>
+        <location filename="../qml/OptionsMenu.qml" line="+53"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -4141,7 +4156,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+221"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -5849,12 +5864,17 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+87"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+1"/>
+        <source>Options</source>
+        <translation>Seçenekler</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Open</source>
         <translation>Aç</translation>
     </message>
@@ -5888,12 +5908,12 @@ Bu geri alınamaz.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+125"/>
+        <location line="+132"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-96"/>
         <source>My profile</source>
         <translation>Profilim</translation>
     </message>
@@ -5963,7 +5983,7 @@ Bu geri alınamaz.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+27"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -5973,7 +5993,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+327"/>
+        <location line="+332"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -6354,7 +6374,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+128"/>
         <source>Could not change %1. Try again.</source>
         <comment>A refused installation change; %1 is the game</comment>
         <translation>%1 değiştirilemedi. Yeniden deneyin.</translation>
@@ -6370,7 +6390,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+544"/>
+        <location line="+542"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6397,7 +6417,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-2074"/>
+        <location line="-2103"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6434,7 +6454,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 sürümüyle aynı oyun mu?</translation>
     </message>
     <message>
-        <location line="+735"/>
+        <location line="+764"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

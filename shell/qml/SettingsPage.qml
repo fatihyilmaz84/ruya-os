@@ -81,6 +81,9 @@ Page {
                                                : current.key === "system" ? systemSlot.item
                                                : current.key === "about" ? aboutSlot.item : null) as SettingsPane
 
+    // The shown pane's rows may have Options menus: its contract is the page's (the Shell asks it, Page.surfaceOptions).
+    surfaceOptions: currentPane ? currentPane.surfaceOptions : null
+
     // The focused pane says which hints it shows (SettingsPane.hints); the category list and a
     // category without a pane yet (A does nothing there) have their own.
     readonly property var listHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
@@ -126,8 +129,12 @@ Page {
         onLoaded: {
             built = true
             const pane = item as SettingsPane
-            if (pane)
+            if (pane) {
                 pane.reflow()
+                // A pane's rows may have an Options menu (RUY-1176): the page opens it as a "row" menu.
+                pane.optionsOpenFor = Qt.binding(() => page.optionsOpenFor)
+                pane.optionsRequested.connect((surface, itemId, anchor) => page.optionsRequested(surface, itemId, anchor, "row"))
+            }
         }
     }
 
@@ -290,6 +297,7 @@ Page {
                     u: page.u
                     overlay: page.overlay
                     onExitRequested: page.leavePane()
+                    onControllerRequested: id => page.openRequested("controller", ({ id: id }))
                 }
             }
         }

@@ -3,28 +3,33 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Bluetooth (the controllers themselves: ControllersPane, RUY-39): the power switch, "Add a device" (a scan), "Pair a new
-// controller" (the guided screen, ControllerOnboarding, T-260), the devices found or paired, and for
-// each paired one a "Forget" row (after a confirmation that names it) and, for a controller, a
-// "Rename" row (the on-screen keyboard; BlueZ keeps the name). Accept on a device pairs it (not
-// paired), connects it (paired) or disconnects it (connected). A controller says "Connected",
-// "Reconnects automatically" (paired and trusted, not connected: it comes back when switched on) or
-// "Paired". A paired device that is not bonded (it forgot its keys: it only reconnects in pairing
-// mode, T-300) says "Not fully paired" and has a "Pair again" row: Forget, a scan, then Pair as soon
-// as it is found again (put it in pairing mode first). With Bluetooth off the pane says so and shows nothing else. Everything goes through
-// the Bluetooth singleton (org.ruyaos.Devices1.Bluetooth).
+// controller" (the guided screen, ControllerOnboarding, T-260) and the devices found or paired. Accept on a device
+// that is not paired pairs it (a keyboard asks first). Accept on a paired one opens its Options menu (RUY-1176, 02 §1.7:
+// several actions and none main; `Page.surfaceOptions` is `surfaceOptions` below): "Pair again" (it is not bonded, T-300: it
+// forgot its keys and only reconnects in pairing mode: Forget, a scan, then Pair as soon as it is found again; first
+// row and focused), Connect or Disconnect, "Controller settings" (a connected pad: its page), "Rename…" (a controller:
+// the on-screen keyboard; BlueZ keeps the name) and, after a divider, "Forget…" (a confirmation that names it). A
+// controller says "Connected", "Reconnects automatically" (paired and trusted, not connected: it comes back when
+// switched on) or "Paired"; a device that is not bonded says "Not fully paired" in `warningText`. With Bluetooth off the pane says
+// so and shows nothing else. Everything goes through the Bluetooth singleton (org.ruyaos.Devices1.Bluetooth).
 SettingsPane {
     id: pane
 
     property string busyId     // the device being paired, "" if none
     property Item overlay      // where the pairing screen, the keyboard and the confirmation are parented
 
+    // "Controller settings" in a device's menu: the Settings page opens that pad's page.
+    signal controllerRequested(string id)
+
     // Rows follow Bluetooth.devices by id (updated in place), so focus stays on a row when the
     // list is re-published, e.g. after a device connects or its battery changes.
     ListModel { id: deviceModel }
 
     function syncDevices() {
-        // Where focus is now, to put it on a neighbour if its row goes away (Forget).
-        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        // Where focus is now, to put it on a neighbour if its row goes away (Forget, or a device that leaves while
+        // its menu is open: the menu has the focus then and the row only its `focus`).
+        const menuOpen = pane.optionsOpenFor !== ""
+        const before = pane.activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
         const list = Bluetooth.devices
         for (let i = deviceModel.count - 1; i >= 0; --i) {
             const id = deviceModel.get(i).devId
@@ -176,20 +181,15 @@ SettingsPane {
         keyboardConfirm.open("custom")
     }
 
-    function activate(id, paired, connected) {
+    // Accept on a device that is not paired (a paired one opens its menu): pair it, a keyboard after its question.
+    function pairDevice(id) {
         if (id === busyId)
             return                         // already pairing: a second Accept or a key repeat does nothing
-        if (!paired) {
-            const dev = Bluetooth.devices.find(d => d.id === id)
-            if (dev && dev.keyboard === true)
-                askKeyboard(id, dev.name)      // a keyboard types anywhere: a second confirmation (RUY-411)
-            else
-                startPairing(id)
-        } else if (connected) {
-            Bluetooth.disconnectDevice(id)
-        } else {
-            Bluetooth.connectDevice(id)        // an unconfirmed keyboard is refused ("not-confirmed"): onFinished asks (RUY-444)
-        }
+        const dev = Bluetooth.devices.find(d => d.id === id)
+        if (dev && dev.keyboard === true)
+            askKeyboard(id, dev.name)      // a keyboard types anywhere: a second confirmation (RUY-411)
+        else
+            startPairing(id)
     }
 
     Connections {
@@ -329,6 +329,7 @@ SettingsPane {
     Repeater {
         model: deviceModel
         SettingRow {
+            id: deviceRow
             required property string devId
             required property string name
             required property string shown
@@ -350,68 +351,79 @@ SettingsPane {
             labelTail: shownTail
             iconName: DeviceIcons.iconFor(deviceKind, family, silhouette)
             value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, deviceKind, trusted)
+            // A device that must be paired again says so in the colour of a warning (02 §1.7, needs attention).
+            valueColor: paired && !bonded && pane.busyId !== devId ? Theme.warningText : Theme.text
+            // A paired device has several actions and none main: Accept opens its menu. One that is not paired has one: Pair.
+            hasOptions: paired
+            acceptOpensOptions: paired
+            anchored: pane.optionsOpenFor === devId
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
             // controller, Connected".
             accessibleValue: DeviceIcons.kindText(deviceKind, family, silhouette) + ", " + value
-            onActivated: pane.activate(devId, paired, connected)
+            onActivated: pane.pairDevice(devId)
+            onOptionsRequested: pane.optionsRequested("bluetooth", devId, deviceRow)
         }
     }
 
-    Repeater {
-        model: deviceModel
-        SettingRow {
-            required property string devId
-            required property string shown
-            required property string shownBase
-            required property string shownTail
-            required property bool paired
-            required property bool bonded
-            objectName: "btRepair_" + devId
-            kind: "action"
-            visible: paired && !bonded && Bluetooth.powered
-            u: pane.u
-            label: qsTr("Pair again %1").arg(shownBase)
-            labelTail: shownTail
-            value: qsTr("Put it in pairing mode first")
-            onActivated: pane.startRepair(devId)
+    // ---- A paired device's Options menu (RUY-1176): Page.surfaceOptions, rows built from the service's list ----
+    function deviceById(id) {
+        return Bluetooth.devices.find(d => d.id === id)
+    }
+
+    // The pad of Input1 that is this Bluetooth device, while it is connected (ControllerPads matches them).
+    function padOf(id) {
+        return ControllerPads.controllers().find(p => p.btId === id)
+    }
+
+    function deviceOptionRows(id) {
+        const d = deviceById(id)
+        if (!d || !d.paired)
+            return []
+        const rows = []
+        if (d.bonded === false)
+            rows.push({ id: "repair", label: qsTr("Pair again"), icon: "link" })
+        rows.push(d.connected ? { id: "disconnect", label: qsTr("Disconnect"), icon: "link_off" }
+                              : { id: "connect", label: qsTr("Connect"), icon: "link" })
+        if (padOf(id))
+            rows.push({ id: "settings", label: qsTr("Controller settings"), icon: "settings" })
+        if (d.kind === "controller")
+            rows.push({ id: "rename", label: qsTr("Rename…"), icon: "edit" })
+        rows.push({ id: "forget", label: qsTr("Forget…"), icon: "delete", divider: true })
+        return rows
+    }
+
+    function runDeviceOption(id, action) {
+        const d = deviceById(id)
+        if (!d)
+            return
+        switch (action) {
+        case "repair":
+            startRepair(id)
+            break
+        case "connect":
+            Bluetooth.connectDevice(id)        // an unconfirmed keyboard is refused ("not-confirmed"): onFinished asks (RUY-444)
+            break
+        case "disconnect":
+            Bluetooth.disconnectDevice(id)
+            break
+        case "settings":
+            controllerRequested(padOf(id)?.id ?? "")
+            break
+        case "rename":
+            deviceActions.askRename(id, d.name, DeviceIcons.shownName(Bluetooth.devices, d))
+            break
+        case "forget":
+            deviceActions.askForget(id, DeviceIcons.shownName(Bluetooth.devices, d))
+            break
         }
     }
 
-    Repeater {
-        model: deviceModel
-        SettingRow {
-            required property string devId
-            required property string name
-            required property string shown
-            required property string shownBase
-            required property string shownTail
-            required property string deviceKind
-            required property bool paired
-            objectName: "btRename_" + devId
-            kind: "action"
-            visible: paired && deviceKind === "controller" && Bluetooth.powered
-            u: pane.u
-            label: qsTr("Rename %1").arg(shownBase)
-            labelTail: shownTail
-            onActivated: deviceActions.askRename(devId, name, shown)
-        }
-    }
-
-    Repeater {
-        model: deviceModel
-        SettingRow {
-            required property string devId
-            required property string shown
-            required property string shownBase
-            required property string shownTail
-            required property bool paired
-            objectName: "btForget_" + devId
-            kind: "action"
-            visible: paired && Bluetooth.powered
-            u: pane.u
-            label: qsTr("Forget %1").arg(shownBase)
-            labelTail: shownTail
-            onActivated: deviceActions.askForget(devId, shown)
-        }
-    }
+    surfaceOptions: ({
+        rows: id => pane.deviceOptionRows(id),
+        title: id => { const d = pane.deviceById(id); return d ? DeviceIcons.shownParts(Bluetooth.devices, d) : ({ name: "", tail: "" }) },
+        // "Pair again" needs the device in pairing mode: said under the menu, where the row's own line used to say it.
+        note: id => pane.deviceById(id)?.bonded === false ? qsTr("Pair again: put the device in pairing mode first.") : "",
+        run: (id, action) => pane.runDeviceOption(id, action),
+        exists: id => pane.deviceById(id) !== undefined
+    })
 }

@@ -8,7 +8,8 @@ import RuyaShell
 // room. Its title is the item's name; its rows are `{ id, label, icon, divider }` (`divider: true` draws a
 // hairline divider before that row, for a destructive one); at most 8.
 //
-//   open(anchor, kind, title, rows, note)   kind: "card" | "pill" | "row"
+//   open(anchor, kind, name, rows, note)   kind: "card" | "pill" | "row"; `name`: the title, a string, or
+//   { name, tail } for a device's name whose address tail stays whole when the line is cut (TailText, RUY-1176)
 //   rows / note can be set again while it is open (a row's condition changed): the focus stays on the
 //   same action if it is still there, else on the row now at that place.
 //   activated(id)    a row was chosen; the menu has closed first and the focus is back on the item.
@@ -26,6 +27,8 @@ FocusScope {
     property var guideKey: null      // function (key) -> bool: the Guide keys are not taken, the Shell opens the Hub
 
     property string title
+    // The end of a device's address that follows `title` and stays whole when the title is cut (" (00:05)").
+    property string titleTail: ""
     property var rows: []
     // The most rows a menu has (02 §1.7); the owner leaves rows out to stay within it.
     readonly property int maxRows: 8
@@ -92,7 +95,7 @@ FocusScope {
     visible: shown || opacity > 0
     opacity: 0
     Accessible.role: Accessible.PopupMenu
-    Accessible.name: qsTr("Options for %1").arg(title)
+    Accessible.name: qsTr("Options for %1").arg(title + titleTail)
 
     // ---- opening and closing ----
     property Item returnTo: null
@@ -106,7 +109,8 @@ FocusScope {
         openAnim.stop()
         anchor = anchorItem
         kind = anchorKind
-        title = name
+        title = typeof name === "string" ? name : name.name
+        titleTail = typeof name === "string" ? "" : name.tail
         note = newNote ?? ""
         rows = newRows
         current = 0
@@ -297,6 +301,7 @@ FocusScope {
             height: menu.titleHeight
             verticalAlignment: Text.AlignVCenter
             name: menu.title
+            tail: menu.titleTail
             color: Theme.text
             font.pixelSize: Theme.typeHeadline * menu.u
             font.weight: Theme.weightDemiBold
