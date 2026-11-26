@@ -85,6 +85,41 @@ impl DirStore {
     }
 }
 
+/// The regular `.json` files among directory entries: (name, text). An entry that cannot be read
+/// (iteration or `file_type()` fails) is skipped like a name that is not a profile file, so one
+/// bad entry never fails the whole directory; it is not journaled per entry (one that stays
+/// unreadable would flood the journal on every load). A file that cannot be read keeps its name
+/// with an empty text, which the loader reports.
+fn read_files(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        if name.starts_with('.') || !name.ends_with(".json") {
+            continue;
+        }
+        // Never follow a link: only regular files count.
+        if !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        let mut text = String::new();
+        let read = fs::File::open(entry.path()).and_then(|f| {
+            f.take(profile::MAX_BYTES as u64 + 1)
+                .read_to_string(&mut text)
+        });
+        match read {
+            Ok(_) => out.push((name, text)),
+            // Not UTF-8, or unreadable: reported by the loader as an empty file.
+            Err(_) => out.push((name, String::new())),
+        }
+    }
+    out
+}
+
 impl ProfileStore for DirStore {
     fn read_all(&mut self, console: &str) -> io::Result<Vec<(String, String)>> {
         let dir = self.root.join(console);
@@ -93,31 +128,7 @@ impl ProfileStore for DirStore {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(e) => return Err(e),
         };
-        let mut out = Vec::new();
-        for entry in entries.take(MAX_ENTRIES) {
-            let entry = entry?;
-            let Ok(name) = entry.file_name().into_string() else {
-                continue;
-            };
-            if name.starts_with('.') || !name.ends_with(".json") {
-                continue;
-            }
-            // Never follow a link: only regular files count.
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-            let mut text = String::new();
-            let read = fs::File::open(entry.path()).and_then(|f| {
-                f.take(profile::MAX_BYTES as u64 + 1)
-                    .read_to_string(&mut text)
-            });
-            match read {
-                Ok(_) => out.push((name, text)),
-                // Not UTF-8, or unreadable: reported by the loader as an empty file.
-                Err(_) => out.push((name, String::new())),
-            }
-        }
-        Ok(out)
+        Ok(read_files(entries.take(MAX_ENTRIES)))
     }
 
     fn write(&mut self, console: &str, name: &str, text: &str) -> io::Result<()> {
@@ -1834,6 +1845,27 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("p1").join("linked.json")).unwrap();
         let mut b = Book::new(Box::new(DirStore::new(root)));
         assert_eq!(ids(&mut b), ["default", "nintendo"]);
+    }
+
+    #[test]
+    fn one_unreadable_directory_entry_is_skipped_not_fatal() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.json"), "one").unwrap();
+        fs::write(dir.path().join("b.json"), "two").unwrap();
+        // A real entry that cannot be typed is not fakeable, so the iteration error is: an `Err`
+        // between two good entries, as `read_dir` yields when one entry cannot be read.
+        let mut entries: Vec<io::Result<fs::DirEntry>> =
+            fs::read_dir(dir.path()).unwrap().collect();
+        entries.insert(1, Err(io::Error::from(io::ErrorKind::PermissionDenied)));
+        let mut files = read_files(entries.into_iter());
+        files.sort();
+        assert_eq!(
+            files,
+            [
+                ("a.json".to_string(), "one".to_string()),
+                ("b.json".to_string(), "two".to_string())
+            ]
+        );
     }
 
     // ---- forgetting a console profile (RUY-468) -----------------------------------------------
