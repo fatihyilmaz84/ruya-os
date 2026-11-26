@@ -169,6 +169,24 @@ Item {
             tryVerify(() => find("paneSystem").activeFocus, 2000, "focus is still in the pane")
         }
 
+        function test_the_focused_drive_going_away_hands_the_focus_to_the_row_now_at_its_place() {
+            setDrives([drive("Disk A", "ok"), drive("Disk B", "ok"), drive("Disk C", "ok")])
+            openSystemPane()
+            goTo("healthDrive_1")
+            setDrives([drive("Disk A", "ok"), drive("Disk C", "ok")])
+            tryVerify(() => find("healthDrive_2") === null, 2000, "the middle row is gone")
+            tryVerify(() => find("healthDrive_1").activeFocus, 2000, "Disk C, now at its place, not the first row")
+            compare(find("healthDrive_1").detail, "Disk C")
+        }
+
+        function test_the_focused_sensor_going_away_hands_the_focus_to_the_row_now_at_its_place() {
+            openSystemPane()
+            goTo("health_mock:ssd")
+            Thermal.mockRemove("mock:ssd")
+            tryVerify(() => find("health_mock:ssd") === null, 2000, "the sensor row is gone")
+            tryVerify(() => find("health_mock:fan").activeFocus, 2000, "the fan, now at its place, not the first row")
+        }
+
         // ---- the category mark
 
         function test_the_system_category_carries_the_drive_mark() {

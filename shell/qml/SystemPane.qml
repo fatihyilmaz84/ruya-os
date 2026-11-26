@@ -81,7 +81,7 @@ SettingsPane {
     ListModel { id: sensorModel }
 
     function syncSensors() {
-        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        const before = pane.focusedRowIndex()
         const list = Thermal.sensors
         for (let i = sensorModel.count - 1; i >= 0; --i) {
             const id = sensorModel.get(i).sensorId
@@ -106,14 +106,14 @@ SettingsPane {
                     sensorModel.move(at, i, 1)
             }
         }
-        Qt.callLater(pane.refocus, before)
+        Qt.callLater(pane.refocusNear, before)
     }
 
     // The drives' rows (RUY-737) follow DriveHealth.drives by key, in place, like the sensors.
     ListModel { id: driveModel }
 
     function syncDrives() {
-        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        const before = pane.focusedRowIndex()
         const list = DriveHealth.drives
         for (let i = driveModel.count - 1; i >= 0; --i) {
             const key = driveModel.get(i).driveKey
@@ -138,17 +138,7 @@ SettingsPane {
                     driveModel.move(at, i, 1)
             }
         }
-        Qt.callLater(pane.refocus, before)
-    }
-
-    // After a list update: if the focused row vanished, focus the row now at its place (or the last).
-    function refocus(index) {
-        if (!pane.activeFocus || index < 0)
-            return
-        const rows = focusableRows()
-        if (rows.length > 0 && !rows.some(r => r.activeFocus))
-            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
-        ensureFocusedVisible()
+        Qt.callLater(pane.refocusNear, before)
     }
 
     // One line for the worst level, so a warm console is told as such (no toast, nothing changes).
