@@ -252,15 +252,7 @@ FocusScope {
     // change needs a frame, and a hidden row swapped for a shown one of the same height never
     // changes it (T-429). Only 0 -> more: while rows come and go otherwise, settling early would
     // pick the first row instead of the neighbour of the one that went.
-    readonly property int focusableCount: {
-        let n = 0
-        for (let i = 0; i < column.children.length; ++i) {
-            const row = column.children[i] as SettingControl
-            if (row && row.visible && row.enabled)
-                ++n
-        }
-        return n
-    }
+    readonly property int focusableCount: focusableRows().length
     property int countBefore: 0
     onFocusableCountChanged: {
         const was = countBefore
@@ -272,12 +264,7 @@ FocusScope {
     // The row that is the pane's focused item although it cannot hold the focus (hidden or
     // disabled), or null.
     function staleRow() {
-        for (let i = 0; i < column.children.length; ++i) {
-            const row = column.children[i] as SettingControl
-            if (row && row.focus && !(row.visible && row.enabled))
-                return row
-        }
-        return null
+        return settingRows().find(r => r.focus && !(r.visible && r.enabled)) ?? null
     }
 
     // Of `list` (focusable rows), the last one before `from` in the column (as the profile panes
@@ -300,22 +287,8 @@ FocusScope {
         return list[0]
     }
 
-    function focusableRows() {
-        const found = []
-        for (let i = 0; i < column.children.length; ++i) {
-            const row = column.children[i] as SettingControl
-            if (row && row.visible && row.enabled)
-                found.push(row)
-        }
-        return found
-    }
-
-    // The rows the pane's `focus` can rest on: `focusableRows`, but while a page covers Settings the pane is neither
-    // visible nor enabled, so no row is, and a row's own `visible` and `enabled` cannot be read: every row counts.
-    // `settleFocus` moves the focus on when it is back, if the row chosen from this list cannot hold it.
-    function restingRows() {
-        if (visible && enabled)
-            return focusableRows()
+    // Every row of the column (a SettingControl), in column order, whatever its state.
+    function settingRows() {
         const found = []
         for (let i = 0; i < column.children.length; ++i) {
             const row = column.children[i] as SettingControl
@@ -323,6 +296,17 @@ FocusScope {
                 found.push(row)
         }
         return found
+    }
+
+    function focusableRows() {
+        return settingRows().filter(r => r.visible && r.enabled)
+    }
+
+    // The rows the pane's `focus` can rest on: `focusableRows`, but while a page covers Settings the pane is neither
+    // visible nor enabled, so no row is, and a row's own `visible` and `enabled` cannot be read: every row counts.
+    // `settleFocus` moves the focus on when it is back, if the row chosen from this list cannot hold it.
+    function restingRows() {
+        return visible && enabled ? focusableRows() : settingRows()
     }
 
     // Lays the rows out now. A Column lays out when its window next polishes it, and a pane whose
@@ -382,13 +366,9 @@ FocusScope {
         countBefore = focusableCount
         // Where focus lands the first time the pane is entered. The pane is usually still
         // hidden here, so don't filter on visibility.
-        for (let i = 0; i < column.children.length; ++i) {
-            const row = column.children[i] as SettingControl
-            if (row) {
-                row.focus = true
-                break
-            }
-        }
+        const first = settingRows()[0]
+        if (first)
+            first.focus = true
     }
 
     Keys.onPressed: event => {
