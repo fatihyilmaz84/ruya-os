@@ -36,7 +36,6 @@ services/ruya-store/src/service.rs | services/ruya-store/src/service.rs | 100  #
 services/ruya-update/src/service.rs | services/ruya-update/src/service.rs | 81  # debt
 shell/qml/AppDetailPage.qml | shell/qml/InstallPackagePage.qml | 549  # debt
 shell/qml/BatteryListModal.qml | shell/qml/ThermalNotice.qml | 84  # debt
-shell/qml/BluetoothPane.qml | shell/qml/SystemPane.qml | 82  # debt
 shell/qml/InstallConfirmSheet.qml | shell/qml/InstallPackagePage.qml | 81  # debt
 shell/qml/InstallResultDialog.qml | shell/qml/ZonePicker.qml | 84  # debt
 shell/qml/LaunchSplash.qml | shell/qml/Shell.qml | 136  # debt
