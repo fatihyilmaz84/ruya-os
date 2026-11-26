@@ -23,6 +23,7 @@ SettingsPane {
     ListModel { id: wifiModel }
 
     function syncNetworks() {
+        const before = pane.focusedRowIndex()     // to put the focus on a neighbour if its row goes (a forgotten network out of range)
         const list = Network.networks
         for (let i = wifiModel.count - 1; i >= 0; --i) {
             const id = wifiModel.get(i).netId
@@ -48,7 +49,7 @@ SettingsPane {
                     wifiModel.move(at, i, 1)
             }
         }
-        Qt.callLater(pane.settleFocus)   // the focused row may have gone (a forgotten network)
+        Qt.callLater(pane.refocusNear, before)   // the focused row may have gone: the row now at its place, else the last
     }
 
     // The first network is where focus lands when the pane is first entered; the status row

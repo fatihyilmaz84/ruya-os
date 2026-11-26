@@ -76,6 +76,12 @@ void Network::mockWifiScript(const QString &status)
         mock->setWifiScript(status);
 }
 
+void Network::mockAddNetwork(const QString &id, const QString &ssid, int signal, bool known)
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
+        mock->addNetwork(id, ssid, signal, known);
+}
+
 void Network::mockClearNetworks()
 {
     if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))

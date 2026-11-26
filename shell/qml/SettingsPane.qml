@@ -207,6 +207,24 @@ FocusScope {
     }
     onActiveFocusChanged: if (activeFocus) Qt.callLater(settleFocus)
 
+    // A list that rows come and go in (a device or network that leaves, Forget): take `focusedRowIndex()` BEFORE the model
+    // changes and call `Qt.callLater(refocusNear, index)` after it. If the focused row vanished, the focus goes to the row
+    // now at its place, else the last one (02 section 1.7), not to the first row as `settleFocus` would.
+    // `focusedRowIndex()` also covers an open Options menu, which holds the focus while its row is the pane's `focus`.
+    function focusedRowIndex() {
+        const menuOpen = optionsOpenFor !== ""
+        return activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
+    }
+
+    function refocusNear(index) {
+        if (!activeFocus || index < 0)
+            return
+        const rows = focusableRows()
+        if (rows.length > 0 && !rows.some(r => r.activeFocus))
+            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
+        ensureFocusedVisible()
+    }
+
     // The pane's focused row: when it hides or is disabled, settle at once. relayout() also settles,
     // but it waits for the column's height to change, which needs a polish (a frame) first.
     readonly property Item focusedChild: {

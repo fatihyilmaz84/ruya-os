@@ -126,7 +126,9 @@ Item {
             tryVerify(() => find("wifi_wifi-lounge") !== null && find("wifi_wifi-lounge").visible, 3000, "the rows are back")
             verify(label.visible, "the label is back with them")
             tryVerify(() => find("wifi_wifi-lounge") !== null)
-            // The fact: Up from the first network lands on it, A is silent, the bar offers Back only.
+            // The fact: Up from the first network lands on it, A is silent, the bar offers Back only. (The focus was on
+            // the first network when the list went; it is now on the row at its place, the scan row.)
+            find("wifi_wifi-lounge").forceActiveFocus()
             keyClick(Qt.Key_Up)
             tryVerify(() => find("rowNetStatus").activeFocus, 2000, "Up skips the label and lands on the fact")
             compare(pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "back Back")
@@ -345,9 +347,32 @@ Item {
             Network.mockClearNetworks()
             tryVerify(() => !menu().shown, 2000, "the menu closed")
             tryVerify(() => find("wifi_wifi-lounge") === null, 3000, "its row is gone")
-            // The rows left are the status fact and the scan row: the pane puts the focus on one of them.
-            tryVerify(() => find("rowNetStatus").activeFocus || find("rowScan").activeFocus, 2000, "focus moved to a row that is left")
+            // The row now at its place (the status fact is row 0, the network was row 1): the scan row, not the top.
+            tryVerify(() => find("rowScan").activeFocus, 2000, "focus is on the row now at its place")
             verify(find("paneNetwork").activeFocus)
+        }
+
+        // A saved network out of range (signal 0) leaves the list when it is forgotten, as with the service: the focus goes
+        // to the row now at its place (not to the top of the pane), then, with it gone too, to the next one.
+        function test_forgetting_a_saved_network_out_of_range_moves_the_focus_to_the_row_at_its_place() {
+            Network.mockAddNetwork("wifi-old1", "Old place", 0, true)
+            Network.mockAddNetwork("wifi-old2", "Old flat", 0, true)
+            tryVerify(() => Network.networks.length === 6)
+            openNetworkPane()
+            tryVerify(() => find("wifi_wifi-old2") !== null)
+            openMenuOf("wifi_wifi-old1", 4)
+            keyClick(Qt.Key_Down)
+            compare(menu().rows[menu().current].id, "forget")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("wifi_wifi-old1") === null, 3000, "its row is gone")
+            tryVerify(() => find("wifi_wifi-old2").activeFocus, 2000, "focus is on the row now at its place")
+            // The last network goes: the row now at its place is the scan row, the last row of the pane.
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => menu().shown && menu().activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("wifi_wifi-old2") === null, 3000, "the last network is gone")
+            tryVerify(() => find("rowScan").activeFocus, 2000, "focus is on the last row")
         }
 
         function test_scan_row() {
@@ -427,8 +452,13 @@ Item {
 
         // Hold A: after holdRingDelayMs the ring shows and fills until longPressMs, when the menu opens. The shot is taken
         // as soon as the ring shows (the window is laid out first), and fails if the menu has opened by then.
-        function ringShot(dir, lang) {
+        function ringShot(dir, lang, active) {
             shotSetup(lang)
+            if (active) {
+                keyClick(Qt.Key_Return)                  // join Lounge 5G: the row shows the current mark
+                tryVerify(() => network("wifi-lounge").active, 2000)
+                tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000)
+            }
             wait(600)
             grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
             const row = find("wifi_wifi-lounge")
@@ -439,12 +469,13 @@ Item {
             const menuOpen = menu().shown
             keyRelease(Qt.Key_Return)
             verify(!menuOpen, "the menu had not opened when the ring was grabbed: run it again")
-            image.save(dir + "network-hold-ring-" + lang + ".png")
+            image.save(dir + "network-hold-ring-" + (active ? "active-" : "") + lang + ".png")
         }
 
         function test_zz_menu_shot_en() { menuShot(shotsDir + "/", "en") }
         function test_zz_menu_shot_tr() { menuShot(shotsDir + "/", "tr") }
         function test_zz_ring_shot_en() { ringShot(shotsDir + "/", "en") }
         function test_zz_ring_shot_tr() { ringShot(shotsDir + "/", "tr") }
+        function test_zz_ring_shot_active_en() { ringShot(shotsDir + "/", "en", true) }
     }
 }

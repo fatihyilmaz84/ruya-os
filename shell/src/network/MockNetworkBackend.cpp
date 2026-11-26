@@ -49,8 +49,13 @@ void MockNetworkBackend::forget(const QString &id)
 {
     const int at = indexOf(id);
     if (at >= 0) {
-        m_networks[at].known = false;
-        m_networks[at].active = false;
+        // A saved network out of range (signal 0) is only listed because it is saved: forgetting it removes it.
+        if (m_networks.at(at).signal == 0) {
+            m_networks.removeAt(at);
+        } else {
+            m_networks[at].known = false;
+            m_networks[at].active = false;
+        }
         publishState();
         publishNetworks();
     }
@@ -77,6 +82,12 @@ void MockNetworkBackend::setWifiSupported(bool supported)
 {
     m_wifiSupported = supported;
     publishState();
+}
+
+void MockNetworkBackend::addNetwork(const QString &id, const QString &ssid, int signal, bool known)
+{
+    m_networks.append({id, ssid, signal, QStringLiteral("wpa-psk"), known, false});
+    publishNetworks();
 }
 
 void MockNetworkBackend::clearNetworks()
