@@ -11,8 +11,8 @@ import RuyaShell
 // row opens its Options menu (`Page.surfaceOptions` is `surfaceOptions` below; Start does too):
 // "Packages on this drive" (RUY-98: the list of .play packages on that drive, `packagesRequested`,
 // Install from USB; only while ruya-play is there, RUY-809), "Rescan" and, after a divider, "Eject".
-// The menu closes when the drive is ejected or unplugged. Accept on the console's own disk does
-// nothing; on a drive whose filesystem is not supported it says why it can't be used (hint "A Why", RUY-1225).
+// The menu closes when the drive is ejected or unplugged. The console's own disk is a fact row (kind "info",
+// no hint for A, RUY-1233); on a drive whose filesystem is not supported it says why it can't be used (hint "A Why", RUY-1225).
 //
 // Under each mounted removable volume (T-331) come the rows of what RuyaOS finds on it, in the
 // style of "This console": "Scanning…" while the service walks the drive, then one row per
@@ -492,14 +492,18 @@ SettingsPane {
             required property bool removable
             required property bool mounted
             objectName: entryKind === "volume" ? "storageVol_" + volId : "storageScan_" + volId + "_" + sub
-            kind: entryKind === "scan" ? "info" : "item"
-            // A mounted removable drive has several actions and none main: Accept opens its menu. The console's own
-            // disk and a drive that is not supported have none (the latter says why on Accept), nor has one
-            // that is being ejected.
+            // A volume whose Accept says why it can't be used (a toast): its filesystem is not supported.
+            readonly property bool showsUnsupportedReason: entryKind === "volume" && !mounted
+            // The console's own disk: mounted, not removable, nothing to do on it.
+            readonly property bool isFixedDisk: entryKind === "volume" && mounted && !removable
+            // A fact (no hint for A) for what was found on a drive and for the console's own disk (RUY-1233).
+            kind: entryKind === "scan" || isFixedDisk ? "info" : "item"
+            // A mounted removable drive has several actions and none main: Accept opens its menu. A drive that is
+            // not supported has none (it says why on Accept), nor has one that is being ejected.
             hasOptions: entryKind === "volume" && removable && mounted && pane.ejectingId !== volId
             acceptOpensOptions: hasOptions
             // A on it says why (a toast), so the hint names that and not "Select".
-            acceptVerb: entryKind === "volume" && !mounted ? qsTr("Why") : ""
+            acceptVerb: showsUnsupportedReason ? qsTr("Why") : ""
             anchored: entryKind === "volume" && pane.optionsOpenFor === volId
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
@@ -508,7 +512,7 @@ SettingsPane {
             label: name
             value: valueText
             onActivated: {
-                if (entryKind === "volume" && !mounted)
+                if (showsUnsupportedReason)
                     Notifications.show(pane.unsupportedText(), "warning")
             }
             onOptionsRequested: pane.optionsRequested("storage", volId, driveRow)

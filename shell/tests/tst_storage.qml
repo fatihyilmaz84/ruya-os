@@ -467,8 +467,10 @@ Item {
             verify(!find("storageVol_vol-old").hasOptions, "an unsupported drive")
             goTo("storageVol_vol-old")
             compare(shownHints(), "accept Why|back Back", "A on an unsupported drive says why: the hint names it (RUY-1225)")
+            compare(find("storageVol_vol-old").kind, "item", "an unsupported drive is a row A acts on")
             goTo("storageVol_vol-internal")
-            compare(shownHints(), "accept Select|back Back", "the console's own disk keeps its hint")
+            compare(find("storageVol_vol-internal").kind, "info", "the console's own disk is a fact (RUY-1233)")
+            compare(shownHints(), "back Back", "A does nothing on the console's own disk, so no A hint (RUY-1233)")
             keyClick(Qt.Key_Return)
             wait(100)
             verify(!menu().shown, "Accept on the console's own disk opens nothing")
@@ -1129,6 +1131,16 @@ Item {
             goTo("storageVol_vol-stick")
             wait(800)
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-stick.png")
+        }
+
+        // RUY-1233: the console's own disk focused: a fact row, the hint bar offers Back only.
+        function test_zz_screenshots_internal_disk() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openStoragePane()
+            goTo("storageVol_vol-internal")
+            wait(800)
+            grabImage(tc.shell).save(shotsDir + "/27-settings-storage-internal.png")
         }
 
         // RUY-1225: the unsupported drive focused: its hint says "A Why" (the reason toast is not shown, it is not asked for).
