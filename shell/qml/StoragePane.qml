@@ -6,23 +6,23 @@ import RuyaShell
 // free space with a usage bar, then what the apps and games take and the rest ("Other"; with the
 // profile data known, "Profile data" and "System");
 // Storage.internal, from Devices1.Storage.GetSystemUsage). Then one row per volume (USB drives,
-// and an internal disk mounted outside the system paths) with its
-// filesystem and "x GB free of y GB", and an "Eject" row for each mounted removable one. Accept
-// on a removable volume moves to its Eject row; on a drive whose filesystem is not supported it
-// says why it can't be used.
+// and an internal disk mounted outside the system paths) with its filesystem and "x GB free of y GB".
+// A mounted removable drive has several actions and none main (RUY-1178, 02 section 1.7), so Accept on its
+// row opens its Options menu (`Page.surfaceOptions` is `surfaceOptions` below; Start does too):
+// "Packages on this drive" (RUY-98: the list of .play packages on that drive, `packagesRequested`,
+// Install from USB; only while ruya-play is there, RUY-809), "Rescan" and, after a divider, "Eject".
+// The menu closes when the drive is ejected or unplugged. Accept on the console's own disk does
+// nothing; on a drive whose filesystem is not supported it says why it can't be used.
 //
 // Under each mounted removable volume (T-331) come the rows of what RuyaOS finds on it, in the
 // style of "This console": "Scanning…" while the service walks the drive, then one row per
 // category (Games, Backups, ...) with its size, "Other" for the rest, or the one line "Nothing
 // from RuyaOS on this drive"; a partial result reads "at least". The scan (Storage.scan) starts
 // when the pane is shown, one drive at a time (the focused drive first), and is cancelled when the
-// pane hides or the drive is ejected. A "Rescan" row under the results walks the drive again (what
-// was written since changed no property the service watches). A scan refused as busy (another
-// client scans) is asked again after 1.5, 3, 6, then every 10 s. Rows are updated in place, so
-// focus stays on its row.
-//
-// A "Packages on this drive" row (RUY-98) under each mounted removable volume's scan opens the list of .play
-// packages on that drive (`packagesRequested`, Install from USB).
+// pane hides or the drive is ejected. "Rescan" in the drive's menu walks the drive again (what
+// was written since changed no property the service watches); it does nothing while that drive
+// scans, and the menu says so. A scan refused as busy (another client scans) is asked again after
+// 1.5, 3, 6, then every 10 s. Rows are updated in place, so focus stays on its row.
 //
 // The service only reads names and sizes: nothing on a volume is opened or run from here.
 // Everything goes through the Storage singleton (org.ruyaos.Devices1.Storage); sizes come from
@@ -99,8 +99,8 @@ SettingsPane {
         }
     }
 
-    // One flat list of the rows under "Drives", in display order: per volume its row, the rows of
-    // its scan and its Eject row. Rows are matched by `rowKey` and updated in place, so focus
+    // One flat list of the rows under "Drives", in display order: per volume its row and the rows of
+    // its scan. Rows are matched by `rowKey` and updated in place, so focus
     // stays on a row when the list is re-published (free space changed) or a scan reports.
     ListModel { id: rowModel }
 
@@ -128,7 +128,7 @@ SettingsPane {
     function scanRows(id) {
         const e = Storage.scans[id]
         const row = (sub, name, value) => ({ rowKey: "scan:" + id + ":" + sub, entryKind: "scan", sub: sub, volId: id,
-                                             name: name, valueText: value, shown: true, removable: true, mounted: true })
+                                             name: name, valueText: value, removable: true, mounted: true })
         // A refusal other than "busy" (another scan runs; asked again soon) is final for now.
         const refused = e && e.status !== "" && e.status !== "busy"
         if (!e || (e.state !== "done" && e.state !== "failed" && !refused))
@@ -155,27 +155,20 @@ SettingsPane {
     function desiredRows() {
         const out = []
         for (const v of Storage.volumes) {
-            const usable = v.removable && v.mounted
             out.push({ rowKey: "vol:" + v.id, entryKind: "volume", sub: "", volId: v.id, name: v.label,
                        valueText: volumeValue(v.filesystem, v.mounted, v.readOnly, v.freeBytes, v.sizeBytes),
-                       shown: true, removable: v.removable, mounted: v.mounted })
-            if (usable) {
+                       removable: v.removable, mounted: v.mounted })
+            if (v.removable && v.mounted)
                 out.push(...scanRows(v.id))
-                if (PlayCopy.installFromUsbAllowed)
-                    out.push({ rowKey: "packages:" + v.id, entryKind: "packages", sub: "", volId: v.id, name: qsTr("Packages on this drive"),
-                               valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
-                out.push({ rowKey: "rescan:" + v.id, entryKind: "rescan", sub: "", volId: v.id, name: qsTr("Rescan %1").arg(v.label),
-                           valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
-            }
-            out.push({ rowKey: "eject:" + v.id, entryKind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
-                       valueText: "", shown: usable, removable: v.removable, mounted: v.mounted })
         }
         return out
     }
 
     function syncRows() {
-        // Where focus is now, to put it on a neighbour if its row goes away (Eject).
-        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        // Where focus is now, to put it on a neighbour if its row goes away (Eject, or a drive that is unplugged
+        // while its menu is open: the menu has the focus then and the row only its `focus`).
+        const menuOpen = pane.optionsOpenFor !== ""
+        const before = pane.activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
         const list = desiredRows()
         for (let i = rowModel.count - 1; i >= 0; --i) {
             const key = rowModel.get(i).rowKey
@@ -264,9 +257,9 @@ SettingsPane {
         }
     }
 
-    // The Rescan row: writes that change no property of the volume leave a finished result looking
+    // Rescan (in the drive's menu): writes that change no property of the volume leave a finished result looking
     // fresh to the service, so one call (ScanVolume with force) drops it and walks again. Nothing
-    // while that drive is being scanned already (Accept does nothing, the hint says so).
+    // while that drive is being scanned already (the menu's note says so).
     function rescanBlocked(id) {
         const e = Storage.scans[id]
         return id === ejectingId || scanPending === id || (e !== undefined && e.state === "running")
@@ -313,12 +306,6 @@ SettingsPane {
             Storage.refreshInternal()
             pumpScan(false)
         }
-    }
-
-    // "Packages on this drive" comes and goes with ruya-play (RUY-809).
-    Connections {
-        target: PlayCopy
-        function onInstallFromUsbAllowedChanged() { pane.syncRows() }
     }
 
     function labelOf(id) {
@@ -371,20 +358,49 @@ SettingsPane {
         Storage.eject(id)
     }
 
-    function activate(id, removable, mounted) {
-        if (!mounted) {
-            Notifications.show(unsupportedText(), "warning")
-        } else if (removable) {
-            const eject = findEject(id)
-            if (eject)
-                eject.forceActiveFocus()
-            ensureFocusedVisible()
+    // ---- A mounted removable drive's Options menu (RUY-1178): Page.surfaceOptions ----
+    function volumeById(id) {
+        return Storage.volumes.find(v => v.id === id)
+    }
+
+    function volumeOptionRows(id) {
+        const v = volumeById(id)
+        if (!v || !v.removable || !v.mounted)
+            return []
+        const rows = []
+        if (PlayCopy.installFromUsbAllowed)     // comes and goes with ruya-play (RUY-809)
+            rows.push({ id: "packages", label: qsTr("Packages on this drive"), icon: "" })
+        rows.push({ id: "rescan", label: qsTr("Rescan"), icon: "" })
+        rows.push({ id: "eject", label: qsTr("Eject"), icon: "", divider: true })
+        return rows
+    }
+
+    function runVolumeOption(id, action) {
+        if (!volumeById(id))
+            return
+        switch (action) {
+        case "packages":
+            packagesRequested(id)
+            break
+        case "rescan":
+            rescan(id)
+            break
+        case "eject":
+            ejectVolume(id)
+            break
         }
     }
 
-    function findEject(id) {
-        return focusableRows().find(r => r.objectName === "storageEject_" + id) ?? null
-    }
+    surfaceOptions: ({
+        rows: id => pane.volumeOptionRows(id),
+        title: id => pane.labelOf(id),
+        // Rescan stays in the menu while its drive is read, and does nothing then: the menu says why.
+        note: id => pane.rescanBlocked(id) ? qsTr("Rescan is not available while this drive is being read.") : "",
+        run: (id, action) => pane.runVolumeOption(id, action),
+        // Gone (unplugged) or no longer a mounted removable drive: the menu closes, the focus settles by `refocus`.
+        // (Eject runs after the menu has closed, and a drive being ejected has no menu: `hasOptions`.)
+        exists: id => { const v = pane.volumeById(id); return v !== undefined && v.removable && v.mounted }
+    })
 
     Connections {
         target: Storage
@@ -470,25 +486,23 @@ SettingsPane {
     Repeater {
         model: rowModel
         SettingRow {
+            id: driveRow
             required property string rowKey
-            required property string entryKind         // "volume" | "scan" | "packages" | "rescan" | "eject"
+            required property string entryKind         // "volume" | "scan"
             required property string sub           // a scan row: "wait", "cat:games", "other", ...
             required property string volId
             required property string name
             required property string valueText
-            required property bool shown
             required property bool removable
             required property bool mounted
-            objectName: entryKind === "volume" ? "storageVol_" + volId
-                      : entryKind === "eject" ? "storageEject_" + volId
-                      : entryKind === "rescan" ? "storageRescan_" + volId
-                      : entryKind === "packages" ? "storagePackages_" + volId
-                      : "storageScan_" + volId + "_" + sub
-            visible: shown
-            kind: entryKind === "eject" || entryKind === "rescan" ? "action" : entryKind === "scan" ? "info"
-                : entryKind === "packages" ? "page" : "item"
-            // A Rescan row while its drive scans does nothing on Accept: Back only.
-            hintKind: entryKind === "scan" || (entryKind === "rescan" && pane.rescanBlocked(volId)) ? "info" : "item"
+            objectName: entryKind === "volume" ? "storageVol_" + volId : "storageScan_" + volId + "_" + sub
+            kind: entryKind === "scan" ? "info" : "item"
+            // A mounted removable drive has several actions and none main: Accept opens its menu. The console's own
+            // disk and a drive that is not supported have none (the latter says why on Accept), nor has one
+            // that is being ejected.
+            hasOptions: entryKind === "volume" && removable && mounted && pane.ejectingId !== volId
+            acceptOpensOptions: hasOptions
+            anchored: entryKind === "volume" && pane.optionsOpenFor === volId
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
             x: entryKind === "scan" ? Theme.spaceL * pane.u : 0
@@ -496,15 +510,10 @@ SettingsPane {
             label: name
             value: valueText
             onActivated: {
-                if (entryKind === "volume")
-                    pane.activate(volId, removable, mounted)
-                else if (entryKind === "eject")
-                    pane.ejectVolume(volId)
-                else if (entryKind === "rescan")
-                    pane.rescan(volId)
-                else if (entryKind === "packages")
-                    pane.packagesRequested(volId)
+                if (entryKind === "volume" && !mounted)
+                    Notifications.show(pane.unsupportedText(), "warning")
             }
+            onOptionsRequested: pane.optionsRequested("storage", volId, driveRow)
         }
     }
 }

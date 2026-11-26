@@ -6736,7 +6736,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+342"/>
+        <location filename="../qml/StoragePane.qml" line="+329"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -6761,13 +6761,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+294"/>
+        <location line="-280"/>
+        <location line="+281"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-232"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -6812,22 +6812,32 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+235"/>
         <source>Packages on this drive</source>
         <translation>Bu bellekteki paketler</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Rescan %1</source>
-        <translation>%1 yeniden tara</translation>
-    </message>
-    <message>
-        <location line="+191"/>
+        <location line="-27"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+28"/>
+        <source>Rescan</source>
+        <translation>Yeniden tara</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Eject</source>
+        <translation>Çıkar</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Rescan is not available while this drive is being read.</source>
+        <translation>Bu sürücü okunurken yeniden tarama kullanılamaz.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
@@ -6852,13 +6862,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-311"/>
-        <location line="+311"/>
+        <location line="-326"/>
+        <location line="+326"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-322"/>
+        <location line="-337"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -6873,14 +6883,9 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+315"/>
+        <location line="+330"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
-    </message>
-    <message>
-        <location line="-296"/>
-        <source>Eject %1</source>
-        <translation>%1 sürücüsünü çıkar</translation>
     </message>
 </context>
 <context>

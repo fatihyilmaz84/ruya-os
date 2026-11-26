@@ -220,10 +220,15 @@ Item {
             tc.shell.openPage("settings", { category: "storage" })
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("paneStorage") !== null && find("paneStorage").visible, 3000, "the Storage pane is shown: " + find("page_settings").params.category)
-            tryVerify(() => find("storagePackages_vol-stick") !== null, 3000, "Packages on this drive: " + find("paneStorage").focusableRows().map(r => r.objectName))
-            compare(find("storagePackages_vol-stick").label, "Packages on this drive")
-            verify(find("storagePackages_vol-internal") === null, "not the console's own disk")
-            find("storagePackages_vol-stick").forceActiveFocus()
+            // RUY-1178: it is a row of the drive's Options menu, the first (Accept on the drive's row opens the menu).
+            tryVerify(() => find("storageVol_vol-stick") !== null, 3000, "the drive: " + find("paneStorage").focusableRows().map(r => r.objectName))
+            verify(find("paneStorage").surfaceOptions.rows("vol-internal").length === 0, "not the console's own disk")
+            find("storageVol_vol-stick").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("optionsMenu").shown, 2000, "Accept opens the drive's menu")
+            compare(find("optionsMenu").rows[0].id, "packages")
+            compare(find("optionsMenu").rows[0].label, "Packages on this drive")
+            compare(find("optionsMenu").current, 0)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "installSources")
             compare(find("page_installSources").drive, "vol-stick", "only that drive")
@@ -976,12 +981,12 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("paneStorage") !== null && find("paneStorage").visible, 3000)
             tryVerify(() => find("storageVol_vol-stick") !== null, 3000, "the drive is listed")
-            verify(find("storagePackages_vol-stick") === null, "Settings -> Storage")
+            const menuIds = () => find("paneStorage").surfaceOptions.rows("vol-stick").map(r => r.id)
+            compare(menuIds().join(), "rescan,eject", "Settings -> Storage: the drive's menu has no Packages row")
             Play.mockServiceRegained()
             tryCompare(Play, "available", true)
-            // The pane re-syncs on installFromUsbAllowedChanged itself, in the turn the service came back (no
-            // other signal needed: a scan or a volume change would hide a missing handler).
-            verify(find("storagePackages_vol-stick") !== null, "and it is back with the service")
+            // The menu's rows read `PlayCopy.installFromUsbAllowed` when they are asked for: no other signal needed.
+            compare(menuIds().join(), "packages,rescan,eject", "and it is back with the service")
         }
 
         // RUY-914: Inspect serves signer_name only for a signed package that names a developer, and the
