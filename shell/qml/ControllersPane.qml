@@ -66,7 +66,9 @@ SettingsPane {
             Qt.callLater(pane.refocusAfter, before)
     }
 
-    // The focused pad row went: the row before it, else the next one (now at its place).
+    // The focused pad row went: the row before it, else the next one (now at its place). Not SettingsPane.refocusNear:
+    // that lands on the row now at the place (04 section 4 asks this list for the one before it), and it does nothing
+    // while a page covers Settings, where only the row's own `focus` moves (T-356).
     function refocusAfter(index) {
         const rows = focusableRows()
         if (rows.length === 0)
