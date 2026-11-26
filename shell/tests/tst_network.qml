@@ -416,18 +416,18 @@ Item {
             clearToasts()
         }
 
-        function menuShot(lang) {
+        function menuShot(dir, lang) {
             shotSetup(lang)
             openMenuOf("wifi_wifi-lounge", 0)
             wait(600)
             grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
             wait(600)
-            grabImage(tc.shell).save(shotsDir + "/network-options-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "network-options-" + lang + ".png")
         }
 
         // Hold A: after holdRingDelayMs the ring shows and fills until longPressMs, when the menu opens. The shot is taken
         // as soon as the ring shows (the window is laid out first), and fails if the menu has opened by then.
-        function ringShot(lang) {
+        function ringShot(dir, lang) {
             shotSetup(lang)
             wait(600)
             grabImage(tc.shell)                          // the first grab of a window makes it lay the pane out
@@ -438,12 +438,12 @@ Item {
             const menuOpen = menu().shown
             keyRelease(Qt.Key_Return)
             verify(!menuOpen, "the menu had not opened when the ring was grabbed: run it again")
-            image.save(shotsDir + "/network-hold-ring-" + lang + ".png")
+            image.save(dir + "network-hold-ring-" + lang + ".png")
         }
 
-        function test_zz_menu_shot_en() { menuShot("en") }
-        function test_zz_menu_shot_tr() { menuShot("tr") }
-        function test_zz_ring_shot_en() { ringShot("en") }
-        function test_zz_ring_shot_tr() { ringShot("tr") }
+        function test_zz_menu_shot_en() { menuShot(shotsDir + "/", "en") }
+        function test_zz_menu_shot_tr() { menuShot(shotsDir + "/", "tr") }
+        function test_zz_ring_shot_en() { ringShot(shotsDir + "/", "en") }
+        function test_zz_ring_shot_tr() { ringShot(shotsDir + "/", "tr") }
     }
 }
