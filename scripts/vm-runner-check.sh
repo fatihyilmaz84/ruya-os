@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # modes: check newest steam sample
+# needs: profile check sample
+# (check and sample run a Windows program on an X display of the signed-in profile, RUY-980; vm-queue.ps1 reads this line)
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there

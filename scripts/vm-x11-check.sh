@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # modes: check clean
+# needs: profile check clean
+# (a profile is signed in because an X server is the signed-in profile's: RUY-473; vm-queue.ps1 reads this line)
 # X11 mode of ruya-session (ADR-034, RUY-435 on an image with RUY-434's xwayland-satellite and Xwayland) and
 # the security point of ADR-034: an app's X server is reachable by that app alone. Runs in the VM as root, like
 # the other vm-*-check.sh (the lead's queue copies vm-x11-client.py next to it):

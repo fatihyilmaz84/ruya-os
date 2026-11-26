@@ -85,6 +85,8 @@ foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.sh") {
     $extra = @($listed | Where-Object { $_ -notin $dispatched })
     if ($missing) { $problems.Add("scripts/$($f.Name): dispatches but does not list in '# modes:': $($missing -join ' ')") }
     if ($extra) { $problems.Add("scripts/$($f.Name): lists in '# modes:' but does not dispatch: $($extra -join ' ')") }
+    # the `# needs:` lines (RUY-1163): readable, a known keyword, every mode named is one the script lists
+    foreach ($p in @(Get-VmNeedsProblems $f.FullName)) { $problems.Add("scripts/$($f.Name): $p") }
 }
 
 # 1d. The queue's skip rules on a temporary tree: a mode not listed, no modes line, a missing script,
@@ -97,6 +99,45 @@ try {
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms remove launch launch-windows parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
+    # The `# needs:` reader (RUY-1163): a listed mode, a mode not listed, `all`, no line, the default mode of
+    # a bare call, and the lines that cannot be read (each must carry an error; the 1c loop fails on it).
+    $needsHead = "#!/usr/bin/env bash`n"
+    $needFixtures = @(
+        @{ name = "needs-listed"; head = "# modes: check other`n# needs: profile check`n"; check = "vm-n-check.sh check"; want = $true },
+        @{ name = "needs-other-mode"; head = "# modes: check other`n# needs: profile check`n"; check = "vm-n-check.sh other"; want = $false },
+        @{ name = "needs-bare-default"; head = "# modes: other check`n# needs: profile check`nmode=`"`${1:-check}`"`n"; check = "vm-n-check.sh"; want = $true },
+        @{ name = "needs-bare-not-default"; head = "# modes: other check`n# needs: profile other`nmode=`"`${1:-check}`"`n"; check = "vm-n-check.sh"; want = $false },
+        @{ name = "needs-all"; head = "# modes: check other`n# needs: profile all`n"; check = "vm-n-check.sh other"; want = $true },
+        @{ name = "needs-none"; head = "# modes: check other`n"; check = "vm-n-check.sh check"; want = $false },
+        @{ name = "needs-prose-comment"; head = "# modes: check`n# needs the shell running`n"; check = "vm-n-check.sh check"; want = $false },
+        @{ name = "needs-unlisted-mode"; head = "# modes: check`n# needs: profile check ghost`n"; check = "vm-n-check.sh ghost"; want = $true; bad = "does not list: ghost" },
+        @{ name = "needs-unknown-keyword"; head = "# modes: check`n# needs: pad check`n"; check = "vm-n-check.sh check"; want = $false; bad = "unknown need 'pad'" },
+        @{ name = "needs-empty"; head = "# modes: check`n# needs:`n"; check = "vm-n-check.sh check"; want = $false; bad = "no keyword" },
+        @{ name = "needs-no-mode"; head = "# modes: check`n# needs: profile`n"; check = "vm-n-check.sh check"; want = $false; bad = "lists no mode" },
+        @{ name = "needs-all-and-mode"; head = "# modes: check`n# needs: profile all check`n"; check = "vm-n-check.sh check"; want = $false; bad = "cannot be combined" },
+        @{ name = "needs-twice"; head = "# modes: check other`n# needs: profile check`n# needs: profile other`n"; check = "vm-n-check.sh check"; want = $true; bad = "declared twice" }
+    )
+    foreach ($nf in $needFixtures) {
+        [IO.File]::WriteAllText((Join-Path $qs "vm-n-check.sh"), $needsHead + $nf.head)
+        $got = Get-CheckNeedsProfile $nf.check $qs
+        if ($got -ne $nf.want) { $problems.Add("needs fixture '$($nf.name)': '$($nf.check)' needs a profile = $got, want $($nf.want)") }
+        $bad = @(Get-VmNeedsProblems (Join-Path $qs "vm-n-check.sh"))
+        if ($nf.bad) {
+            if (-not ($bad | Where-Object { $_ -like "*$($nf.bad)*" })) { $problems.Add("needs fixture '$($nf.name)': the lint would not report '$($nf.bad)', got: $($bad -join ' | ')") }
+        } elseif ($bad) { $problems.Add("needs fixture '$($nf.name)': reported a problem on a good line: $($bad -join ' | ')") }
+    }
+    # the real scripts, the answers the hard-coded list of vm-queue.ps1 gave (the default queue and the
+    # modes around it); a bare vm-platform-check.sh and vm-runner-check.sh run `check`, which needs it
+    foreach ($e in @(
+        @("vm-x11-check.sh", $true), @("vm-x11-check.sh check", $true), @("vm-x11-check.sh clean", $true),
+        @("vm-runner-check.sh check", $true), @("vm-runner-check.sh sample", $true), @("vm-runner-check.sh newest", $false), @("vm-runner-check.sh steam", $false),
+        @("vm-library-check.sh steam", $true), @("vm-library-check.sh installations", $true), @("vm-library-check.sh check", $false), @("vm-library-check.sh play", $false), @("vm-library-check.sh seed", $false),
+        @("vm-platform-check.sh check", $true), @("vm-platform-check.sh identity", $true), @("vm-platform-check.sh deputy", $true), @("vm-platform-check.sh clean", $false), @("vm-platform-check.sh", $true),
+        @("vm-session-check.sh check", $false), @("vm-notifications-check.sh check", $false), @("vm-sounds-check.sh", $false), @("vm-storage-check.ps1 scan", $false), @("vm-reboot-check.ps1 -SavedOutput", $false)
+    )) {
+        $got = Get-CheckNeedsProfile $e[0] $Scripts
+        if ($got -ne $e[1]) { $problems.Add("vm-queue needs: '$($e[0])' needs a profile = $got, want $($e[1]) (its '# needs:' line)") }
+    }
     # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
     # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
     # Lines are single-quoted PowerShell strings, so the shell text needs no escaping.
