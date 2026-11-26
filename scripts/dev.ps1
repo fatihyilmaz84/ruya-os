@@ -1425,6 +1425,38 @@ function Test-ScriptSelfChecks {
     Test-BusPolicies
 }
 
+# Runs qmllint on one target (a .qml file, or "@<response file>") and returns the exit code and the whole
+# report. --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
+# RUY-582: no 2>&1 on the native exe, so PowerShell 5.1 never wraps stderr in NativeCommandError records.
+# RUY-1223: both streams go to files under output\ and come back as text, so the caller can print the
+# report into the log (qmllint's Info/Warning lines go to stderr, which a redirected run would lose).
+function Invoke-QmlLint([string]$Target) {
+    $dir = Join-Path $Repo "output"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $outFile = Join-Path $dir "qmllint.out.txt"
+    $errFile = Join-Path $dir "qmllint.err.txt"
+    $p = Start-Process (Get-Command qmllint).Source -ArgumentList @("--max-warnings", "0", "`"$Target`"") `
+        -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $text = ([IO.File]::ReadAllText($outFile) + [IO.File]::ReadAllText($errFile)).TrimEnd()
+    [pscustomobject]@{ ExitCode = $p.ExitCode; Text = $text }
+}
+
+# Self-check (RUY-1223): a file with an unqualified access gives a non-zero exit code and its warning text
+# comes back; a clean file gives exit code 0 and no text.
+function Test-QmlLintCapture {
+    $fx = Join-Path $Repo "output\qmllint-fixture"
+    New-Item -ItemType Directory -Force -Path $fx | Out-Null
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText((Join-Path $fx "Bad.qml"), "import QtQuick`nItem {`n    property int a: undefinedName`n}`n", $utf8)
+    [IO.File]::WriteAllText((Join-Path $fx "Good.qml"), "import QtQuick`nItem {`n    property int a: 1`n}`n", $utf8)
+    $bad = Invoke-QmlLint (Join-Path $fx "Bad.qml")
+    $good = Invoke-QmlLint (Join-Path $fx "Good.qml")
+    Remove-Item -Recurse -Force $fx
+    $ok = ($bad.ExitCode -ne 0) -and ($bad.Text -match "Unqualified access") -and ($good.ExitCode -eq 0) -and (-not $good.Text)
+    if (-not $ok) { Write-Host "    bad: exit $($bad.ExitCode), text '$($bad.Text)'; good: exit $($good.ExitCode), text '$($good.Text)'" -ForegroundColor Yellow }
+    Record "qmllint capture self-check (a warning comes back as text and a red exit code, a clean file as neither)" $ok
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
@@ -1436,11 +1468,11 @@ function Do-Shell {
     Test-QmlTests
     Test-TestMembers
     Step "qmllint (module context)"
-    # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
-    # RUY-582: qmllint's Info/Warning lines go to stderr. Start-Process (no 2>&1) lets them print as they are,
-    # so PowerShell 5.1 never wraps them in NativeCommandError records; the verdict is the exit code only.
-    $lint = Start-Process (Get-Command qmllint).Source -ArgumentList @("--max-warnings", "0", "`"@$ShellBuild\.rcc\qmllint\ruyashell.rsp`"") -NoNewWindow -Wait -PassThru
+    $lint = Invoke-QmlLint "@$ShellBuild\.rcc\qmllint\ruyashell.rsp"
+    # The report goes through Write-Host (the information stream), so a run redirected to a file keeps it.
+    if ($lint.Text) { Write-Host $lint.Text }
     Record "qmllint" ($lint.ExitCode -eq 0)
+    Test-QmlLintCapture
     # T-462: the probe path of `shots` (a window that presents no frames stops it), without a display:
     # the window is never shown, so the probe must report "no frames" even though offscreen draws.
     Step "Display probe self-check (no frames -> asleep)"
