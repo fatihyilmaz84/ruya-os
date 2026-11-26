@@ -1117,6 +1117,8 @@ Item {
             tryVerify(() => volume("vol-card") !== undefined)
             openStoragePane()
             tryVerify(() => find("storageScan_vol-stick_cat:games") !== null && find("storageScan_vol-card_none") !== null, 3000)
+            tryCompare(addedSpy, "count", 2, 5000)       // the service announces a drive after a settle window
+            tryVerify(() => Notifications.model.count === 2, 2000, "both toasts are up")
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
                 openDriveMenu("vol-stick")
