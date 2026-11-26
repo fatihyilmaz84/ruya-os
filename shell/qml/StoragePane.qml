@@ -390,6 +390,14 @@ SettingsPane {
         exists: id => { const v = pane.volumeById(id); return v !== undefined && v.removable && v.mounted }
     })
 
+    // The rows' texts are made by `desiredRows()` into `rowModel`, not in bindings (the model holds the text, matched
+    // by `rowKey` and set in place, so focus stays): when the language changes they are made again, here only
+    // (`retranslate()` has run by then, `DeviceSettings.setLanguage`).
+    Connections {
+        target: DeviceSettings
+        function onLanguageChanged() { pane.syncRows() }
+    }
+
     Connections {
         target: Storage
         function onFinished(op, id, status) {

@@ -369,6 +369,31 @@ Item {
             compare(find("categoryList").currentItem.objectName, "category_storage")
         }
 
+        // RUY-1227: the language changes while the pane is open (and its drive menu is closed): the rows' texts are made by
+        // `desiredRows()` into a model, so they must be made again on the change, with focus staying where it is.
+        function test_the_rows_retranslate_when_the_language_changes_while_the_pane_is_open() {
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null && find("storageScan_vol-card_none") !== null, 3000)
+            goTo("storageScan_vol-stick_cat:games")
+            verify(find("storageVol_vol-stick").value.indexOf("free of") > 0)
+            compare(find("storageVol_vol-old").value, "Not supported")
+            compare(find("storageScan_vol-card_none").label, "Nothing found here")
+            DeviceSettings.language = "tr"
+            tryVerify(() => find("storageVol_vol-old").value === "Desteklenmiyor", 2000, "the unsupported drive's value")
+            tryVerify(() => find("storageVol_vol-stick").value.indexOf("içinde") > 0 && find("storageVol_vol-stick").value.indexOf("free of") < 0,
+                      2000, "the volume's value")
+            compare(find("storageScan_vol-stick_cat:games").label, "Oyunlar")
+            compare(find("storageScan_vol-stick_other").label, "Diğer")
+            compare(find("storageScan_vol-card_none").label, "Burada bir şey bulunamadı")
+            verify(find("storageScan_vol-stick_cat:games").activeFocus, "focus stays on its row")
+            DeviceSettings.language = "en"
+            tryVerify(() => find("storageVol_vol-old").value === "Not supported", 2000, "and back")
+            compare(find("storageScan_vol-stick_cat:games").label, "Games")
+            verify(find("storageScan_vol-stick_cat:games").activeFocus, "focus stays on its row")
+        }
+
         function test_unplugged_drive_while_focused() {
             // A drive that goes away under the focus (eject from elsewhere) must not strand it.
             Storage.mockPlugStick()
