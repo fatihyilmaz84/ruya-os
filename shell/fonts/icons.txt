@@ -51,9 +51,9 @@ close e5cd
 delete e92e
 bar_chart e26b
 more_horiz e5d3
-link e157
+link e250
 link_off e16f
-edit e3c9
+edit f097
 # Our own glyphs (T-199, RUY-491; scripts/add-pad-glyphs.py): the name, a private-use code point Material
 # does not use, and the word ruya. They are not downloaded: one per silhouette in shell/art/pads/
 # (pad_<file stem>, in the order of the stems), drawn from its SVG into both cuts.
