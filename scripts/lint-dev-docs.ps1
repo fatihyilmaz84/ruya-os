@@ -64,16 +64,7 @@ function Find-Python {
     }
     return $null
 }
-function Find-Bash {
-    foreach ($p in "$env:ProgramFiles\Git\bin\bash.exe", "$env:ProgramFiles\Git\usr\bin\bash.exe") {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
-    # Not the WSL launcher in System32: it would run the block in another distribution.
-    $c = Get-Command bash -ErrorAction SilentlyContinue |
-        Where-Object { $_.Source -notmatch 'System32|WindowsApps' } | Select-Object -First 1
-    if ($c) { return $c.Source }
-    return $null
-}
+. (Join-Path $PSScriptRoot "lib-bash.ps1")
 $python = Find-Python
 $bash = Find-Bash
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-" + [guid]::NewGuid().ToString("N"))
