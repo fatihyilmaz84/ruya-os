@@ -33,6 +33,14 @@ FocusScope {
 
     signal exitRequested()
 
+    // Rows with an Options menu (RUY-1176, 02 §1.7): a pane whose rows have one sets `surfaceOptions` (the
+    // contract of `Page.surfaceOptions`; SettingsPage hands the shown pane's to the Shell) and answers a row's
+    // `optionsRequested` with the pane's own `optionsRequested(surface, itemId, row)`. `optionsOpenFor` is the
+    // item id whose menu is open (the page feeds it): that row is `anchored`.
+    property var surfaceOptions: null
+    property string optionsOpenFor: ""
+    signal optionsRequested(string surface, string itemId, Item anchor)
+
     // The visible part of the pane (Flickable plus clip). Rows are never drawn cut: scrolling
     // moves in whole rows (the top edge is always the top of a row) and the viewport ends at the
     // bottom of the last row that fits. Its height is therefore at most the pane's.

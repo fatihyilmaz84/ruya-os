@@ -230,16 +230,24 @@ Item {
             expectPlain(find("btDev_bt-pad-old"), tc.hostile, 1, "Bluetooth device row", ["label"])
         }
 
-        // The confirmation that names the device: its title, and the confirm button's label ("Forget <name>").
+        // The menu that names the device and the confirmation: the menu's title, the confirmation's title and the
+        // confirm button's label ("Forget <name>").
         function test_forget_confirmation_names_the_device() {
             Bluetooth.mockSetName("bt-pad-old", tc.hostile)
             openSettings()
             keyClick(Qt.Key_Down)                        // Network
             keyClick(Qt.Key_Down)                        // Bluetooth & controllers
             keyClick(Qt.Key_Right)
-            tryVerify(() => find("btForget_bt-pad-old") !== null, 3000, "the Forget row")
-            find("btForget_bt-pad-old").forceActiveFocus()
-            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btDev_bt-pad-old") !== null, 3000, "the device row")
+            find("btDev_bt-pad-old").forceActiveFocus()
+            keyClick(Qt.Key_Return)                      // a paired device: A opens its menu, titled with the name
+            tryVerify(() => find("optionsMenu").shown, 2000, "the menu opens")
+            // the title is one line and the markup is long: its start is enough to find it (it must be plain text)
+            expectPlain(find("optionsMenu"), tc.hostile.slice(0, 8), 1, "Options menu title", ["optionsTitle"])
+            for (let i = 0; i < 8 && find("optionsMenu").rows[find("optionsMenu").current].id !== "forget"; ++i)
+                keyClick(Qt.Key_Down)
+            compare(find("optionsMenu").rows[find("optionsMenu").current].id, "forget")
+            keyClick(Qt.Key_Return)                      // Forget…
             tryVerify(() => find("btForgetConfirm").shown, 2000, "the confirmation opens")
             expectPlain(find("btForgetConfirm"), "Forget " + tc.hostile, 2, "Forget confirmation", ["powerConfirmLabel", "powerConfirmTitle"])
         }

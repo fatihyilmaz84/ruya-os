@@ -312,11 +312,8 @@ Item {
 
         function test_scrolled_pane_draws_only_whole_rows() {
             openSettings()
-            for (let scan = 0; scan < 2; ++scan) {       // two scans list every device: more rows than fit
-                Bluetooth.startScan()
-                tryCompare(Bluetooth, "discovering", true)
-                tryCompare(Bluetooth, "discovering", false, 3000)
-            }
+            Bluetooth.mockPopulate()                     // the gallery of paired devices: one row each, more rows than fit
+            tryVerify(() => Bluetooth.devices.length > 12, 3000, "the gallery is listed")
             selectCategory("bluetooth")                            // Bluetooth & controllers
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
@@ -355,11 +352,8 @@ Item {
 
         // Scroll cue (T-185): the first / last visible row is dimmed while rows exist beyond it.
         function fillBluetoothPane() {
-            for (let scan = 0; scan < 2; ++scan) {
-                Bluetooth.startScan()
-                tryCompare(Bluetooth, "discovering", true)
-                tryCompare(Bluetooth, "discovering", false, 3000)
-            }
+            Bluetooth.mockPopulate()                     // the gallery of paired devices: one row each, more rows than fit
+            tryVerify(() => Bluetooth.devices.length > 12, 3000, "the gallery is listed")
             selectCategory("bluetooth")                            // Bluetooth & controllers
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
@@ -616,7 +610,7 @@ Item {
             keyClick(Qt.Key_Return)                      // scan: devices are listed below
             tryCompare(Bluetooth, "discovering", true)
             tryCompare(Bluetooth, "discovering", false, 3000)
-            tryVerify(() => pane.laidOutRows().length > 10, 2000, "devices were added")
+            tryVerify(() => pane.laidOutRows().length > 7, 2000, "devices were added")   // the six rows before, and the two the scan found
             const row = checkFocusedRowClear(pane, "after the scan")
             compare(row.objectName, "rowBtAdd")
             const all = pane.laidOutRows()

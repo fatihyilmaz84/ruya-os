@@ -2188,16 +2188,41 @@ FocusScope {
         return Library.sessionAppId(id) !== "" && !Play.isPlayApp(Library.sessionAppId(id)) && !Store.available ? qsTr("Store options are unavailable right now.") : ""
     }
 
+    // The page that owns the open menu's rows (Page.surfaceOptions), else null: the Library's items. While no
+    // menu is open the pages ask `optionRows` for their hints, and that is the Library's alone.
+    readonly property var ownedOptions: optionsOn ? (optionsPage?.surfaceOptions ?? null) : null
+
     function optionRows(surface, id) {
+        if (ownedOptions)
+            return ownedOptions.rows(id)
         return optionsList === "installations" ? installationRows(id) : gameRows(id)
     }
 
     function optionNote(surface, id) {
+        if (ownedOptions)
+            return ownedOptions.note(id)
         return optionsList === "installations" ? "" : gameNote(id)
     }
 
     function optionTitle(surface, id) {
+        if (ownedOptions)
+            return ownedOptions.title(id)
         return Library.items.find(i => i.id === id)?.title ?? ""
+    }
+
+    // Whether the item the menu was opened for is still there: a Library item, or the page's own (`exists`). It
+    // does not read `optionsOn`, which closing the menu changes.
+    readonly property bool optionsItemPresent: optionsPage?.surfaceOptions ? optionsPage.surfaceOptions.exists(optionsItemId)
+                                                                           : Library.items.some(i => i.id === optionsItemId)
+    // It went while the menu is open: close it; the surface moves its own focus. `dismiss()` returns the focus to
+    // the item only while it can take it; the menu still holding it means the item (or its row) is gone too, and
+    // the page it came from takes the focus back by its own rule (a Settings pane settles on the row now at that place).
+    onOptionsItemPresentChanged: {
+        if (optionsItemPresent || !optionsOn)
+            return
+        optionsMenu.dismiss()
+        if (optionsMenu.activeFocus && optionsPage)
+            optionsPage.forceActiveFocus()
     }
 
     // Opens the menu of item `id` on `surface`, anchored to `anchor` (a card or a pill). False when it
@@ -2227,6 +2252,12 @@ FocusScope {
 
     // A row was chosen (the menu has closed and the focus is on the item).
     function runOption(surface, id, action) {
+        // The menu has closed already (`optionsOn` is false): the page that opened it runs its row. A page's own
+        // call (`Page.runOption`, surface "page") never reaches a page that opened a menu earlier.
+        if (optionsPage?.surfaceOptions && surface === optionsSurface) {
+            optionsPage.surfaceOptions.run(id, action)
+            return
+        }
         const item = Library.items.find(i => i.id === id)
         if (!item)
             return
@@ -2382,12 +2413,10 @@ FocusScope {
         uninstallGone = waiting
     }
 
-    // The item behind the open menu is gone: close it; the surface moves its own focus.
+    // The item behind the open menu is gone (`optionsItemGone` closes it); an uninstalled one settles the focus.
     Connections {
         target: Library
         function onItemsChanged() {
-            if (root.optionsOn && !Library.items.some(i => i.id === root.optionsItemId))
-                optionsMenu.dismiss()
             if (root.uninstallGone.length > 0)
                 Qt.callLater(root.settleUninstalled)
         }

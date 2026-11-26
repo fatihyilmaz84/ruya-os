@@ -72,19 +72,27 @@ FocusScope {
     property bool centered: false
     property bool primary: false
     property int labelWeight: Font.Normal
+    // Its Options menu is open (04 §5, anchor look): `selectedFill` while the menu holds the focus, the way a
+    // category list shows its selection without focus. The owner (SettingRow) also sets the label's weight.
+    property bool anchored: false
     // The label's colour (onPrimary on a primary action).
     property color labelColor: Theme.text
 
     // What the hint bar shows while this row has the focus (SettingsPane, 04 §5): a list of
     // { button, text }. `hintKind` picks the default; a row names its own verb with `hints:`.
     property string hintKind: "item"
+    // The row has an Options menu that Start opens beside its own verb on A (02 §1.7): the hint says so.
+    property bool optionsHint: false
     property var hints: {
         const back = { action: "back", text: qsTr("Back") }
+        const options = { action: "options", text: qsTr("Options") }
         switch (hintKind) {
         case "info":
             return [back]
+        case "options":                    // A opens the menu: it is the row's verb (a device with several actions)
+            return [{ action: "accept", text: options.text }, back]
         case "page":
-            return [{ action: "accept", text: qsTr("Open") }, back]
+            return [{ action: "accept", text: qsTr("Open") }, ...(optionsHint ? [options] : []), back]
         case "toggle":
             return [{ action: "accept", text: qsTr("Toggle") }, back]
         case "choice":
@@ -92,7 +100,7 @@ FocusScope {
         case "slider":
             return [{ actions: ["left", "right"], text: qsTr("Adjust") }, back]
         default:
-            return [{ action: "accept", text: qsTr("Select") }, back]
+            return [{ action: "accept", text: qsTr("Select") }, ...(optionsHint ? [options] : []), back]
         }
     }
 
@@ -122,6 +130,7 @@ FocusScope {
         // A flat row (a fact, a message) has no fill at rest: the clear colour is focusFill's own, at alpha 0,
         // so the focus fade does not pass through black. A primary action keeps its fill when focused.
         color: control.primary ? Theme.primaryFill
+               : control.anchored ? Theme.selectedFill
                : control.activeFocus ? Theme.focusFill
                : control.flat ? Qt.alpha(Theme.focusFill, 0)
                : (Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque)
