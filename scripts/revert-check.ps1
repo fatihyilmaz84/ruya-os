@@ -16,10 +16,12 @@
 # much faster; name the file that holds the new test, since nothing else runs.
 # -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks incl. the translation and bus-policy lints), for a mutation of
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
-# mutation. Neither builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
+# mutation; -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1` alone (about 4 minutes), for a mutation of that lint
+# or of vm-queue-lib.ps1. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-translations.ps1 -Old '<a Get-PadNameFindings rule>' -New '<nothing>'
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-bus-policies.ps1 -Old '<a rule>' -New '<nothing>'
+#   .\scripts\revert-check.ps1 -Mode vmlint -File scripts\vm-queue-lib.ps1 -Old '<a Get-VmNeedsProblems rule>' -New '<nothing>'
 # A -File under services\<crate>\ is Rust: step 2 is `cargo test -p <crate> --all-features -- <-Test name filters>`
 # (every feature, so code behind one, like ruya-platform's dev-mock, is tested too), e.g.
 #   .\scripts\revert-check.ps1 -File services\ruya-session\src\spawner.rs -Old '...' -New '...' -Test scope_names
@@ -28,7 +30,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Old,
     [Parameter(Mandatory = $true)][string]$New,
     [string[]]$Test = @(),
-    [ValidateSet("default", "docs", "vmchecks")][string]$Mode = "default",
+    [ValidateSet("default", "docs", "vmchecks", "vmlint")][string]$Mode = "default",
     # Self-check only (dev.ps1): a script block that stands in for the build and test run and returns its
     # console text, with "FAIL!  : name" lines for failed tests. Nothing is rebuilt afterwards.
     [scriptblock]$Runner,
@@ -103,6 +105,12 @@ $badName = $false
 $rel = [IO.Path]::GetFullPath($Path).Substring([IO.Path]::GetFullPath($Repo).TrimEnd('\').Length).TrimStart('\')
 $crate = if ($rel -match '^services\\([^\\]+)\\') { $Matches[1] } else { $null }
 $cmdMode = $Mode -ne "default"
+# The modes whose step 2 is one command run from the checkout root (RUY-1216: vmlint joins vmchecks here, so a
+# mode is one table row and not a second copy of the exit-code plumbing).
+$repoCommands = @{
+    vmchecks = @{ Label = "bash scripts/test-vm-checks.sh"; Run = { & bash scripts/test-vm-checks.sh } }
+    vmlint   = @{ Label = "scripts\lint-vm-checks.ps1"; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") } }
+}
 $rust = [bool]$crate -and -not $cmdMode
 # The record goes down before the first byte of the file changes.
 New-Item -ItemType Directory -Path $recordDir -Force | Out-Null
@@ -137,10 +145,10 @@ try {
             $out = & (Join-Path $PSScriptRoot "dev.ps1") docs *>&1 | Out-String -Width 4096
             $childExit = $LASTEXITCODE
             $logs = @()
-        } elseif ($Mode -eq "vmchecks") {
-            Write-Host "== mutated ${File}; bash scripts/test-vm-checks.sh =="
+        } elseif ($repoCommands.ContainsKey($Mode)) {
+            Write-Host "== mutated ${File}; $($repoCommands[$Mode].Label) =="
             Push-Location $Repo
-            try { $out = & bash scripts/test-vm-checks.sh *>&1 | Out-String -Width 4096; $childExit = $LASTEXITCODE } finally { Pop-Location }
+            try { $out = & $repoCommands[$Mode].Run *>&1 | Out-String -Width 4096; $childExit = $LASTEXITCODE } finally { Pop-Location }
             $logs = @()
         } elseif ($rust) {
             Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="

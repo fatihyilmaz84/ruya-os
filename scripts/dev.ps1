@@ -446,9 +446,9 @@ function Test-RevertCheckPiping {
             if (-not (Test-RevertCase "exit-code piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Runner = $exitRunner; Test = "tst_fixture"; LogDir = $fx })) { $ok = $false }
         }
     }
-    # RUY-657: -Mode docs / vmchecks take the verdict from the child's failure ("FAILED: ..." from the stand-in).
+    # RUY-657: -Mode docs / vmchecks / vmlint take the verdict from the child's failure ("FAILED: ..." from the stand-in).
     $docsRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "    FAILED: fixture lint"; "FAILED: fixture lint" } else { "ALL GREEN (docs)" } }.GetNewClosure()
-    foreach ($mode in @("docs", "vmchecks")) {
+    foreach ($mode in @("docs", "vmchecks", "vmlint")) {
         foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
             foreach ($piped in @($false, $true)) {
                 if (-not (Test-RevertCase "mode=$mode piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Mode = $mode; Runner = $docsRunner })) { $ok = $false }
@@ -459,7 +459,7 @@ function Test-RevertCheckPiping {
     # not return; it is CAUGHT, says "child aborted" and exits 0, in every mode; the same child with nothing to
     # throw about is NOT CAUGHT.
     $throwRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { throw "fixture child died (FAILED: cmake)" } else { "ALL GREEN" } }.GetNewClosure()
-    foreach ($mode in @("default", "docs", "vmchecks")) {
+    foreach ($mode in @("default", "docs", "vmchecks", "vmlint")) {
         foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
             foreach ($piped in @($false, $true)) {
                 if (-not (Test-RevertCase "aborted child mode=$mode piped=$piped caught=$($case.Caught)" $script $target $case.New $piped $case.Caught @{ Mode = $mode; Runner = $throwRunner; Test = "tst_fixture"; LogDir = $fx } 'child aborted: fixture child died')) { $ok = $false }
