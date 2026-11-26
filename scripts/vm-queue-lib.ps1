@@ -5,6 +5,10 @@
 # (`# modes: none` when it takes no mode). The queue reads that line, nothing else. The lint
 # (lint-vm-checks.ps1) compares it with what the script dispatches, so the line cannot drift.
 #
+# Needs. A script whose modes need a signed-in profile says so next to it, `# needs: profile check sample`
+# (or `# needs: profile all`); vm-queue.ps1 runs vm-goto.ps1 home once when a queued check needs one.
+# The lint checks every named mode is in `# modes:`. It does not guess a need from the script text.
+#
 # The .play files. vm-play-check.sh and vm-library-check.sh play need the sample package and
 # ruya-pack on the guest (scripts/play-vm-files.sh builds both into output\play-vm).
 
@@ -24,8 +28,64 @@ function Get-VmModes([string]$Path) {
     return $null
 }
 
+# The preconditions a script declares in its header, one `# needs: <keyword> <mode>... | all` line each
+# (RUY-1163). The only keyword is `profile`: the queue signs a profile in (vm-goto.ps1 home) before it runs
+# a check that lists its mode, or `all`. A line that cannot be read is not guessed at: its entry carries
+# `error`, and the lint fails on it. Returns an array of
+# @{ keyword; modes = <listed modes>; all = <bool>; error = <text or $null> } (wrap the call in @()).
+$script:VmNeedKeywords = @("profile")
+function Get-VmNeeds([string]$Path) {
+    $found = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+    foreach ($l in [IO.File]::ReadAllLines($Path)) {
+        if ($l -notmatch '^#\s*needs:\s*(.*?)\s*$') { continue }
+        $t = @($Matches[1] -split '\s+' | Where-Object { $_ })
+        $n = @{ keyword = ""; modes = @(); all = $false; error = $null }
+        if ($t.Count -eq 0) { $n.error = "no keyword (want '# needs: profile <mode> ...' or '# needs: profile all')" }
+        else {
+            $n.keyword = $t[0]
+            $rest = @($t | Select-Object -Skip 1)
+            if ($n.keyword -notin $script:VmNeedKeywords) { $n.error = "unknown need '$($n.keyword)' (known: $($script:VmNeedKeywords -join ' '))" }
+            elseif ($seen.ContainsKey($n.keyword)) { $n.error = "'$($n.keyword)' is declared twice" }
+            elseif ($rest.Count -eq 0) { $n.error = "'$($n.keyword)' lists no mode (name the modes, or 'all')" }
+            elseif ('all' -in $rest -and $rest.Count -gt 1) { $n.error = "'all' cannot be combined with modes" }
+            elseif ($rest.Count -eq 1 -and $rest[0] -eq 'all') { $n.all = $true }
+            else { $n.modes = $rest }
+            $seen[$n.keyword] = $true
+        }
+        $found.Add($n)
+    }
+    return $found.ToArray()
+}
+
+# What is wrong with a script's `# needs:` lines (the lint's side): a line that cannot be read, a mode it
+# names that the script's `# modes:` line does not list. Returns the messages (none: fine).
+function Get-VmNeedsProblems([string]$Path) {
+    $listed = Get-VmModes $Path
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($n in @(Get-VmNeeds $Path)) {
+        if ($n.error) { $out.Add("'# needs:' line: $($n.error)"); continue }
+        $unlisted = @($n.modes | Where-Object { $null -eq $listed -or $_ -notin $listed })
+        if ($unlisted) { $out.Add("'# needs: $($n.keyword)' names a mode that '# modes:' does not list: $($unlisted -join ' ')") }
+    }
+    return $out.ToArray()
+}
+
+# Does this check need a signed-in profile? $Check is "<script> [mode ...]". A bare call runs the script's
+# default mode. The one place the queue decides it: the script's own `# needs: profile` line.
+function Get-CheckNeedsProfile([string]$Check, [string]$ScriptsDir) {
+    $parts = @($Check -split "\s+" | Where-Object { $_ })
+    $path = Join-Path $ScriptsDir $parts[0]
+    if (-not $parts[0].EndsWith(".sh") -or -not (Test-Path $path)) { return $false }
+    $need = @(Get-VmNeeds $path | Where-Object { $_.keyword -eq "profile" -and -not $_.error }) | Select-Object -First 1
+    if (-not $need) { return $false }
+    if ($need.all) { return $true }
+    $mode = if ($parts.Count -ge 2) { $parts[1] } else { (Get-VmDispatchedModes $path).default }
+    return [bool]$mode -and ($mode -in $need.modes)
+}
+
 # What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
-# @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
+# @{ modes = <sorted modes>; default = <the mode a bare call runs, or $null>; unreadable = <lines it could not read> }.
 #
 # One way to dispatch, enforced (RUY-890). A script whose `# modes:` is not `none` reads its mode
 # with exactly one of
@@ -80,6 +140,7 @@ function Get-VmDispatchedModes([string]$Path) {
             if ($fl -match '^\}') { $fname = $null }
         }
     }
+    $default = $null       # the mode a bare call runs ($null: none, or `# modes: none`)
     $heredoc = $null
     $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet)
     $funcIndent = -1       # the indentation of the function whose body we are in; -1: top level
@@ -118,6 +179,13 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         $top = -not $inFunc
         $canon = $top -and -not $tail     # a string's tail is the end of a command, not a dispatch line
+        # the mode a bare call runs: the first top-level `${1:-mode}` (never one in a function body or here-document)
+        if ($canon -and -not $none) {
+            foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) {
+                [void]$found.Add($t.Groups[1].Value)
+                if ($null -eq $default) { $default = $t.Groups[1].Value }
+            }
+        }
         if ($canon -and $l -match "^(\s*)case $sel in\s*(.*)$") {
             $left = $left -replace "^\s*case $sel in", ''
             $indent = $Matches[1].Length
@@ -134,8 +202,7 @@ function Get-VmDispatchedModes([string]$Path) {
             }
         }
         if ($canon) {
-            # the mode a bare call runs, and the tests of the canonical forms
-            if (-not $none) { foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) } }
+            # the tests of the canonical forms
             $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
             foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
             $left = [regex]::Replace($left, $test, '')
@@ -152,7 +219,7 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         if (($top -and $left -match $argRef) -or $left -match $nameRef) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
     }
-    return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
+    return @{ modes = @($found | Sort-Object); default = $default; unreadable = @($unreadable) }
 }
 
 # The packages and ruya-pack the .play checks copy:

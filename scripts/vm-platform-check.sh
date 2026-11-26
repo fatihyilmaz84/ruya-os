@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # modes: check clean identity deputy
+# needs: profile check identity deputy
+# (these call the door as the signed-in profile's app, RUY-1129; vm-queue.ps1 reads this line)
 # Checks ruya-platform (org.ruyaos.Platform1, the one door for sandboxed apps; ADR-022, RUY-157) inside a
 # running VM, as root, with a profile signed in (vm-queue.ps1 signs one in). It builds a local Flatpak
 # repository with two test apps whose only bus permission is --system-talk-name=org.ruyaos.Platform1 (and
