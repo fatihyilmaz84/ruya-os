@@ -18,6 +18,8 @@
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
 # mutation; -Mode vmlint: step 2 is `scripts\lint-vm-checks.ps1` alone (about 4 minutes), for a mutation of that lint
 # or of vm-queue-lib.ps1. None of them builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
+# vmchecks and vmlint also print the child's finding lines (up to 10) before the verdict, so a CAUGHT shows why, or say
+# that the child printed none (RUY-1221; the self-check in dev.ps1 runs both rows on fixture children).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-translations.ps1 -Old '<a Get-PadNameFindings rule>' -New '<nothing>'
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-bus-policies.ps1 -Old '<a rule>' -New '<nothing>'
@@ -112,6 +114,24 @@ $repoCommands = @{
     vmlint   = @{ Label = "scripts\lint-vm-checks.ps1"; Run = { & (Join-Path $PSScriptRoot "lint-vm-checks.ps1") } }
 }
 $rust = [bool]$crate -and -not $cmdMode
+# RUY-1221: the lines of a repoCommands child that say WHY it failed, so a CAUGHT shows its reason. The two real
+# children print their findings in two shapes (read from the scripts, not guessed): test-vm-checks.sh prints
+# "    FAIL <what>" per failed assertion (lint-vm-checks.ps1 echoes them, indented further), and lint-vm-checks.ps1
+# prints its findings indented, without "FAIL", as the lines right before "    VM check lint: N finding(s)". At most
+# $Cap lines come back, in the child's order; an `ok` line that merely mentions FAIL is not a finding.
+function Get-ChildFindings([string]$Out, [int]$Cap = 10) {
+    $lines = @($Out -split "`r?`n")
+    $at = New-Object 'System.Collections.Generic.SortedSet[int]'
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^\s*FAIL(ED)?\b') { [void]$at.Add($i) }
+        if ($lines[$i] -match '^\s*VM check lint: (\d+) finding\(s\)\s*$') {
+            for ($k = [Math]::Max(0, $i - [int]$Matches[1]); $k -lt $i; $k++) { [void]$at.Add($k) }
+        }
+    }
+    $found = @($at | ForEach-Object { $lines[$_].TrimEnd() })
+    if ($found.Count -gt $Cap) { $found = @($found | Select-Object -First $Cap) + "(and $($at.Count - $Cap) more finding lines)" }
+    return $found
+}
 # The record goes down before the first byte of the file changes.
 New-Item -ItemType Directory -Path $recordDir -Force | Out-Null
 [IO.File]::WriteAllText($recordPath, (@{ path = $Path; bytes = [Convert]::ToBase64String($bytes) } | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
@@ -202,7 +222,14 @@ try {
     # The invariant (RUY-1203): a child that did not finish is a failure, whatever mode and whatever it printed; NOT
     # CAUGHT is only a child that ran to the end with every test passing. Also the Rust mode, which reads no exit code.
     if ($aborted) { $failed = @("child aborted: $aborted (exit code $childExit)") }
-    ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
+    if ($repoCommands.ContainsKey($Mode)) {
+        # The command modes (RUY-1221): the child's finding lines, or the statement that it printed none.
+        $findings = @(Get-ChildFindings $out)
+        if ($findings.Count -gt 0) { $findings | ForEach-Object { Write-Host "    $_" } }
+        else { Write-Host "    (no finding lines: the child printed none)" }
+    } else {
+        ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
+    }
     # An aborted child is judged before these heuristics: its output is only the error text, which says nothing
     # about test names or builds.
     $buildBroke = (-not $cmdMode) -and -not $aborted -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))

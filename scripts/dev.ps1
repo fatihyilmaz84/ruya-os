@@ -548,6 +548,57 @@ function Test-RevertCheckRestore {
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
 }
 
+# RUY-1221: the command modes (vmchecks, vmlint) run their real $repoCommands rows, not a stand-in -Runner, in a
+# fixture checkout whose two child scripts are tiny fakes that print what the real ones print (an `ok` line that
+# mentions FAIL, then "    FAIL ..." lines or the lint's indented findings before "    VM check lint: N finding(s)").
+# So a wrong Label or Run in a row (another script, another directory) fails here, and the summary is asserted to
+# name the child's finding lines (capped at 10) when CAUGHT and to say it found none when NOT CAUGHT.
+function Test-RevertCheckCommandModes {
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-revert-cmd-" + [guid]::NewGuid().ToString("N"))
+    $scripts = Join-Path $fx "scripts"
+    New-Item -ItemType Directory -Path $scripts | Out-Null
+    Set-Content -LiteralPath (Join-Path $fx ".git") -Value "gitdir: elsewhere"
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "revert-check.ps1") -Destination (Join-Path $scripts "revert-check.ps1")
+    $target = Join-Path $scripts "target.txt"
+    $utf8 = New-Object Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText((Join-Path $scripts "lint-vm-checks.ps1"), @'
+$t = [IO.File]::ReadAllText((Join-Path $PSScriptRoot "target.txt"))
+Write-Host "    ok   an assertion that FAILs when the thing is broken"
+if ($t -match 'value=bad') { Write-Host "    fixture finding 1"; Write-Host "    fixture finding 2"; Write-Host "    VM check lint: 2 finding(s)"; exit 1 }
+if ($t -match 'value=many') { 1..12 | ForEach-Object { Write-Host "    fixture finding $_" }; Write-Host "    VM check lint: 12 finding(s)"; exit 1 }
+Write-Host "    VM check lint: ok (fixture)"
+exit 0
+'@, $utf8)
+    [IO.File]::WriteAllText((Join-Path $scripts "test-vm-checks.sh"), "#!/bin/bash`necho `"    ok   a check that FAILs when the thing is broken`"`nif grep -q 'value=bad' scripts/target.txt; then echo `"    FAIL fixture assertion`"; echo `"vm-check tests: 1 failed`"; exit 1; fi`necho `"vm-check tests: all passed`"`n", $utf8)
+    $script = Join-Path $scripts "revert-check.ps1"
+    $ok = $true
+    $cases = @(
+        @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=bad"; Caught = $true; Want = @('^\s+FAIL fixture assertion\s*$'); Lack = @() },
+        @{ Mode = "vmchecks"; Label = 'bash scripts/test-vm-checks.sh'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture assertion') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=bad"; Caught = $true; Want = @('^\s+fixture finding 1\s*$', '^\s+fixture finding 2\s*$'); Lack = @('more finding lines') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=many"; Caught = $true; Want = @('^\s+fixture finding 10\s*$', '\(and 2 more finding lines\)'); Lack = @('fixture finding 11') },
+        @{ Mode = "vmlint"; Label = 'scripts\\lint-vm-checks\.ps1'; New = "value=good"; Caught = $false; Want = @('\(no finding lines'); Lack = @('fixture finding') }
+    )
+    foreach ($case in $cases) {
+        [IO.File]::WriteAllText($target, "value=good`n")
+        $text = (& $script -File $target -Old "value=good" -New $case.New -Mode $case.Mode *>&1 | Out-String -Width 4096)
+        $code = $LASTEXITCODE
+        $wantCode = if ($case.Caught) { 0 } else { 1 }
+        $verdict = if ($case.Caught) { '(?m)^CAUGHT' } else { '(?m)^NOT CAUGHT' }
+        $problems = @()
+        if ($code -ne $wantCode) { $problems += "exit $code, want $wantCode" }
+        if ($text -notmatch $verdict) { $problems += "no $verdict line" }
+        if ($text -notmatch "(?m)^== mutated .*target\.txt; $($case.Label) ==") { $problems += "the header does not name the row's command" }
+        if ($text -match 'child aborted') { $problems += "the row's command did not run (child aborted)" }
+        foreach ($w in $case.Want) { if ($text -notmatch "(?m)$w") { $problems += "missing /$w/" } }
+        foreach ($l in @($case.Lack) + 'an assertion that FAILs') { if ($l -and $text -match $l) { $problems += "must not print /$l/" } }
+        if ([IO.File]::ReadAllText($target) -ne "value=good`n") { $problems += "the file was not restored" }
+        if ($problems) { $ok = $false; Write-Host "    mode=$($case.Mode) $($case.New): $($problems -join '; '), output:`n$text" -ForegroundColor Yellow }
+    }
+    Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+    Record "revert-check command modes self-check (each repoCommands row runs its own child; a CAUGHT names the child's finding lines, capped at 10; a NOT CAUGHT says it found none, RUY-1221)" $ok
+}
+
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
 function Run-QmlTests([string]$ShotsDir, [string]$InputFile, [string[]]$ShotFiles = @()) {
     if (-not $ShotsDir -and -not $InputFile) { Run-QmlShards; return }
@@ -1413,6 +1464,8 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckPiping
     Step "Revert check restore self-check (RUY-752)"
     Test-RevertCheckRestore
+    Step "Revert check command modes self-check (RUY-1221)"
+    Test-RevertCheckCommandModes
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-QmlNameParsing
