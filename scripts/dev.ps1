@@ -370,9 +370,11 @@ function Test-QmlShardRunner {
     Record "shard runner self-check (a missing test program is one FAILED naming the file, in seconds, not a wait for the limit)" $goneOk
 
     # The same for CI's twin, scripts/run-qml-tests.sh (Git's bash), with a stand-in test program.
-    $bash = "$env:ProgramFiles\Git\bin\bash.exe"
-    if (-not (Test-Path $bash)) {
-        Record "shard runner (sh) self-check: Git's bash.exe not found" $false
+    # RUY-1232: the bash is lib-bash.ps1's Find-Bash (never the WSL launcher); none is a failure, not a skip.
+    . (Join-Path $PSScriptRoot "lib-bash.ps1")
+    $bash = Find-Bash
+    if (-not $bash) {
+        Record "shard runner (sh) self-check: no bash found (Git for Windows' bash.exe, or one on PATH that is not the WSL launcher)" $false
     } else {
         $fake = "#!/bin/bash`nlog=`"`${2%,txt}`"; base=`$(basename `"`$4`" .qml)`ncase `$base in`n" +
             "  tst_fail) echo 'FAIL!  : x::test_y() boom' > `"`$log`"; echo 'Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 5ms' >> `"`$log`"; exit 1;;`n" +
