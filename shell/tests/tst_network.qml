@@ -434,6 +434,7 @@ Item {
             const row = find("wifi_wifi-lounge")
             keyPress(Qt.Key_Return)
             tryVerify(() => findChild(row, "rowHoldRing").shown, 2000, "the ring shows while A is held")
+            wait((Theme.longPressMs - Theme.holdRingDelayMs) / 3)     // a third of the way round, the menu still 200 ms away
             const image = grabImage(tc.shell)
             const menuOpen = menu().shown
             keyRelease(Qt.Key_Return)
