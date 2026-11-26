@@ -83,6 +83,8 @@ FocusScope {
     property string hintKind: "item"
     // The row has an Options menu that Start opens beside its own verb on A (02 §1.7): the hint says so.
     property bool optionsHint: false
+    // The verb on A of an item row ("Connect" for a network) when it is not "Select"; the Options hint is still added.
+    property string acceptVerb: ""
     property var hints: {
         const back = { action: "back", text: qsTr("Back") }
         const options = { action: "options", text: qsTr("Options") }
@@ -100,7 +102,7 @@ FocusScope {
         case "slider":
             return [{ actions: ["left", "right"], text: qsTr("Adjust") }, back]
         default:
-            return [{ action: "accept", text: qsTr("Select") }, ...(optionsHint ? [options] : []), back]
+            return [{ action: "accept", text: acceptVerb !== "" ? acceptVerb : qsTr("Select") }, ...(optionsHint ? [options] : []), back]
         }
     }
 

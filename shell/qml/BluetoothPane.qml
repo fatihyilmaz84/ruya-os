@@ -26,10 +26,8 @@ SettingsPane {
     ListModel { id: deviceModel }
 
     function syncDevices() {
-        // Where focus is now, to put it on a neighbour if its row goes away (Forget, or a device that leaves while
-        // its menu is open: the menu has the focus then and the row only its `focus`).
-        const menuOpen = pane.optionsOpenFor !== ""
-        const before = pane.activeFocus || menuOpen ? focusableRows().findIndex(r => menuOpen ? r.focus : r.activeFocus) : -1
+        // Where focus is now, to put it on a neighbour if its row goes away (Forget, or a device that leaves while its menu is open).
+        const before = pane.focusedRowIndex()
         const list = Bluetooth.devices
         for (let i = deviceModel.count - 1; i >= 0; --i) {
             const id = deviceModel.get(i).devId
@@ -63,18 +61,7 @@ SettingsPane {
             if (!pane.focusableRows().some(r => r.activeFocus))
                 pane.focusableRows()[0]?.forceActiveFocus()
         }
-        Qt.callLater(pane.refocus, before)
-    }
-
-    // After a list update: if the focused row vanished, focus the row now at its place (or the
-    // last one).
-    function refocus(index) {
-        if (!pane.activeFocus || index < 0)
-            return
-        const rows = focusableRows()
-        if (rows.length > 0 && !rows.some(r => r.activeFocus))
-            rows[Math.min(index, rows.length - 1)].forceActiveFocus()
-        ensureFocusedVisible()
+        Qt.callLater(pane.refocusNear, before)
     }
 
     Component.onCompleted: syncDevices()

@@ -87,6 +87,7 @@ SettingControl {
         horizontalAlignment: Text.AlignRight
         textFormat: Text.PlainText      // a value may be a name from a drive (a wallpaper): never markup
         text: row.value
+        opacity: row.endOpacity
         color: row.valueColor
         font.pixelSize: Theme.typeBody * row.u
     }
@@ -96,6 +97,7 @@ SettingControl {
         id: chevron
         objectName: "chevron"
         visible: row.isPage
+        opacity: row.endOpacity
         anchors { right: parent.right; rightMargin: Theme.spaceS * row.u; verticalCenter: parent.verticalCenter }
         u: row.u
         name: "chevron_right"
@@ -107,11 +109,36 @@ SettingControl {
         id: currentMark
         objectName: "currentMark"
         visible: row.isCurrent
+        opacity: row.endOpacity
         anchors { right: parent.right; rightMargin: Theme.spaceS * row.u; verticalCenter: parent.verticalCenter }
         u: row.u
         name: "check_circle"
         filled: true
         color: Qt.alpha(Theme.text, row.dimmed ? Theme.disabledOpacity : 1)
+    }
+
+    // While the Hold ring shows, what the row shows at its right end (the value, the current mark, a chevron) gives way to
+    // it: it fades to 0 over `focusMs` as the ring fades in, and comes back at once when the ring goes (a release, or the
+    // menu opening), as the ring itself is cut. The layout never changes, no width is reserved for the ring (04 section 5).
+    property real endOpacity: 1
+    Connections {
+        target: hold
+        function onRingShownChanged() {
+            if (hold.ringShown && Theme.focusMs > 0) {
+                endFade.restart()
+            } else {
+                endFade.stop()
+                row.endOpacity = hold.ringShown ? 0 : 1
+            }
+        }
+    }
+    NumberAnimation {
+        id: endFade
+        target: row
+        property: "endOpacity"
+        from: 1
+        to: 0
+        duration: Theme.focusMs
     }
 
     // The Hold ring of a row that has a menu and a main action, `spaceXs` inside the right end.

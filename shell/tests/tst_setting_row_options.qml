@@ -30,6 +30,7 @@ Item {
             objectName: "withMenu"
             kind: "item"
             label: "Main action"
+            value: "Saved"
             hasOptions: true
         }
         SettingRow {
@@ -39,6 +40,14 @@ Item {
             label: "Several actions"
             hasOptions: true
             acceptOpensOptions: true
+        }
+        SettingRow {
+            id: verbed
+            objectName: "verbed"
+            kind: "item"
+            label: "Named verb"
+            hasOptions: true
+            acceptVerb: "Connect"
         }
         SettingRow {
             id: fact
@@ -79,6 +88,8 @@ Item {
 
         function ring(row) { return findChild(row, "rowHoldRing") }
 
+        function valueOf(row) { return findChild(row, "value") }
+
         function hintTexts(row) { return row.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|") }
 
         // A row without a menu: A acts on the press, as before; Start bubbles to whoever is above.
@@ -93,6 +104,12 @@ Item {
             compare(host.menuKeys, 1, "Start reached the page above")
             compare(ring(plain), null, "no Hold ring is built for it")
             compare(hintTexts(plain), "accept Select|back Back")
+        }
+
+        // RUY-1177: an item row can name its own verb on A (a network's "Connect"); the Options hint still follows it.
+        function test_an_item_row_can_name_its_verb() {
+            compare(hintTexts(verbed), "accept Connect|options Options|back Back")
+            compare(hintTexts(withMenu), "accept Select|options Options|back Back", "the default is untouched")
         }
 
         // hasOptions: a tap acts on release.
@@ -111,12 +128,15 @@ Item {
             focusRow(withMenu)
             keyPress(Qt.Key_Return)
             tryVerify(() => ring(withMenu).shown, 2000, "the ring after holdRingDelayMs")
+            // The value gives way to the ring (the layout does not change) and is back when the ring is gone.
+            tryVerify(() => valueOf(withMenu).opacity === 0, 2000, "the value fades out under the ring")
             const r = ring(withMenu)
             const end = r.mapToItem(withMenu, r.width, 0).x
             compare(Math.round(end), Math.round(withMenu.width - Theme.spaceXs * withMenu.u), "`spaceXs` inside the right end")
             compare(Math.round(r.mapToItem(withMenu, 0, r.height / 2).y), Math.round(withMenu.height / 2), "vertically centred")
             tryCompare(mainOptions, "count", 1, 3000)
             verify(!ring(withMenu).shown, "the disc goes when the menu is asked for")
+            compare(valueOf(withMenu).opacity, 1, "and the value is back at once")
             keyRelease(Qt.Key_Return)
             compare(mainActivated.count, 0, "the release after a hold does nothing")
             compare(mainOptions.count, 1)
@@ -138,6 +158,7 @@ Item {
             tryVerify(() => ring(withMenu).shown, 2000)
             focusRow(plain)
             tryVerify(() => !ring(withMenu).shown, 2000, "the ring is cut")
+            compare(valueOf(withMenu).opacity, 1, "and the value returns with it")
             wait(Theme.longPressMs + 100)
             compare(mainOptions.count, 0, "no menu opens for a row that lost the focus")
             keyRelease(Qt.Key_Return)

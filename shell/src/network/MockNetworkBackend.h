@@ -30,6 +30,8 @@ public:
     void setWifiSupported(bool supported);
     void reset();
     void clearNetworks();
+    // Appends a Wi-Fi network (WPA); signal 0 is a saved network out of range, which Forget removes from the list, as the service does.
+    void addNetwork(const QString &id, const QString &ssid, int signal, bool known);
     // A network's name as an access point could broadcast it (any text); publishes the lists.
     void setSsid(const QString &id, const QString &ssid);
     // Replies to refresh() arrive after `ms` (0: at once), with the state as it was when asked;

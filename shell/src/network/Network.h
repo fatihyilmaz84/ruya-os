@@ -54,6 +54,7 @@ public:
     Q_INVOKABLE void mockWifiScript(const QString &status);
     Q_INVOKABLE void mockWifiSupported(bool supported);
     Q_INVOKABLE void mockReset();
+    Q_INVOKABLE void mockAddNetwork(const QString &id, const QString &ssid, int signal, bool known);   // signal 0: saved, out of range (Forget removes it)
     Q_INVOKABLE void mockClearNetworks();   // no Wi-Fi network in range (mockReset brings them back)
     Q_INVOKABLE void mockSetSsid(const QString &id, const QString &ssid);   // any text, as an access point could send it
     // Asks the backend for the state and the networks; the replies arrive after `ms` and show them

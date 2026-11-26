@@ -3,9 +3,11 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Network: the status row (what the console is connected through), the Wi-Fi
-// networks in range, a rescan row, and a "Forget" row for each saved network. Accept on a
-// network joins it: open and saved ones at once, a new WPA one after a masked password entry,
-// an enterprise one is refused by the service ("unsupported"). Everything goes through the
+// networks in range and a rescan row. Accept on a network joins it: open and saved ones at
+// once, a new WPA one after a masked password entry, an enterprise one is refused by the
+// service ("unsupported"). A saved network also has an Options menu (RUY-1177, 02 §1.7: Start
+// or a held A; `Page.surfaceOptions` is `surfaceOptions` below): Connect (not the one in use)
+// and Forget…, which has no confirmation. Everything goes through the
 // Network singleton (org.ruyaos.Devices1.Network).
 SettingsPane {
     id: pane
@@ -21,6 +23,7 @@ SettingsPane {
     ListModel { id: wifiModel }
 
     function syncNetworks() {
+        const before = pane.focusedRowIndex()     // to put the focus on a neighbour if its row goes (a forgotten network out of range)
         const list = Network.networks
         for (let i = wifiModel.count - 1; i >= 0; --i) {
             const id = wifiModel.get(i).netId
@@ -46,7 +49,7 @@ SettingsPane {
                     wifiModel.move(at, i, 1)
             }
         }
-        Qt.callLater(pane.settleFocus)   // the focused row may have gone (a forgotten network)
+        Qt.callLater(pane.refocusNear, before)   // the focused row may have gone: the row now at its place, else the last
     }
 
     // The first network is where focus lands when the pane is first entered; the status row
@@ -139,6 +142,7 @@ SettingsPane {
         id: wifiRepeater
         model: wifiModel
         SettingRow {
+            id: wifiRow
             required property string netId
             required property string ssid
             required property int signal
@@ -148,11 +152,15 @@ SettingsPane {
             objectName: "wifi_" + netId
             kind: "item"
             current: active
-            hints: [{ action: "accept", text: qsTr("Connect") }, { action: "back", text: qsTr("Back") }]
+            // A saved network has a main action (A connects) and a menu (Start, or a held A): Forget. A new one has no menu.
+            hasOptions: known
+            acceptVerb: qsTr("Connect")
+            anchored: pane.optionsOpenFor === netId
             u: pane.u
             label: ssid
             value: pane.wifiValue(active, known, security, signal)
             onActivated: pane.join(netId, ssid, security, known)
+            onOptionsRequested: pane.optionsRequested("network", netId, wifiRow)
         }
     }
 
@@ -164,20 +172,41 @@ SettingsPane {
         onActivated: Network.scan()
     }
 
-    Repeater {
-        model: wifiModel
-        SettingRow {
-            required property string netId
-            required property string ssid
-            required property bool known
-            objectName: "forget_" + netId
-            kind: "action"
-            visible: known
-            u: pane.u
-            label: qsTr("Forget %1").arg(ssid)
-            onActivated: Network.forget(netId)
-        }
+    // ---- A saved network's Options menu (RUY-1177): Page.surfaceOptions, rows read live from Network.networks ----
+    function networkById(id) {
+        return Network.networks.find(n => n.id === id)
     }
+
+    // Connect (not the one in use) and, after a divider, Forget. There is no Disconnect: the service has none.
+    function networkOptionRows(id) {
+        const n = networkById(id)
+        if (!n || !n.known)
+            return []
+        const rows = []
+        if (!n.active)
+            rows.push({ id: "connect", label: qsTr("Connect"), icon: "link" })
+        rows.push({ id: "forget", label: qsTr("Forget…"), icon: "delete", divider: rows.length > 0 })
+        return rows
+    }
+
+    function runNetworkOption(id, action) {
+        const n = networkById(id)
+        if (!n)
+            return
+        if (action === "connect")
+            pane.join(id, n.ssid, n.security, n.known)
+        else if (action === "forget")
+            Network.forget(id)
+    }
+
+    surfaceOptions: ({
+        rows: id => pane.networkOptionRows(id),
+        title: id => pane.networkById(id)?.ssid ?? "",
+        note: id => "",
+        run: (id, action) => pane.runNetworkOption(id, action),
+        // Gone from the scan list, or forgotten: the menu closes and the focus settles on a row.
+        exists: id => pane.networkById(id)?.known === true
+    })
 
     // The password keyboard, built when it first opens (T-349).
     Loader {

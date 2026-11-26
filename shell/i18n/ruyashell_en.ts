@@ -3776,7 +3776,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NetworkPane</name>
     <message>
-        <location filename="../qml/NetworkPane.qml" line="+64"/>
+        <location filename="../qml/NetworkPane.qml" line="+66"/>
         <source>Wrong password.</source>
         <translation>Wrong password.</translation>
     </message>
@@ -3872,24 +3872,20 @@ This can&apos;t be undone.</translation>
         <translation>Wi-Fi networks</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+19"/>
+        <location line="+30"/>
         <source>Connect</source>
         <translation>Connect</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Back</source>
-        <translation>Back</translation>
+        <location line="+1"/>
+        <source>Forget…</source>
+        <translation>Forget…</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="-17"/>
         <source>Scan for networks</source>
         <translation>Scan for networks</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Forget %1</source>
-        <translation>Forget %1</translation>
     </message>
 </context>
 <context>
@@ -5884,7 +5880,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+87"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+89"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
