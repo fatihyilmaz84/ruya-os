@@ -107,6 +107,7 @@ try {
         @{ name = "needs-other-mode"; head = "# modes: check other`n# needs: profile check`n"; check = "vm-n-check.sh other"; want = $false },
         @{ name = "needs-bare-default"; head = "# modes: other check`n# needs: profile check`nmode=`"`${1:-check}`"`n"; check = "vm-n-check.sh"; want = $true },
         @{ name = "needs-bare-not-default"; head = "# modes: other check`n# needs: profile other`nmode=`"`${1:-check}`"`n"; check = "vm-n-check.sh"; want = $false },
+        @{ name = "needs-bare-after-function-default"; head = "# modes: check other`n# needs: profile check`nwho() { local u=`"`${1:-root}`"; }`nmode=`"`${1:-check}`"`n"; check = "vm-n-check.sh"; want = $true },
         @{ name = "needs-all"; head = "# modes: check other`n# needs: profile all`n"; check = "vm-n-check.sh other"; want = $true },
         @{ name = "needs-none"; head = "# modes: check other`n"; check = "vm-n-check.sh check"; want = $false },
         @{ name = "needs-prose-comment"; head = "# modes: check`n# needs the shell running`n"; check = "vm-n-check.sh check"; want = $false },
@@ -138,6 +139,14 @@ try {
         $got = Get-CheckNeedsProfile $e[0] $Scripts
         if ($got -ne $e[1]) { $problems.Add("vm-queue needs: '$($e[0])' needs a profile = $got, want $($e[1]) (its '# needs:' line)") }
     }
+    # The real default queue of vm-queue.ps1 (read with the parser, not a pattern): exactly these checks
+    # sign a profile in, the ones the old hard-coded list matched plus the bare vm-platform-check.sh
+    $qa = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Scripts "vm-queue.ps1"), [ref]$null, [ref]$null)
+    $checksParam = $qa.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq "Checks" }
+    $defaultChecks = @(& ([scriptblock]::Create($checksParam.DefaultValue.Extent.Text)))
+    $needing = @($defaultChecks | Where-Object { Get-CheckNeedsProfile $_ $Scripts })
+    $wantNeeding = @("vm-x11-check.sh", "vm-library-check.sh steam", "vm-platform-check.sh")
+    if ($defaultChecks.Count -lt 10 -or ($needing -join "|") -ne ($wantNeeding -join "|")) { $problems.Add("vm-queue.ps1 default checks ($($defaultChecks.Count)): those that sign a profile in are '$($needing -join ' | ')', want '$($wantNeeding -join ' | ')'") }
     # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
     # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
     # Lines are single-quoted PowerShell strings, so the shell text needs no escaping.
@@ -145,6 +154,9 @@ try {
         # PASS: the canonical forms, and function bodies
         @{ name = "canonical-assigned"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'case "$mode" in', '    check) ;;', '    extra) ;;', 'esac') },
         @{ name = "canonical-assigned-no-colon"; modes = "check extra"; unreadable = 0; lines = @('mode="${1-check}"', 'case "$mode" in', '    check) ;;', '    extra) ;;', 'esac') },
+        @{ name = "default-after-function-body"; modes = "check"; default = "check"; unreadable = 0; lines = @('who() { local u="${1:-root}"; }', 'g() {', '    local v="${1:-other}"', '}', 'mode="${1:-check}"', 'case "$mode" in', '    check) ;;', 'esac') },
+        @{ name = "default-after-heredoc"; modes = "check"; default = "check"; unreadable = 0; lines = @('cat <<EOF', 'x="${1:-root}"', 'EOF', 'case "${1:-check}" in', '    check) ;;', 'esac') },
+        @{ name = "default-of-none"; modes = ""; default = $null; unreadable = 0; lines = @('# modes: none', 'echo hi') },
         @{ name = "canonical-case"; modes = "check other"; unreadable = 0; lines = @('case "${1:-check}" in', '    check) ;;', '    other) ;;', 'esac') },
         @{ name = "canonical-test"; modes = "check extra"; unreadable = 0; lines = @('if [ "${1:-check}" = extra ]; then :; fi') },
         @{ name = "canonical-assigned-test"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'if [ "$mode" == extra ]; then :; fi', 'run_it "$mode"', 'echo "the mode is $mode"') },
@@ -181,6 +193,7 @@ try {
         [IO.File]::WriteAllText($sp, "#!/usr/bin/env bash`n" + ($s.lines -join "`n") + "`n")
         $d = Get-VmDispatchedModes $sp
         if ($s.unreadable -eq 0 -and ($d.modes -join " ") -ne $s.modes) { $problems.Add("mode dispatch fixture '$($s.name)': read modes '$($d.modes -join ' ')', want '$($s.modes)'") }
+        if ($s.ContainsKey("default") -and $d.default -ne $s.default) { $problems.Add("mode dispatch fixture '$($s.name)': default mode '$($d.default)', want '$($s.default)'") }
         if ($d.unreadable.Count -ne $s.unreadable) { $problems.Add("mode dispatch fixture '$($s.name)': $($d.unreadable.Count) unreadable lines, want $($s.unreadable)") }
     }
     $rules = @(

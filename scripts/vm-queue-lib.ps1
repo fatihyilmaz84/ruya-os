@@ -28,16 +28,6 @@ function Get-VmModes([string]$Path) {
     return $null
 }
 
-# The mode a bare call of the script runs: the default of its first `${1:-mode}` (the one form
-# Get-VmDispatchedModes accepts, below); $null when it has none.
-function Get-VmDefaultMode([string]$Path) {
-    foreach ($l in [IO.File]::ReadAllLines($Path)) {
-        if ($l -match '^\s*#') { continue }
-        if ($l -match '\$\{1:?-([A-Za-z][\w-]*)\}') { return $Matches[1] }
-    }
-    return $null
-}
-
 # The preconditions a script declares in its header, one `# needs: <keyword> <mode>... | all` line each
 # (RUY-1163). The only keyword is `profile`: the queue signs a profile in (vm-goto.ps1 home) before it runs
 # a check that lists its mode, or `all`. A line that cannot be read is not guessed at: its entry carries
@@ -90,12 +80,12 @@ function Get-CheckNeedsProfile([string]$Check, [string]$ScriptsDir) {
     $need = @(Get-VmNeeds $path | Where-Object { $_.keyword -eq "profile" -and -not $_.error }) | Select-Object -First 1
     if (-not $need) { return $false }
     if ($need.all) { return $true }
-    $mode = if ($parts.Count -ge 2) { $parts[1] } else { Get-VmDefaultMode $path }
+    $mode = if ($parts.Count -ge 2) { $parts[1] } else { (Get-VmDispatchedModes $path).default }
     return [bool]$mode -and ($mode -in $need.modes)
 }
 
 # What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
-# @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
+# @{ modes = <sorted modes>; default = <the mode a bare call runs, or $null>; unreadable = <lines it could not read> }.
 #
 # One way to dispatch, enforced (RUY-890). A script whose `# modes:` is not `none` reads its mode
 # with exactly one of
@@ -150,6 +140,7 @@ function Get-VmDispatchedModes([string]$Path) {
             if ($fl -match '^\}') { $fname = $null }
         }
     }
+    $default = $null       # the mode a bare call runs ($null: none, or `# modes: none`)
     $heredoc = $null
     $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet)
     $funcIndent = -1       # the indentation of the function whose body we are in; -1: top level
@@ -188,6 +179,13 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         $top = -not $inFunc
         $canon = $top -and -not $tail     # a string's tail is the end of a command, not a dispatch line
+        # the mode a bare call runs: the first top-level `${1:-mode}` (never one in a function body or here-document)
+        if ($canon -and -not $none) {
+            foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) {
+                [void]$found.Add($t.Groups[1].Value)
+                if ($null -eq $default) { $default = $t.Groups[1].Value }
+            }
+        }
         if ($canon -and $l -match "^(\s*)case $sel in\s*(.*)$") {
             $left = $left -replace "^\s*case $sel in", ''
             $indent = $Matches[1].Length
@@ -204,8 +202,7 @@ function Get-VmDispatchedModes([string]$Path) {
             }
         }
         if ($canon) {
-            # the mode a bare call runs, and the tests of the canonical forms
-            if (-not $none) { foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) } }
+            # the tests of the canonical forms
             $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
             foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
             $left = [regex]::Replace($left, $test, '')
@@ -222,7 +219,7 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         if (($top -and $left -match $argRef) -or $left -match $nameRef) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
     }
-    return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
+    return @{ modes = @($found | Sort-Object); default = $default; unreadable = @($unreadable) }
 }
 
 # The packages and ruya-pack the .play checks copy:
