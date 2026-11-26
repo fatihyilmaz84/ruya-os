@@ -1298,6 +1298,8 @@ Item {
             tryCompare(tc.shell, "currentPage", "controller")
             Bluetooth.forget("AA:00:00:00:00:04")
             tryVerify(() => find("btDev_AA:00:00:00:00:04") === null, 2000, "the row is gone")
+            tryVerify(() => find(names[at + 1]).focus, 2000, "the row now at its place holds the pane's focus while the page covers it")
+            compare(tc.shell.currentPage, "controller")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find(names[at + 1]).activeFocus, 2000, "the row now at its place, not the first row")
