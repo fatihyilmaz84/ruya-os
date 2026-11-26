@@ -13,7 +13,8 @@
 // of what runs. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // Running records are plain objects: { instance, appId, item, parent, profile, started, state, frozen }.
-// `frozen` follows FrozenChanged and `state` becomes "stopping" on AppStopping, both in place.
+// `frozen` follows FrozenChanged and `state` becomes "stopping" on AppStopping, both in place; a later
+// ListRunning reply replaces the whole list (one computed before a stop can say "running" again).
 // `item` is the Library1 item id ("flatpak:<appId>", or "steam:<appid>" for a Steam game) and `parent`
 // the instance of the Steam instance a game runs under ("" for every other record), ADR-041.
 class Session : public QObject
@@ -69,6 +70,9 @@ public:
     Q_INVOKABLE void mockIgnoreStop(bool ignore);
     // Kill answers `status` and does nothing (RUY-736); "" is the normal answer again (and after mockReset).
     Q_INVOKABLE void mockKillAnswer(const QString &status);
+    // Stop answers `status` and does nothing (a refused Stop, RUY-1238); "" is the normal answer again (and
+    // after mockReset).
+    Q_INVOKABLE void mockStopAnswer(const QString &status);
     // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
     Q_INVOKABLE int mockPidOf(const QString &instance) const;
     // A Steam game starts under the running instance `parentInstance` (ADR-041, for B6's tests): a child
@@ -84,6 +88,9 @@ public:
     // AppStopping for every run (children first), then the FrozenChanged(false) of each frozen one's thaw;
     // each run ends later with AppExited, as a Stop of it would (mockStopDelay, mockIgnoreStop).
     Q_INVOKABLE void mockStopAll();
+    // A ListRunning reply computed now reaches this client after `ms` (RUY-1238): the race of a reply that
+    // crosses a stop, whose "running" overwrites the "stopping" AppStopping set until the next refresh.
+    Q_INVOKABLE void mockListRunningLate(int ms);
     // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" and "forward steam:<appid>"
     // (a Steam game handed to the running Steam) in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
@@ -101,6 +108,9 @@ signals:
     // status: "ok" | "invalid" | "not-found" | "failed"; `instance` is set on "ok" only.
     void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
     void appStarted(const QString &instance, const QString &appId);
+    // The instance entered "stopping" (Session1 AppStopping, RUY-1235), whoever asked for the stop. Sent just
+    // before the record's `state` becomes "stopping", so a handler sees what held when the stop began.
+    void appStopping(const QString &instance, const QString &appId);
     // reason: "quit" | "crashed" | "killed" | "launch-failed"
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 

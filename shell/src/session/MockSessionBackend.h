@@ -82,6 +82,8 @@ public:
     void reset();
     // The system goes down (ruya-session's StopAll): every run is stopped as Stop would, in one go.
     void stopAll();
+    // A ListRunning reply of the list as it is now, delivered after `ms` (a reply that crosses a later stop).
+    void listRunningLate(int ms);
     // The signed-in profile changed (T-165): the apps of the one before are frozen.
     void activeProfileChanged();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
@@ -96,6 +98,8 @@ public:
     void setIgnoreStop(bool ignore) { m_ignoreStop = ignore; }
     // Kill answers `status` and changes nothing ("": the normal answer), RUY-736.
     void setKillAnswer(const QString &status) { m_killAnswer = status; }
+    // Stop answers `status` and changes nothing ("": the normal answer), RUY-1238.
+    void setStopAnswer(const QString &status) { m_stopAnswer = status; }
     // ruya-session's STOP_GRACE: an ignored Stop is killed this long after it (RUY-736).
     static constexpr int BackstopMs = 30000;
     // ruya-session's CHILD_LAUNCH_WAIT: a Steam game without its scope this long is "launch-failed" (RUY-1067).
@@ -152,6 +156,7 @@ private:
     bool m_stubbornStop = false;
     bool m_ignoreStop = false;
     QString m_killAnswer;
+    QString m_stopAnswer;
     int m_childWaitMs = ChildLaunchWaitMs;
     // The Steam games ended before their scope came, and the reason their AppExited will carry.
     QHash<QString, QString> m_endingAs;

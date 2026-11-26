@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: caps check close confirm coop fallback forget guide hold join nodes owner players profiles restart seathold security shell signals start startpad twopads uinput useractive
+# modes: caps check close confirm coop fallback forget guide hold join nodes owner players profiles restart seathold security shell shutdown shutdown-verify signals start startpad twopads uinput useractive
 # Checks Ruya Input (ruya-inputd, org.ruyaos.Input1, RUY-3 / T-367) inside a running VM, as root:
 # the service runs as ruya-input, a uinput "physical" pad gets a virtual Xbox 360-style pad for
 # the routed profile whose ACL names only that profile's user, other users are refused, the route
@@ -9,7 +9,7 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py scripts/vm_dbus.py scripts/vm_uinput_trust.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|uinput|start|useractive|signals|players|seathold|coop|join]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|shutdown|shutdown-verify|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|uinput|start|useractive|signals|players|seathold|coop|join]
 # The probe's stand-in pads are root's uinput devices, which root vouches for (vm_uinput_trust.py next to the probe,
 # RUY-1063): a uinput device nobody vouched for is foreign and ruya-inputd never reads it.
 # `startpad` (RUY-837) with the shell stopped like `twopads`: a uinput pad signs the profile in; the profile user opens no
@@ -123,6 +123,13 @@
 # LibreQuake saved joy_device -1 after its pads were destroyed under it), so the journal shows no "virtual pad ... destroyed"
 # before the last journal line of the game's unit, the route stays overlay with the game's instance until the exit and is
 # shell afterwards. Needs the shell running, the Wayland test app (see `shell`), vm-input-probe.py and vm-inject-key.py.
+# `shutdown` and `shutdown-verify` (RUY-1238) are the two halves of `vm-reboot-check.ps1 -PadShutdown` (the queue cannot
+# reboot): `shutdown` starts like `close` (test pad, test app in front, the Hub freezes it), then chooses Home, so the
+# game waits frozen behind Home with its virtual pad and the route overlay, and keeps its instance in
+# /root/vm-input-shutdown-instance; the reboot follows (through logind, so ruya-session's StopAll thaws and stops it).
+# `shutdown-verify`, on the next boot, reads the previous boot's journal (judge_shutdown_pads): after ruya-session's "the
+# system goes down" line no "virtual pad ... destroyed" and no route shell or locked of ruya-inputd before the game's unit
+# ended (the shell's stop hold; before it the thaw of the stop sent "shell" and the game quit without its pad).
 # `fallback` (RUY-410) checks the compositor's emergency pad reader: it masks ruya-inputd
 # (systemctl mask --runtime --now), waits for the shell's journal line "ruya-shell: input fallback on"
 # (3 s without an owner of org.ruyaos.Input1), locks to the picker and lets a uinput pad
@@ -576,27 +583,28 @@ shell_check() {
     fi
 }
 
-# RUY-611: Close game from the Hub keeps the game's virtual pads until its unit is gone. Needs the shell, the Wayland
-# test app, the probe (a uinput pad) and vm-inject-key.py in /root, like shell_check.
-close_check() {
-    echo "--- Close game from the Hub keeps the pads until the game has exited (RUY-611)"
-    local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
-    local out inst padpid node_before closets unit_ts destroyed_ts first n=0
-    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return; }
-    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
-    [ -f /root/vm-inject-key.py ] || { bad "/root/vm-inject-key.py is missing: copy it there"; return; }
-    flatpak info --system "$wclient" >/dev/null 2>&1 || { bad "$wclient is not installed: run 'vm-session-check.sh display' (then display-clean) first"; return; }
-    python3 "$probe" pad 300 > /var/tmp/ruya-input-pad.log 2>&1 &
+# The start `close` and `shutdown` share (RUY-611, RUY-1238): a seated test pad (vm-input-probe.py, `pad_secs`
+# seconds, immune to the SSH session's hang-up), the Wayland test app launched as $me and in front with its virtual
+# pad, then the Guide's Hub over it, which freezes it and keeps that pad. Sets the caller's `inst`, `padpid` and
+# `node_before`; returns 1 after a FAIL that leaves nothing to check (the pad stopped again). Needs the shell, the
+# Wayland test app, the probe and vm-inject-key.py in /root, like shell_check.
+hub_over_test_app() { # <pad_secs>
+    local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1 out n=0
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return 1; }
+    [ -f /root/vm-inject-key.py ] || { bad "/root/vm-inject-key.py is missing: copy it there"; return 1; }
+    flatpak info --system "$wclient" >/dev/null 2>&1 || { bad "$wclient is not installed: run 'vm-session-check.sh display' (then display-clean) first"; return 1; }
+    nohup python3 "$probe" pad "$1" > /var/tmp/ruya-input-pad.log 2>&1 < /dev/null &
     padpid=$!
     until grep -q "^pad " /var/tmp/ruya-input-pad.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
-    grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return; }
-    stop_all_apps && ok "no app is running before the test app starts" || { bad "an app is still running after Stop"; kill "$padpid"; return; }
-    settle_route || { kill "$padpid"; return; }
-    seat_test_pad || { kill "$padpid"; return; }
+    grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return 1; }
+    stop_all_apps && ok "no app is running before the test app starts" || { bad "an app is still running after Stop"; kill "$padpid"; return 1; }
+    settle_route || { kill "$padpid"; return 1; }
+    seat_test_pad || { kill "$padpid"; return 1; }
 
     out="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$wclient" "$me")"
     inst=""; case "$out" in 'ss "ok" '*) inst="$(echo "$out" | cut -d'"' -f4)";; esac
-    [ -n "$inst" ] && ok "Launch $wclient as $me: $inst" || { bad "Launch: $out"; kill "$padpid"; return; }
+    [ -n "$inst" ] && ok "Launch $wclient as $me: $inst" || { bad "Launch: $out"; kill "$padpid"; return 1; }
     wait_route app 60 && ok "the test app in front: the route is app" || bad "with the app in front the route reads '$(route_now)'"
     wait_pad present 5 && ok "the test pad has a virtual pad for $me ($(virtual_pad))" || bad "no virtual pad with the app in front"
     node_before="$(virtual_pad)"
@@ -606,6 +614,14 @@ close_check() {
     n=0; until [ "$(frozen_count)" -ge 1 ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
     [ "$(frozen_count)" -ge 1 ] && ok "the Hub froze the app" || bad "the Hub did not freeze the app (Pause games in the Hub off?)"
     [ -n "$node_before" ] && [ "$(virtual_pad)" = "$node_before" ] && ok "the frozen app keeps its virtual pad ($node_before)" || bad "under the Hub the virtual pad is '$(virtual_pad)', before it was '$node_before'"
+}
+
+# RUY-611: Close game from the Hub keeps the game's virtual pads until its unit is gone.
+close_check() {
+    echo "--- Close game from the Hub keeps the pads until the game has exited (RUY-611)"
+    local ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
+    local inst padpid node_before closets unit_ts destroyed_ts first n=0
+    hub_over_test_app 300 || return
 
     # Resume is focused when the Hub opens: Down, then Right is Close game (it shares the row with Home), Return.
     closets="$(date +%s.%N)"
@@ -649,6 +665,71 @@ close_check() {
     fi
     kill "$padpid" 2>/dev/null
     stop_all_apps >/dev/null 2>&1
+}
+
+# RUY-1238: the instance `shutdown` left frozen behind Home, for `shutdown-verify` on the next boot.
+shutdown_state=/root/vm-input-shutdown-instance
+
+# The first half (before the reboot): the test app frozen behind Home with its virtual pad, the route overlay.
+shutdown_check() {
+    echo "--- a game frozen behind Home keeps its pads through the system going down (RUY-1238): before the reboot"
+    local ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
+    local inst padpid node_before
+    rm -f "$shutdown_state"
+    hub_over_test_app 900 || return              # the pad outlives this SSH session until the reboot
+    # Resume is focused when the Hub opens: Down is Home (Close game shares its row, one step right), Return.
+    python3 /root/vm-inject-key.py down return >/dev/null 2>&1
+    sleep 2                                      # Home and the route settle; a Close would have ended it by now
+    runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -q "$inst" \
+        && ok "the game still runs ($inst)" || { bad "the game is gone: Down, Return did not choose Home"; kill "$padpid"; return; }
+    [ "$(frozen_count)" -ge 1 ] && ok "the game stays frozen behind Home" || bad "the game is not frozen behind Home"
+    [ "$(route_now)" = overlay ] && ok "Home with the frozen game behind it: the route is overlay" || bad "at Home the route reads '$(route_now)', not overlay"
+    [ "$(virtual_pad)" = "$node_before" ] && ok "the frozen game keeps its virtual pad at Home ($node_before)" || bad "at Home the virtual pad is '$(virtual_pad)', before it was '$node_before'"
+    echo "$inst" > "$shutdown_state"
+    echo "Ready: reboot now (systemctl reboot, through logind) and run '$0 shutdown-verify' on the next boot."
+}
+
+# --- judge_shutdown_pads begin
+# The previous boot's journal (-o short-unix) on stdin; $1 the time the game's unit ended (its last line in that
+# boot). After ruya-session's "the system goes down" line, no virtual pad may be destroyed and the route may not go
+# to shell or locked before that end: the thawed game still finds its pads while it quits. Returns 1 on a FAIL.
+judge_shutdown_pads() { # <unit end, unix seconds>
+    local text down first
+    text="$(cat)"
+    down="$(printf '%s\n' "$text" | grep -a "ruya-session: the system goes down, stopping every app first" | head -1 | awk '{print $1}')"
+    case "$down" in
+        ''|*[!0-9.]*) bad "journal: no 'the system goes down' line of ruya-session (was the reboot through logind?)"; return 1 ;;
+    esac
+    case "$1" in
+        ''|*[!0-9.]*) bad "journal: no line of the game's unit in the previous boot (was it running?)"; return 1 ;;
+    esac
+    awk -v d="$down" -v u="$1" 'BEGIN {exit !(u + 0 >= d + 0)}' \
+        || { bad "journal: the game's unit ended at $1, before the system went down at $down"; return 1; }
+    ok "journal: the system went down at $down, the game's unit ended at $1"
+    first="$(printf '%s\n' "$text" | grep -a -E "ruya-inputd: (virtual pad ruya-input/pad[0-9]+ destroyed|route (shell|locked) )" \
+        | awk -v d="$down" -v u="$1" '$1 ~ /^[0-9]+(\.[0-9]+)?$/ && $1 + 0 >= d + 0 && $1 + 0 < u + 0' | head -1)"
+    if [ -n "$first" ]; then
+        echo "    $first"
+        bad "journal: the game lost its pads while it quit (a pad destroyed or the route left it before its unit ended)"
+        return 1
+    fi
+    ok "journal: no virtual pad destroyed and no route away from the game before its unit ended"
+}
+# --- judge_shutdown_pads end
+
+# The second half (on the next boot): the order in the previous boot's journal (a persistent journal, as RUY-888's
+# shutdown-verify needs).
+shutdown_verify() {
+    echo "--- a game frozen behind Home kept its pads through the system going down (RUY-1238): the previous boot"
+    local inst unit_ts
+    inst="$(cat "$shutdown_state" 2>/dev/null)"
+    [ -n "$inst" ] || { bad "no instance from 'shutdown' ($shutdown_state): run it before the reboot"; return; }
+    [ -n "$(journalctl -b -1 --no-pager -n 1 -o cat 2>/dev/null)" ] \
+        && ok "the previous boot's journal is there" || { bad "no journal of the previous boot (journalctl -b -1)"; return; }
+    # The app's unit lives in the profile's user manager: its own lines and the manager's Stopping/Stopped lines.
+    unit_ts="$(journalctl -b -1 _SYSTEMD_USER_UNIT="$inst" + USER_UNIT="$inst" --no-pager -o short-unix 2>/dev/null | awk '$1 ~ /^[0-9]+(\.[0-9]+)?$/ {t = $1} END {print t}')"
+    journalctl -b -1 --no-pager -o short-unix 2>/dev/null | judge_shutdown_pads "$unit_ts"
+    rm -f "$shutdown_state"
 }
 
 # The first profile without a PIN, as "<index> <id>" in picker order (ListProfiles), or "".
@@ -1200,6 +1281,12 @@ close)
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
     close_check
     ;;
+shutdown)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    shutdown_check
+    ;;
+shutdown-verify) shutdown_verify ;;
 join)
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }

@@ -43,8 +43,10 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
         emit frozenChanged(instance, frozen);
     });
     // AppStopping (RUY-1235): the record is "stopping" at once, before the thaw of the same stop arrives,
-    // whoever asked for the stop.
-    connect(m_backend.get(), &SessionBackend::appStopping, this, [this](const QString &instance) {
+    // whoever asked for the stop. The signal goes out first (RUY-1238), so a handler still sees what held
+    // when the stop began (Shell.qml's stop hold: whether the route held the game's pads).
+    connect(m_backend.get(), &SessionBackend::appStopping, this, [this](const QString &instance, const QString &appId) {
+        emit appStopping(instance, appId);
         setRecordValue(instance, QStringLiteral("state"), QStringLiteral("stopping"));
     });
     connect(m_backend.get(), &SessionBackend::appStarted, this, [this](const QString &instance, const QString &appId) {
@@ -176,6 +178,12 @@ void Session::mockKillAnswer(const QString &status)
         mock->setKillAnswer(status);
 }
 
+void Session::mockStopAnswer(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setStopAnswer(status);
+}
+
 int Session::mockPidOf(const QString &instance) const
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
@@ -234,6 +242,12 @@ void Session::mockStopAll()
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
         mock->stopAll();
+}
+
+void Session::mockListRunningLate(int ms)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->listRunningLate(ms);
 }
 
 QStringList Session::mockCalls() const

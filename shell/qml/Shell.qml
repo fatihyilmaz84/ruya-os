@@ -462,6 +462,7 @@ FocusScope {
             optionsMenu.dismiss()
             uninstallConfirm.dismiss()
             endWindowGap()
+            stopPadHold = ""    // Lock and a switch take a stopping game's pads too (06 §5.2)
             endLaunch(false)    // nobody to start it for; the app, if it starts, waits hidden (T-164)
             dropCloseScreen()
             dropAllPages()       // the next sign-in starts at home
@@ -598,20 +599,46 @@ FocusScope {
         overlay: systemPanel.open || whosPlaying.pausing || modeConfirm.shown || IdleClock.covered
         heldInstance: root.heldGame ? root.heldGame.instance : ""
         heldAppId: root.heldGame ? root.heldGame.appId : ""
+        heldInFront: root.stopHeldInFront
         lookupPending: root.frontLookupPending
         runningInstances: Session.running.map(r => r.instance)
     }
 
-    // The game whose pads outlive the screen with no app in front (RUY-611, 06 §5.2): a game can still
-    // read its pads while it is frozen behind Home or the Hub, and while it is being closed (Close thaws
-    // it so it can quit), and games save their controller choice on quit (LibreQuake wrote joy_device -1
-    // after "Gamepad removed"). So the route stays "overlay" with its instance
+    // The game whose pads outlive the screen (RUY-611, RUY-1238, 06 §5.2): a game can still read its pads
+    // while it is frozen behind Home or the Hub, and while it is being stopped (a stop thaws it so it can
+    // quit), and games save their controller choice on quit (LibreQuake wrote joy_device -1 after
+    // "Gamepad removed"). So the route stays "overlay" with its instance
     //   - while the game that was in front last is frozen (Home or the Hub over it), and
-    //   - while an instance Close asked to stop, whose pads the route held when Close began, has not
-    //     ended (AppExited, a refused Stop or the kill check, which release `closePadHold`).
+    //   - from any stop of an instance whose pads the route held when the stop began (the stop hold:
+    //     Close, Force quit, the system going down; whoever asked) until it has exited, also while its own
+    //     window is still in front (`stopHeldInFront`).
     // Lock, a profile switch and a game that is not frozen behind Home keep the old rule (the pads go).
     property string lastFrontInstance: ""
-    property string closePadHold: ""
+    // The stop hold: the instance whose pads stay until it has exited. It is set on Session's appStopping
+    // (sent before the record says "stopping") and by Close itself before its Stop, and it holds by
+    // itself, not by the record's `state`: a ListRunning reply computed before the stop may say "running"
+    // again afterwards. Only AppExited, a refused Stop (or Kill) and a sign-out release it.
+    property string stopPadHold: ""
+    function holdPadsOfStop(instance) {
+        if (inputRoute.routeInstance === instance)
+            stopPadHold = instance
+    }
+    function releaseStopHold(instance) {
+        if (stopPadHold === instance)
+            stopPadHold = ""
+    }
+    Connections {
+        target: Session
+        function onAppStopping(instance, appId) { root.holdPadsOfStop(instance) }
+    }
+    // The window in front is the stop-held game's own (it is still up while the game quits), by the window's
+    // instance as `instanceOfWindow` finds it, a stopping one included (`runningFor` leaves those out).
+    readonly property bool stopHeldInFront: {
+        if (stopPadHold === "" || !focusedApp)
+            return false
+        const run = instanceOfWindow(recordOf(focusedApp))
+        return run !== undefined && run.instance === stopPadHold
+    }
     // The window gap (RUY-814): the last window of a running instance closed and the next one has not
     // mapped yet (an installer, then the game). The instance's pads stay (route "overlay", the held game
     // path) for `windowGapMs` at most; the gap ends when any window is in front again, the instance is
@@ -652,10 +679,9 @@ FocusScope {
         if (!signedIn)
             return null
         const mine = Session.running.filter(r => r.profile === Profiles.activeProfile)
-        const closing = closePadHold !== "" && closingInstances.includes(closePadHold)
-                        ? mine.find(r => r.instance === closePadHold) : undefined
-        if (closing)
-            return closing
+        const stopping = stopPadHold !== "" ? mine.find(r => r.instance === stopPadHold) : undefined
+        if (stopping)
+            return stopping
         const gap = gapInstance !== "" ? mine.find(r => r.instance === gapInstance && r.state !== "stopping") : undefined
         if (gap)
             return gap
@@ -1119,9 +1145,10 @@ FocusScope {
     function startClose(instance, appId, title, picture) {
         closeState = { instance: instance, appId: appId, title: title, picture: picture, stuck: false, killing: false }
         closingInstances = closingInstances.includes(instance) ? closingInstances : closingInstances.concat([instance])
-        // The pads the route holds for this game stay until it has exited (RUY-611); a game whose pads
-        // are not held now (not frozen behind Home) has none to keep.
-        closePadHold = inputRoute.routeInstance === instance ? instance : closePadHold
+        // The pads the route holds for this game stay until it has exited (the stop hold, RUY-611); a game
+        // whose pads are not held now (not frozen behind Home) has none to keep. Held before the Stop: Home
+        // comes in front at once, before Session1's AppStopping arrives.
+        holdPadsOfStop(instance)
         closeStuckTimer.restart()
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
     }
@@ -1235,8 +1262,7 @@ FocusScope {
     // The service refused or could not Stop `instance`: it is not closing.
     function stopRefused(instance) {
         closingInstances = closingInstances.filter(i => i !== instance)
-        if (closePadHold === instance)
-            closePadHold = ""
+        releaseStopHold(instance)       // nothing is stopping: the pads follow the screen again
         if (closeState && closeState.instance === instance)
             endClose()
     }
@@ -1244,8 +1270,7 @@ FocusScope {
     // AppExited for an instance Close asked to stop ends the screen; "killed" is checked once the list has
     // been refreshed (the kill itself needs no message, an instance still listed after it does).
     function closeEnded(instance, appId, reason) {
-        if (closePadHold === instance)
-            closePadHold = ""           // the game has exited: its pads may go
+        releaseStopHold(instance)       // the game has exited: its pads may go
         if (closeState && closeState.instance === instance)
             endClose()
         if (reason === "killed" && closingInstances.includes(instance)) {
