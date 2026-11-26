@@ -64,6 +64,7 @@ DBusSessionBackend::DBusSessionBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("AppStarted"), this, SIGNAL(appStarted(QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("AppStopping"), this, SIGNAL(appStopping(QString, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("AppExited"), this,
                   SIGNAL(appExited(QString, QString, int, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("FrozenChanged"), this, SIGNAL(frozenChanged(QString, bool)));

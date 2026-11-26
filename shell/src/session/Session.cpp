@@ -39,18 +39,13 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
     connect(m_backend.get(), &SessionBackend::instanceOfPidFinished, this, &Session::instanceOfPidFinished);
     // The record changes in place, so a binding on `running` sees the new `frozen` at once.
     connect(m_backend.get(), &SessionBackend::frozenChanged, this, [this](const QString &instance, bool frozen) {
-        for (QVariant &v : m_running) {
-            QVariantMap m = v.toMap();
-            if (m.value(QStringLiteral("instance")).toString() != instance)
-                continue;
-            if (m.value(QStringLiteral("frozen")).toBool() != frozen) {
-                m.insert(QStringLiteral("frozen"), frozen);
-                v = m;
-                emit runningChanged();
-            }
-            break;
-        }
+        setRecordValue(instance, QStringLiteral("frozen"), frozen);
         emit frozenChanged(instance, frozen);
+    });
+    // AppStopping (RUY-1235): the record is "stopping" at once, before the thaw of the same stop arrives,
+    // whoever asked for the stop.
+    connect(m_backend.get(), &SessionBackend::appStopping, this, [this](const QString &instance) {
+        setRecordValue(instance, QStringLiteral("state"), QStringLiteral("stopping"));
     });
     connect(m_backend.get(), &SessionBackend::appStarted, this, [this](const QString &instance, const QString &appId) {
         m_backend->refresh();
@@ -65,6 +60,21 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
 }
 
 Session::~Session() = default;
+
+void Session::setRecordValue(const QString &instance, const QString &key, const QVariant &value)
+{
+    for (QVariant &v : m_running) {
+        QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("instance")).toString() != instance)
+            continue;
+        if (m.value(key) != value) {
+            m.insert(key, value);
+            v = m;
+            emit runningChanged();
+        }
+        return;
+    }
+}
 
 Session *Session::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
@@ -218,6 +228,12 @@ void Session::mockChildLaunchWait(int ms)
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
         mock->setChildLaunchWait(ms);
+}
+
+void Session::mockStopAll()
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->stopAll();
 }
 
 QStringList Session::mockCalls() const

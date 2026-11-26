@@ -22,6 +22,18 @@ Item {
     SignalSpy { id: freezeSpy; target: Session; signalName: "freezeFinished" }
     SignalSpy { id: thawSpy; target: Session; signalName: "thawFinished" }
 
+    // The record's state when each FrozenChanged(false) arrives (RUY-1235: "stopping" already on a stop).
+    property var statesAtThaw: []
+    Connections {
+        target: Session
+        function onFrozenChanged(instance, frozen) {
+            if (frozen)
+                return
+            const r = Session.running.find(a => a.instance === instance)
+            host.statesAtThaw = host.statesAtThaw.concat([r ? r.state : "unlisted"])
+        }
+    }
+
     TestCase {
         id: tc
         name: "Session"
@@ -39,6 +51,7 @@ Item {
             exited.clear()
             freezeSpy.clear()
             thawSpy.clear()
+            host.statesAtThaw = []
         }
 
         // Launches and returns the instance of an "ok" launch.
@@ -355,6 +368,59 @@ Item {
             compare(exited.signalArguments[0][3], "quit")
             compare(Session.mockCalls(), ["freeze " + mine, "thaw " + mine, "freeze " + mine,
                                           "thaw " + mine, "stop " + mine], "a stop thaws first")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+        }
+
+        // RUY-1235: the system goes down (StopAll replayed in ruya-session's order). AppStopping makes each
+        // record "stopping" in place, before the thaw of the frozen game arrives and long before any exit,
+        // though the shell asked for no stop.
+        function test_stop_all_marks_every_run_stopping_before_its_thaw() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const game = launchOk("org.example.Racer", "p2")
+            const other = launchOk("org.example.Chess", "p2")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").state === "running")
+            tryVerify(() => Session.instanceOf("org.example.Chess", "p2").state === "running")
+            compare(freezeStatus(game), "ok")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").frozen === true)
+            Session.mockStopDelay(400)
+
+            Session.mockStopAll()
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").state === "stopping")
+            tryVerify(() => Session.instanceOf("org.example.Chess", "p2").state === "stopping")
+            tryVerify(() => Session.instanceOf("org.example.Racer", "p2").frozen === false)
+            compare(host.statesAtThaw, ["stopping"], "AppStopping came before FrozenChanged(false)")
+            compare(exited.count, 0, "the runs end later")
+            compare(Session.mockCalls(), ["freeze " + game, "thaw " + game, "stop " + game, "stop " + other])
+            Session.mockStopAll()
+            compare(Session.mockCalls().length, 4, "a run stopping already is left alone")
+            tryCompare(exited, "count", 2)
+            tryVerify(() => Session.running.length === 0)
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+        }
+
+        // A parent's Kill: each child is "stopping" before its AppExited (RUY-1235).
+        function test_kill_marks_children_stopping_before_they_end() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const steam = launchOk("org.example.Steam", "p2")
+            tryVerify(() => Session.instanceOf("org.example.Steam", "p2").state === "running")
+            const game = Session.mockStartChild(steam, "steam:70")
+            tryVerify(() => Session.running.length === 2)
+            let stateAtExit = ""
+            const seen = (instance) => {
+                if (instance === game) {
+                    const r = Session.running.find(a => a.instance === game)
+                    stateAtExit = r ? r.state : "unlisted"
+                }
+            }
+            Session.appExited.connect(seen)
+            Session.kill(steam)
+            tryCompare(exited, "count", 2)
+            Session.appExited.disconnect(seen)
+            compare(stateAtExit, "stopping")
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
         }

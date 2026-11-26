@@ -105,7 +105,7 @@
     parent     s    the parent's instance name for a child instance, else ""
     profile    s    profile id the app runs as
     started    x    unix seconds
-    state      s    "starting" | "running" | "stopping"
+    state      s    "starting" | "running" | "stopping" (AppStopping announces the change to "stopping")
     frozen     b    true while the app is frozen by Freeze (T-457) or because its profile left (T-165);
                FrozenChanged follows each change
                (an app taken over after a restart of the service reads its unit's FreezerState)
@@ -327,13 +327,27 @@
       <arg name="profile" type="s"/>
     </signal>
 
-    <!-- The `frozen` of a running app changed (Freeze, Thaw, or the thaw before a Stop). -->
+    <!-- The `frozen` of a running app changed (Freeze, Thaw, or the thaw before a Stop; that one
+         comes after the stop's AppStopping). -->
     <signal name="FrozenChanged">
       <arg name="instance" type="s"/>
       <arg name="frozen" type="b"/>
     </signal>
 
     <signal name="AppStarted">
+      <arg name="instance" type="s"/>
+      <arg name="app_id" type="s"/>
+    </signal>
+
+    <!-- The instance entered "stopping" (RUY-1235): once per entry, whoever asked for the stop:
+         Stop, Kill, the stop of every app when the system goes down (RUY-888), and a parent's Stop
+         or Kill reaching its children (each child's comes before its parent's). A Stop or Kill of
+         an instance that is stopping already sends none; a Stop or Kill that fails at once (the
+         instance keeps running) sends none. app_id as AppStarted's (a child: Steam's). Order: it
+         comes before any FrozenChanged(instance, false) of the same stop (the thaw before its
+         SIGTERM), so a client knows the instance is on its way out before it sees it run again;
+         AppExited follows when it has ended. The record's `state` is "stopping" from then on. -->
+    <signal name="AppStopping">
       <arg name="instance" type="s"/>
       <arg name="app_id" type="s"/>
     </signal>

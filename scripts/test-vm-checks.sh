@@ -830,6 +830,28 @@ expect_contains "judge_secs: 31 s passes the backstop" "$out" "PASS: the backsto
 out="$(runjudge 'judge_secs "the kill" "" 0 2')"
 expect_contains "judge_secs: no AppExited at all fails" "$out" "FAIL: the kill: no time measured"
 expect_contains "judge_secs: no AppExited at all returns 1" "$out" "rc=1"
+# RUY-1235: the Stop of a frozen app sends AppStopping, then FrozenChanged(false), then AppExited.
+ordersrc="$tmp/stop-order.sh"
+sed -n '/^# --- judge_stop_order begin/,/^# --- judge_stop_order end/p' "$here/vm-session-check.sh" > "$ordersrc"
+[ -s "$ordersrc" ] && pass "vm-session-check.sh has the judge_stop_order block" || fail "no judge_stop_order block in vm-session-check.sh"
+runorder() { bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$ordersrc'; judge_stop_order '$tmp/stop-order.log' ruya-app-ruya-p1-a.service; echo \"rc=\$?\"" 2>&1; }
+o_stop='{"type":"signal","interface":"org.ruyaos.Session1","member":"AppStopping","payload":{"signature":"ss","data":["ruya-app-ruya-p1-a.service","a"]}}'
+o_thaw='{"type":"signal","interface":"org.ruyaos.Session1","member":"FrozenChanged","payload":{"signature":"sb","data":["ruya-app-ruya-p1-a.service",false]}}'
+o_exit='{"type":"signal","interface":"org.ruyaos.Session1","member":"AppExited","payload":{"signature":"ssis","data":["ruya-app-ruya-p1-a.service","a",0,"quit"]}}'
+o_other='{"type":"signal","interface":"org.ruyaos.Session1","member":"AppStopping","payload":{"signature":"ss","data":["ruya-app-ruya-p1-b.service","b"]}}'
+printf '%s\n' "$o_other" "$o_stop" "$o_thaw" "$o_exit" > "$tmp/stop-order.log"
+out="$(runorder)"
+expect_contains "judge_stop_order: AppStopping, thaw, exit passes" "$out" "PASS: the Stop of ruya-app-ruya-p1-a.service sent AppStopping, then FrozenChanged(false), then AppExited"
+expect_contains "judge_stop_order: the right order returns 0" "$out" "rc=0"
+printf '%s\n' "$o_thaw" "$o_stop" "$o_exit" > "$tmp/stop-order.log"
+out="$(runorder)"
+expect_contains "judge_stop_order: the thaw before AppStopping fails" "$out" "FAIL: the Stop of ruya-app-ruya-p1-a.service sent its signals out of order (lines: AppStopping 2, FrozenChanged(false) 1, AppExited 3)"
+expect_contains "judge_stop_order: the wrong order returns 1" "$out" "rc=1"
+printf '%s\n' "$o_other" "$o_thaw" "$o_exit" > "$tmp/stop-order.log"
+out="$(runorder)"
+expect_contains "judge_stop_order: another instance's AppStopping does not count" "$out" "FAIL: no AppStopping for ruya-app-ruya-p1-a.service after its Stop"
+grep -q 'judge_stop_order "$work/signals.log" "$inst"' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh check judges the Stop's signal order (RUY-1235)" || fail "vm-session-check.sh check: the Stop's signal order is not judged"
 # The kill mode is wired: a Kill call, the stubborn app in the repository, both windows judged.
 grep -q 'kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }' "$here/vm-session-check.sh" \
     && pass "vm-session-check.sh calls Session1.Kill (RUY-736)" || fail "vm-session-check.sh: no Kill call"

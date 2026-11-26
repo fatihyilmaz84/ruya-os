@@ -14,7 +14,9 @@ use zbus::{interface, Connection, MatchRule, MessageStream};
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
 use crate::profile_scan::Trigger;
 use crate::runner_choice::runner_args_from_library;
-use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
+use crate::session::{
+    ExitReason, FrozenChange, Notice, RunningApp, Session, Status, StoppingNotice,
+};
 use crate::spawner::{flatpak_app_version, Listing, Spawner, UnitEvent};
 use crate::steam_tool::STEAM_APP_ID;
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
@@ -76,22 +78,66 @@ pub async fn wait_while_stopping(
     wait_while(session, bound, |s| s.is_stopping(app_id, profile)).await
 }
 
+/// A change of a running record to announce: it entered `stopping` (`AppStopping`, RUY-1235) or
+/// its `frozen` changed (`FrozenChanged`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RecordSignal {
+    Stopping(StoppingNotice),
+    Frozen(FrozenChange),
+}
+
+/// What a stop (Stop, Kill, StopAll) announces, in the order it is sent: every entry into
+/// `stopping` first, then the `frozen` changes (the thaws before the SIGTERMs). One connection
+/// keeps that order on the bus, so the shell hears that an instance is stopping before the thaw
+/// that would otherwise let it drop the instance's pads (RUY-1235, lead-53).
+fn take_stop_signals(session: &mut Session<DynSpawner, ProfileSnapshot>) -> Vec<RecordSignal> {
+    let stopping = session
+        .take_stopping()
+        .into_iter()
+        .map(RecordSignal::Stopping);
+    let frozen = session
+        .take_frozen_changes()
+        .into_iter()
+        .map(RecordSignal::Frozen);
+    stopping.chain(frozen).collect()
+}
+
+/// Sends `signals` in order.
+async fn emit_record_signals(emitter: &SignalEmitter<'_>, signals: Vec<RecordSignal>) {
+    for signal in signals {
+        let (name, sent) = match signal {
+            RecordSignal::Stopping(s) => (
+                "AppStopping",
+                SessionIface::app_stopping(emitter, s.instance, s.app_id).await,
+            ),
+            RecordSignal::Frozen(c) => (
+                "FrozenChanged",
+                SessionIface::frozen_changed(emitter, c.instance, c.frozen).await,
+            ),
+        };
+        if let Err(err) = sent {
+            eprintln!("ruya-session: emitting {name} failed: {err}");
+        }
+    }
+}
+
 /// The system goes down (RUY-888, `shutdown.rs`): every app is stopped through the core's
-/// `stop_all` (a frozen one thawed right before its SIGTERM), the thaws are handed to `emit`
-/// (`FrozenChanged`), and this waits until those apps have ended (`forward` takes their ends in),
-/// for at most `bound`. True when they all ended in time.
+/// `stop_all` (a frozen one thawed right before its SIGTERM), its signals are handed to `emit`
+/// (`take_stop_signals`: every `AppStopping`, then the thaws' `FrozenChanged`), and this waits
+/// until those apps have ended (`forward` takes their ends in), for at most `bound`. True when
+/// they all ended in time.
 #[cfg(any(target_os = "linux", test))]
 async fn stop_all_and_wait<E, EFut>(session: &Shared, bound: Duration, emit: E) -> bool
 where
-    E: FnOnce(Vec<FrozenChange>) -> EFut,
+    E: FnOnce(Vec<RecordSignal>) -> EFut,
     EFut: std::future::Future<Output = ()>,
 {
-    let (asked, changes) = {
+    let (asked, signals) = {
         let mut session = lock(session);
         let asked = session.stop_all(Instant::now);
-        (asked, session.take_frozen_changes())
+        (asked, take_stop_signals(&mut session))
     };
-    emit(changes).await;
+    emit(signals).await;
     eprintln!(
         "ruya-session: the system goes down, stopping every app first: {} running",
         asked.len()
@@ -179,13 +225,13 @@ pub async fn watch_shutdown(connection: Connection, session: Shared) {
         }
     };
     let stop_all = || async {
-        let emit = |changes: Vec<FrozenChange>| async {
+        let emit = |signals: Vec<RecordSignal>| async {
             if let Ok(iface) = connection
                 .object_server()
                 .interface::<_, SessionIface>(OBJECT_PATH)
                 .await
             {
-                emit_frozen(iface.signal_emitter(), changes).await;
+                emit_record_signals(iface.signal_emitter(), signals).await;
             }
         };
         stop_all_and_wait(&session, STOP_ALL_WAIT, emit).await;
@@ -634,25 +680,34 @@ impl SessionIface {
         instance: &str,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        let (status, changes): (Status, Vec<FrozenChange>) = {
+        let (status, signals) = {
             let mut session = lock(&self.session);
             let status = session.stop(instance, Instant::now);
-            (status, session.take_frozen_changes())
+            (status, take_stop_signals(&mut session))
         };
-        emit_frozen(&emitter, changes).await;
+        emit_record_signals(&emitter, signals).await;
         status.as_str().to_owned()
     }
 
     /// Force quit (RUY-736): the signed-in profile is asked of `Profiles1` (system mode), then the
-    /// core sends the kill. AppExited "killed" follows when the run has ended.
-    async fn kill(&self, instance: &str, #[zbus(connection)] connection: &Connection) -> String {
+    /// core sends the kill, and `AppStopping` goes out for each instance it put in `stopping`.
+    /// AppExited "killed" follows when the run has ended.
+    async fn kill(
+        &self,
+        instance: &str,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
         let Ok(active) = self.active(connection).await else {
             return "failed".to_owned();
         };
-        lock(&self.session)
-            .kill(instance, active.as_deref(), Instant::now)
-            .as_str()
-            .to_owned()
+        let (status, signals) = {
+            let mut session = lock(&self.session);
+            let status = session.kill(instance, active.as_deref(), Instant::now);
+            (status, take_stop_signals(&mut session))
+        };
+        emit_record_signals(&emitter, signals).await;
+        status.as_str().to_owned()
     }
 
     async fn freeze(
@@ -819,6 +874,13 @@ impl SessionIface {
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]
+    async fn app_stopping(
+        emitter: &SignalEmitter<'_>,
+        instance: String,
+        app_id: String,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
     async fn app_exited(
         emitter: &SignalEmitter<'_>,
         instance: String,
@@ -830,11 +892,8 @@ impl SessionIface {
 
 /// Sends `FrozenChanged` for each change, in order.
 async fn emit_frozen(emitter: &SignalEmitter<'_>, changes: Vec<FrozenChange>) {
-    for c in changes {
-        if let Err(err) = SessionIface::frozen_changed(emitter, c.instance, c.frozen).await {
-            eprintln!("ruya-session: emitting FrozenChanged failed: {err}");
-        }
-    }
+    let signals = changes.into_iter().map(RecordSignal::Frozen).collect();
+    emit_record_signals(emitter, signals).await;
 }
 
 const PROFILES_NAME: &str = "org.ruyaos.Profiles1";
@@ -1314,7 +1373,7 @@ mod tests {
     }
 
     /// `stop_all_and_wait` with an `emit` that collects what would be announced.
-    fn stop_all_collecting(shared: &Shared, bound: Duration) -> (bool, Vec<FrozenChange>) {
+    fn stop_all_collecting(shared: &Shared, bound: Duration) -> (bool, Vec<RecordSignal>) {
         let out = Mutex::new(Vec::new());
         let ended = futures_lite::future::block_on(stop_all_and_wait(shared, bound, |c| async {
             *out.lock().unwrap_or_else(|e| e.into_inner()) = c;
@@ -1352,15 +1411,92 @@ mod tests {
             t0.elapsed() < Duration::from_secs(4),
             "it waited the whole bound"
         );
-        // The thaw before the stop is announced.
+        // Its stop is announced, then the thaw before the SIGTERM (RUY-1235: the shell must hear
+        // "stopping" before the thaw that would let it drop the game's pads).
         assert_eq!(
             changes,
-            [FrozenChange {
-                instance: unit,
-                frozen: false
-            }]
+            [
+                RecordSignal::Stopping(StoppingNotice {
+                    instance: unit.clone(),
+                    app_id: APP.to_owned()
+                }),
+                RecordSignal::Frozen(FrozenChange {
+                    instance: unit,
+                    frozen: false
+                })
+            ]
         );
         assert!(lock(&shared).list().is_empty());
+    }
+
+    fn stopping(instance: &str, app_id: &str) -> RecordSignal {
+        RecordSignal::Stopping(StoppingNotice {
+            instance: instance.to_owned(),
+            app_id: app_id.to_owned(),
+        })
+    }
+
+    fn thawed(instance: &str) -> RecordSignal {
+        RecordSignal::Frozen(FrozenChange {
+            instance: instance.to_owned(),
+            frozen: false,
+        })
+    }
+
+    #[test]
+    fn stop_all_announces_every_app_stopping_before_any_thaw() {
+        // A frozen game (behind Home) and a running one: one AppStopping each, and every one of
+        // them before the FrozenChanged(false) of the frozen game's thaw (RUY-1235).
+        const PUZZLE: &str = "org.ruyaos.Puzzle";
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP).with_app(PUZZLE));
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let [racer, puzzle] = [APP, PUZZLE].map(|app| {
+            let (status, unit) = lock(&shared).launch(app, "p1", 1, &[]);
+            assert_eq!(status, Status::Ok);
+            lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
+            unit
+        });
+        assert_eq!(
+            lock(&shared).freeze(&racer, None, Instant::now()),
+            Status::Ok
+        );
+        lock(&shared).take_frozen_changes();
+        let (_, signals) = stop_all_collecting(&shared, Duration::from_millis(50));
+        assert_eq!(
+            signals,
+            [
+                stopping(&racer, APP),
+                stopping(&puzzle, PUZZLE),
+                thawed(&racer)
+            ]
+        );
+        // A second StopAll (or Stop) of apps already stopping announces nothing.
+        let (_, again) = stop_all_collecting(&shared, Duration::from_millis(50));
+        assert!(again.is_empty(), "{again:?}");
+    }
+
+    #[test]
+    fn stop_and_kill_announce_their_stopping_first_and_once() {
+        // Stop of a frozen app: AppStopping, then the thaw; a second Stop and a Kill of the
+        // stopping app add nothing.
+        let (shared, unit) = frozen_session();
+        let mut s = lock(&shared);
+        assert_eq!(s.stop(&unit, Instant::now), Status::Ok);
+        assert_eq!(
+            take_stop_signals(&mut s),
+            [stopping(&unit, APP), thawed(&unit)]
+        );
+        assert_eq!(s.stop(&unit, Instant::now), Status::Ok);
+        assert_eq!(s.kill(&unit, None, Instant::now), Status::Ok);
+        assert!(take_stop_signals(&mut s).is_empty());
+        drop(s);
+
+        // Kill of a running app: AppStopping alone (a Kill thaws nothing).
+        let (shared, unit, _) = signed_in_session();
+        let mut s = lock(&shared);
+        assert_eq!(s.kill(&unit, None, Instant::now), Status::Ok);
+        assert_eq!(take_stop_signals(&mut s), [stopping(&unit, APP)]);
     }
 
     #[test]

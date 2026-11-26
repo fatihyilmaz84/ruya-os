@@ -13,6 +13,7 @@
 // of what runs. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // Running records are plain objects: { instance, appId, item, parent, profile, started, state, frozen }.
+// `frozen` follows FrozenChanged and `state` becomes "stopping" on AppStopping, both in place.
 // `item` is the Library1 item id ("flatpak:<appId>", or "steam:<appid>" for a Steam game) and `parent`
 // the instance of the Steam instance a game runs under ("" for every other record), ADR-041.
 class Session : public QObject
@@ -79,6 +80,10 @@ public:
     // A Steam game LaunchItem starts from now on is "launch-failed" after `ms` without its scope
     // (ruya-session's 120 s, again after mockReset), RUY-1067.
     Q_INVOKABLE void mockChildLaunchWait(int ms);
+    // The system goes down (ruya-session's StopAll, RUY-888), replayed in the service's order (RUY-1235):
+    // AppStopping for every run (children first), then the FrozenChanged(false) of each frozen one's thaw;
+    // each run ends later with AppExited, as a Stop of it would (mockStopDelay, mockIgnoreStop).
+    Q_INVOKABLE void mockStopAll();
     // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" and "forward steam:<appid>"
     // (a Steam game handed to the running Steam) in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
@@ -100,6 +105,9 @@ signals:
     void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 
 private:
+    // Sets `key` of the running record of `instance` in place (runningChanged when it changed).
+    void setRecordValue(const QString &instance, const QString &key, const QVariant &value);
+
     std::unique_ptr<SessionBackend> m_backend;
     QVariantList m_running;
 };
