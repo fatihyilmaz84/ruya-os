@@ -83,6 +83,7 @@ void MockSessionBackend::reset()
     m_stubbornStop = false;
     m_ignoreStop = false;
     m_killAnswer.clear();
+    m_stopAnswer.clear();
     m_childWaitMs = ChildLaunchWaitMs;
     m_endingAs.clear();
     m_lastActive = m_activeProfile ? m_activeProfile().value_or(QString()) : QString();
@@ -92,6 +93,12 @@ void MockSessionBackend::reset()
 void MockSessionBackend::refresh()
 {
     QTimer::singleShot(0, this, [this] { emit runningListed(m_running); });
+}
+
+void MockSessionBackend::listRunningLate(int ms)
+{
+    const QList<RunningApp> asked = m_running;   // computed when asked, as ruya-session answers
+    QTimer::singleShot(ms, this, [this, asked] { emit runningListed(asked); });
 }
 
 void MockSessionBackend::launch(const QString &appId, const QString &profile)
@@ -286,12 +293,14 @@ void MockSessionBackend::stop(const QString &instance)
 {
     QString status = QStringLiteral("ok");
     const int i = indexOf(instance);
-    if (instance.isEmpty())
+    if (!m_stopAnswer.isEmpty())
+        status = m_stopAnswer;
+    else if (instance.isEmpty())
         status = QStringLiteral("invalid");
     else if (i < 0)
         status = QStringLiteral("unknown-instance");
     QTimer::singleShot(0, this, [this, instance, status] { emit stopFinished(instance, status); });
-    if (status == QLatin1String("ok"))
+    if (status == QLatin1String("ok") && m_stopAnswer.isEmpty())
         stopRuns({instance});
 }
 

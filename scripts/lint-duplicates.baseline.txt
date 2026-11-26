@@ -75,7 +75,6 @@ shell/src/profiles/DBusProfilesBackend.cpp | shell/src/store/DBusStoreBackend.cp
 shell/src/profiles/Profiles.h | shell/src/profiles/ProfilesBackend.h | 82  # debt
 shell/src/session/DBusSessionBackend.cpp | shell/src/storage/DBusStorageBackend.cpp | 114  # debt
 shell/src/session/DBusSessionBackend.cpp | shell/src/usage/DBusUsageBackend.cpp | 107  # debt
-shell/src/session/Session.h | shell/src/session/SessionBackend.h | 259  # debt
 shell/src/storage/DBusStorageBackend.cpp | shell/src/storage/DBusStorageBackend.cpp | 183  # debt
 shell/src/storage/DBusStorageBackend.cpp | shell/src/store/DBusStoreBackend.cpp | 200  # debt
 shell/src/storage/DBusStorageBackend.cpp | shell/src/system/DBusSystemDetailsBackend.cpp | 167  # debt

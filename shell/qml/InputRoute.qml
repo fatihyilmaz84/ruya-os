@@ -12,8 +12,10 @@ import RuyaShell
 //            always with its instance and app id, so its pads stay, held in neutral (RUY-541: a
 //            Freeze by the Hub keeps them; a one-pad game keeps the player's pad). Also with no app
 //            in front while Shell.qml names a held game (RUY-611): one frozen behind Home or the Hub,
-//            or one being closed until it has exited, so a game that saves its controller choice on
-//            quit (LibreQuake: "Gamepad removed" -> joy_device -1) still finds its pads
+//            or one being stopped (any stop: Close, Force quit, the system going down; RUY-1238) until
+//            it has exited, so a game that saves its controller choice on quit (LibreQuake: "Gamepad
+//            removed" -> joy_device -1) still finds its pads; a stopping game's own window in front
+//            (`heldInFront`) holds them the same way
 //   app      the app in front has the keys and is not frozen
 // Two gaps between windows keep the pads (RUY-814; Input destroys them on "shell"):
 //   - a new window whose instance Session1 has not yet named (`lookupPending`) holds the last sent
@@ -43,10 +45,14 @@ QtObject {
     property bool frozen: false
     // Something of the shell covers the app and takes the keys (the Hub, a system dialog, the saver).
     property bool overlay: false
-    // A game whose pads outlive the screen (RUY-611), used only with no app in front: Session1's
-    // instance and Flatpak id of a frozen game behind Home, or of a game being closed (Shell.qml).
+    // A game whose pads outlive the screen (RUY-611), used with no app in front: Session1's instance and
+    // Flatpak id of a frozen game behind Home, or of a game being stopped until it has exited (the stop
+    // hold, RUY-1238: Close, Force quit, the system going down; Shell.qml).
     property string heldInstance: ""
     property string heldAppId: ""
+    // The window in front is the held game's own, which is being stopped (RUY-1238): the hold applies
+    // with it in front too, as the shell no longer names the instance of a stopping app's window.
+    property bool heldInFront: false
 
     // The instance lookup of the app in front is pending (RUY-814): a window just mapped and Session1
     // has not yet said which instance its process belongs to (Shell.qml: the focused record's `pending`).
@@ -60,7 +66,7 @@ QtObject {
     property string sentAppId: ""
     property string sentProfile: ""
 
-    readonly property bool holding: signedIn && !appInFront && heldInstance !== "" && heldAppId !== ""
+    readonly property bool holding: signedIn && (!appInFront || heldInFront) && heldInstance !== "" && heldAppId !== ""
 
     // The window hold (RUY-814): while the front window's instance is not yet known, the last sent
     // "app"/"overlay" of this profile stays, as long as that instance still runs. A second window of a

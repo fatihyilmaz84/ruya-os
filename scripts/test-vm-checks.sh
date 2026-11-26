@@ -776,9 +776,50 @@ grep -q 'printf .%s\\n. "$prev" | judge_clean_end "the shutdown" "$puid"' "$here
     && pass "vm-session-check.sh shutdown-verify judges the previous boot's journal" || fail "vm-session-check.sh shutdown-verify: the journal is not judged"
 grep -q 'prev="$(journalctl -b -1 ' "$here/vm-session-check.sh" \
     && pass "vm-session-check.sh shutdown-verify reads the boot that went down" || fail "vm-session-check.sh shutdown-verify: not the previous boot"
-grep -q 'bash /root/vm-session-check.sh shutdown"' "$here/vm-reboot-check.ps1" \
-    && grep -q 'bash /root/vm-session-check.sh shutdown-verify"' "$here/vm-reboot-check.ps1" \
+grep -q 'bash /root/$($halves.script) shutdown"' "$here/vm-reboot-check.ps1" \
+    && grep -q 'bash /root/$($halves.script) shutdown-verify"' "$here/vm-reboot-check.ps1" \
+    && grep -q 'if ($Shutdown) { $halves = @{ script = "vm-session-check.sh"' "$here/vm-reboot-check.ps1" \
     && pass "vm-reboot-check.ps1 -Shutdown runs both halves around the reboot" || fail "vm-reboot-check.ps1: the shutdown halves are not run"
+
+# --- vm-input-check.sh shutdown: a frozen game keeps its pads while the system goes down (RUY-1238) ------------
+# The verdict on the previous boot's journal: after "the system goes down", no pad destroyed and no route shell or
+# locked before the game's unit ended; what came before the shutdown or after the end does not count.
+padsrc="$tmp/shutdownpads.sh"
+sed -n '/^# --- judge_shutdown_pads begin/,/^# --- judge_shutdown_pads end/p' "$here/vm-input-check.sh" > "$padsrc"
+[ -s "$padsrc" ] && pass "vm-input-check.sh has the judge_shutdown_pads block" || fail "no judge_shutdown_pads block in vm-input-check.sh"
+runpads() { # <journal text, -o short-unix> <unit end>
+    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$padsrc'; judge_shutdown_pads '$2'; echo \"rc=\$?\"" 2>&1
+}
+pads_down='100.000000 ruya ruya-session[9]: ruya-session: the system goes down, stopping every app first: 1 running'
+out="$(runpads "90.000000 ruya ruya-inputd[7]: ruya-inputd: virtual pad ruya-input/pad1 destroyed
+$pads_down
+101.000000 ruya ruya-inputd[7]: ruya-inputd: route overlay instance 'ruya-app-x.service' app 'org.ruyaos.TestWaylandClient' profile 'p1'
+105.500000 ruya ruya-inputd[7]: ruya-inputd: route shell instance '' app '' profile 'p1'
+105.600000 ruya ruya-inputd[7]: ruya-inputd: virtual pad ruya-input/pad1 destroyed" 104.250000)"
+expect_contains "judge_shutdown_pads: the pads going after the unit's end pass" "$out" "PASS: journal: no virtual pad destroyed and no route away from the game"
+expect_contains "judge_shutdown_pads: a pass returns 0 (a destroy before the shutdown does not count)" "$out" "rc=0"
+out="$(runpads "$pads_down
+102.000000 ruya ruya-inputd[7]: ruya-inputd: virtual pad ruya-input/pad1 destroyed" 104.250000)"
+expect_contains "judge_shutdown_pads: a pad destroyed before the unit's end fails" "$out" "FAIL: journal: the game lost its pads while it quit"
+expect_contains "judge_shutdown_pads: that FAIL returns 1" "$out" "rc=1"
+out="$(runpads "$pads_down
+100.500000 ruya ruya-inputd[7]: ruya-inputd: route shell instance '' app '' profile 'p1'" 104.250000)"
+expect_contains "judge_shutdown_pads: the route shell before the unit's end fails" "$out" "FAIL: journal: the game lost its pads while it quit"
+out="$(runpads "$pads_down
+100.500000 ruya ruya-inputd[7]: ruya-inputd: route locked instance '' app '' profile ''" 104.250000)"
+expect_contains "judge_shutdown_pads: the route locked before the unit's end fails" "$out" "FAIL: journal: the game lost its pads while it quit"
+out="$(runpads "103.000000 ruya ruya-inputd[7]: ruya-inputd: virtual pad ruya-input/pad1 destroyed" 104.250000)"
+expect_contains "judge_shutdown_pads: no 'the system goes down' line fails" "$out" "FAIL: journal: no 'the system goes down' line"
+expect_contains "judge_shutdown_pads: that FAIL returns 1" "$out" "rc=1"
+out="$(runpads "$pads_down" "")"
+expect_contains "judge_shutdown_pads: no line of the game's unit fails" "$out" "FAIL: journal: no line of the game's unit"
+out="$(runpads "$pads_down" 99.000000)"
+expect_contains "judge_shutdown_pads: a unit that ended before the shutdown fails" "$out" "FAIL: journal: the game's unit ended at 99.000000, before the system went down"
+grep -q 'journalctl -b -1 --no-pager -o short-unix 2>/dev/null | judge_shutdown_pads "$unit_ts"' "$here/vm-input-check.sh" \
+    && grep -q 'unit_ts="$(journalctl -b -1 _SYSTEMD_USER_UNIT="$inst" + USER_UNIT="$inst" ' "$here/vm-input-check.sh" \
+    && pass "vm-input-check.sh shutdown-verify judges the previous boot's journal against the game's unit" || fail "vm-input-check.sh shutdown-verify: not the previous boot or not the game's unit"
+grep -q 'if ($PadShutdown) {' "$here/vm-reboot-check.ps1" && grep -q 'script = "vm-input-check.sh"; files = @("vm-input-check.sh", "vm-input-probe.py"' "$here/vm-reboot-check.ps1" \
+    && pass "vm-reboot-check.ps1 -PadShutdown runs vm-input-check.sh's halves with the probe" || fail "vm-reboot-check.ps1: -PadShutdown does not run vm-input-check.sh's halves"
 
 # --- vm-session-check.sh check: the app unit's limits (RUY-855) ------------------------------------
 limsrc="$tmp/limits.sh"

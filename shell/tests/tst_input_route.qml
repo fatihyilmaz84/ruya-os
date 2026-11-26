@@ -61,6 +61,14 @@ Item {
     }
     SignalSpy { id: testSpy; target: Input; signalName: "testStartFinished" }
 
+    // How many SetRoute calls had been made when the last AppExited arrived (RUY-1238): every call before it
+    // was sent while the game still ran (the shell sends one event-loop turn after a change at the earliest).
+    property int callsAtExit: -1
+    Connections {
+        target: Session
+        function onAppExited() { host.callsAtExit = Input.mockCalls().length }
+    }
+
     TestCase {
         id: tc
         name: "InputRoute"
@@ -82,6 +90,7 @@ Item {
             preparedSpy.clear()
             host.preparedAtLaunch = -1
             host.padsAtLaunch = false
+            host.callsAtExit = -1
         }
 
         function cleanup() {
@@ -474,6 +483,146 @@ Item {
             expectRoute("shell", "", "", "p2", "the game has exited")
             verify(!Input.mockPads(), "closing a game with no pads made none")
             verify(Input.mockCalls().slice(from).every(c => c.route === "shell"), "no overlay was sent for it")
+            checkCalls()
+        }
+
+        // RUY-1238: one stop hold for every kind of stop. The Hub freezes the game in front, Home goes in front
+        // of it: the route is "overlay" with its instance (RUY-611's Home hold).
+        function freezeBehindHome(run) {
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "Home with the frozen game behind it")
+        }
+
+        // The route the shell works out now (synchronous, unlike what Input was last asked) holds the game's pads.
+        function holdsNow(instance, why) {
+            const r = find("inputRoute")
+            compare(r.route + "|" + r.routeInstance + "|" + r.routeAppId, "overlay|" + instance + "|org.example.Racer", why)
+        }
+
+        // Once the game has exited: every call from `from` (an index into Input.mockCalls()) until its AppExited
+        // held its pads, "overlay" with its instance (a shell, locked or app call sent while it quit would be here).
+        function onlyHeldUntilExit(from, instance, why) {
+            tryVerify(() => host.callsAtExit >= from, 2000, "AppExited arrived")
+            const calls = Input.mockCalls().slice(from, host.callsAtExit)
+            verify(calls.every(c => c.route === "overlay" && c.instance === instance && c.appId === "org.example.Racer"),
+                   why + ": " + JSON.stringify(calls.map(c => c.route + "|" + c.instance)))
+        }
+
+        // The system goes down with a game frozen behind Home (ruya-session's StopAll, replayed in its order:
+        // AppStopping, the thaw, AppExited later): nobody in the shell asked for the stop, and the game,
+        // thawed so it can quit, still finds its pads until it has exited (LibreQuake saved "no controller"
+        // at a reboot when Home's hold ended at the thaw). Then "shell", and the pads go.
+        function test_the_system_going_down_keeps_the_pads_of_a_game_frozen_behind_home() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            const pads = Input.mockPadGeneration()
+            freezeBehindHome(run)
+            Session.mockStopDelay(1500)
+            const from = Input.mockCalls().length
+            Session.mockStopAll()
+            tryVerify(() => recordOf(run.instance).state === "stopping", 2000, "AppStopping: the game is stopping")
+            holdsNow(run.instance, "stopping: the route still holds the game")
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the stop thawed it")
+            holdsNow(run.instance, "stopping and thawed, the exit still to come")
+            tryVerify(() => recordOf(run.instance) === undefined, 5000, "the game quit")
+            onlyHeldUntilExit(from, run.instance, "no shell or locked route before the exit")
+            compare(Input.mockPadGeneration(), pads, "the same pads until the exit, none made or destroyed")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            verify(!Input.mockPads(), "the pads go once the game has exited")
+            checkCalls()
+        }
+
+        // The same with the game in front and not frozen: the shell no longer names a stopping app's window
+        // instance (`runningFor`), and the hold keeps the pads with that window in front ("overlay": the game
+        // quits, it is not played any more).
+        function test_the_system_going_down_keeps_the_pads_of_the_game_in_front() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            const pads = Input.mockPadGeneration()
+            Session.mockStopDelay(1500)
+            const from = Input.mockCalls().length
+            Session.mockStopAll()
+            tryVerify(() => recordOf(run.instance).state === "stopping", 2000, "AppStopping: the game is stopping")
+            verify(run.app.activeFocus, "its window is still in front")
+            holdsNow(run.instance, "the stopping game in front")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the stopping game in front")
+            compare(Input.mockPadGeneration(), pads, "the same pads, none made or destroyed")
+            tryVerify(() => recordOf(run.instance) === undefined, 5000, "the game quit")
+            onlyHeldUntilExit(from, run.instance, "no app, shell or locked route between the stop and the exit")
+            expectRoute("shell", "", "", "p2", "the game has exited, its window not yet gone")
+            verify(!Input.mockPads(), "the pads go once the game has exited")
+            checkCalls()
+        }
+
+        // The race of a ListRunning reply computed before the stop that arrives after AppStopping (RUY-1235's
+        // review): it says "running" again until the next refresh. The hold was taken on the signal, so the
+        // reply does not drop it: still "overlay" with the instance, never "app" or "shell", until the exit.
+        function test_a_listing_from_before_the_stop_does_not_drop_the_hold() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            Session.mockStopDelay(1500)
+            const from = Input.mockCalls().length
+            Session.mockListRunningLate(300)             // computed now: the game "running"
+            Session.mockStopAll()
+            tryVerify(() => recordOf(run.instance).state === "stopping", 2000, "AppStopping: the game is stopping")
+            tryVerify(() => recordOf(run.instance).state === "running", 2000, "the late reply says running again")
+            holdsNow(run.instance, "the hold outlives the stale reply")
+            tryVerify(() => recordOf(run.instance) === undefined, 5000, "the game quit")
+            onlyHeldUntilExit(from, run.instance, "no app, shell or locked route between the stop and the exit")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            checkCalls()
+        }
+
+        // A refused Stop ends the hold: nothing is stopping, so a game that is not frozen behind Home (the
+        // Hub's pause off) loses its pads at Home as before.
+        function test_a_refused_stop_releases_the_hold() {
+            DeviceSettings.pauseGamesInHub = false
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            openHub()
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the Hub over the running game")
+            Session.mockStopAnswer("failed")
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !tc.shell.closingScreen && tc.shell.stopPadHold === "", 2000, "the refused Stop ended the close and the hold")
+            verify(recordOf(run.instance) !== undefined && recordOf(run.instance).state === "running", "the game still runs")
+            expectRoute("shell", "", "", "p2", "Home, the game not frozen and not stopping")
+            verify(!Input.mockPads(), "no pads are held for it")
+            Session.mockStopAnswer("")
+            checkCalls()
+        }
+
+        // The kill check giving up (a Stop reported "killed" with the game still listed, T-458) ends the hold
+        // too: the hold went with that AppExited, and the warning comes with the route at the shell.
+        function test_the_kill_check_giving_up_releases_the_hold() {
+            DeviceSettings.pauseGamesInHub = false
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            openHub()
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the Hub over the running game")
+            tc.shell.killCheckMs = 200
+            Session.mockStopDelay(300)
+            Session.mockStubbornStop(true)
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "closing: the stop hold")
+            tryVerify(() => !tc.shell.closingInstances.includes(run.instance), 3000, "the kill check gave up")
+            verify(recordOf(run.instance) !== undefined, "the game is still listed")
+            compare(tc.shell.stopPadHold, "", "no hold is left")
+            expectRoute("shell", "", "", "p2", "Home, the hold released")
+            verify(!Input.mockPads(), "no pads are held for it")
+            Session.mockStubbornStop(false)
             checkCalls()
         }
 
