@@ -230,6 +230,11 @@
       installed app with that id), "not-withdrawable", "forbidden", "failed" (the metadata or the
       override could not be read or written). Each reads Flatpak's installed set first, like
       Install (InstalledChanged).
+
+      Reads never wait for each other: GetPermissions and GetWithdrawnCounts take no lock against
+      one another. A read waits only for a change that is under way (a restore resets the override
+      and writes the rest back, two steps), so it answers from the override before the change or
+      after it, never from the step in between.
     -->
 
     <!-- effective: what the app gets now (its metadata with the override on top), in contract order.
@@ -242,6 +247,20 @@
       <arg name="effective" type="as" direction="out"/>
       <arg name="withdrawn" type="as" direction="out"/>
       <arg name="withdrawable" type="as" direction="out"/>
+    </method>
+
+    <!-- How many of its permissions the console withdraws, for every installed app at once (the
+         Settings list of apps shows it on each row, so it asks once instead of GetPermissions per
+         app). counts: app id -> the length of that app's `withdrawn` list in GetPermissions, from
+         the same rule. Only installed apps with at least one withdrawn key are listed; an app that
+         is not listed has none. Reads Flatpak's installed set once and every override in one
+         pass; only an app that has an override costs one more read (its metadata), the others
+         cost nothing. An app whose metadata cannot be read is left out (the service logs it).
+         Open to the shell for every profile, like GetPermissions. Statuses: "ok", "failed" (the
+         overrides could not be read; counts is empty then). -->
+    <method name="GetWithdrawnCounts">
+      <arg name="status" type="s" direction="out"/>
+      <arg name="counts" type="a{su}" direction="out"/>
     </method>
 
     <!-- Adds the key's withdrawal to the app's override. "ok" also when it is withdrawn already. -->

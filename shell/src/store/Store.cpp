@@ -129,7 +129,25 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
                                              {QStringLiteral("effective"), effective},
                                              {QStringLiteral("withdrawn"), withdrawn},
                                              {QStringLiteral("withdrawable"), withdrawable}});
+        // The app's own answer is the newest word about it: its row in the Privacy pane follows.
+        const int count = status == QLatin1String("ok") ? int(withdrawn.size()) : 0;
+        if (m_withdrawnCounts.value(id, 0) != count) {
+            if (count > 0)
+                m_withdrawnCounts.insert(id, count);
+            else
+                m_withdrawnCounts.remove(id);
+            emit withdrawnCountsChanged();
+        }
         emit permissionsLoaded(id);
+    });
+    connect(m_backend.get(), &StoreBackend::withdrawnCountsLoaded, this, [this](const QVariantMap &counts) {
+        QHash<QString, int> next;
+        for (auto it = counts.cbegin(); it != counts.cend(); ++it)
+            next.insert(it.key(), it.value().toInt());
+        if (next != m_withdrawnCounts) {
+            m_withdrawnCounts = next;
+            emit withdrawnCountsChanged();
+        }
     });
     connect(m_backend.get(), &StoreBackend::permissionChanged, this, [this](const QString &id, const QString &key, const QString &status) {
         emit permissionChanged(id, key, status);
@@ -284,6 +302,16 @@ QVariantMap Store::permissions(const QString &appId) const
     return m_permissions.value(appId);
 }
 
+void Store::loadWithdrawnCounts()
+{
+    m_backend->getWithdrawnCounts();
+}
+
+int Store::withdrawnCount(const QString &appId) const
+{
+    return m_withdrawnCounts.value(appId, 0);
+}
+
 void Store::withdrawPermission(const QString &appId, const QString &key)
 {
     m_backend->withdrawPermission(appId, key);
@@ -364,6 +392,7 @@ void Store::mockReset()
     m_lost.clear();
     m_getOnly.clear();
     m_permissions.clear();
+    m_withdrawnCounts.clear();
     // The reset drops the mock's running jobs without a JobFinished, so the jobs this facade
     // already saw progress for would stay in `jobs` for ever (T-167).
     if (!m_jobs.isEmpty()) {
@@ -526,4 +555,22 @@ int Store::mockPendingPermissionReplies() const
 {
     auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
     return mock ? mock->pendingPermissionReplies() : 0;
+}
+
+void Store::mockWithdrawnCountsDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->withdrawnCountsDelayed(ms);
+}
+
+int Store::mockPendingWithdrawnCountReplies() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->pendingWithdrawnCountReplies() : 0;
+}
+
+int Store::mockWithdrawnCountReads() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->withdrawnCountReads() : 0;
 }
