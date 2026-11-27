@@ -102,6 +102,7 @@ qt_add_qml_module(ruyashell
         src/update/MockUpdateBackend.h src/update/MockUpdateBackend.cpp
         src/update/DBusUpdateBackend.h src/update/DBusUpdateBackend.cpp
         src/update/Update.h src/update/Update.cpp
+        src/session/SessionSignals.h
         src/session/SessionBackend.h
         src/session/MockSessionBackend.h src/session/MockSessionBackend.cpp
         src/session/DBusSessionBackend.h src/session/DBusSessionBackend.cpp

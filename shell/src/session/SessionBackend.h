@@ -1,7 +1,8 @@
 #pragma once
 
+#include "SessionSignals.h"
+
 #include <QList>
-#include <QObject>
 #include <QString>
 #include <QVariantMap>
 
@@ -36,12 +37,12 @@ struct RunningApp
 
 // Transport behind the Session QML singleton: org.ruyaos.Session1 over D-Bus, or an in-memory mock.
 // Results arrive asynchronously through signals.
-class SessionBackend : public QObject
+class SessionBackend : public SessionSignals
 {
     Q_OBJECT
 
 public:
-    using QObject::QObject;
+    using SessionSignals::SessionSignals;
 
     virtual bool isMock() const = 0;
     virtual void refresh() = 0; // reports the running list
@@ -59,24 +60,6 @@ public:
     virtual void instanceOfPid(int pid) = 0;
 
 signals:
+    // The list of running apps (the Session1 signals are SessionSignals').
     void runningListed(const QList<RunningApp> &apps);
-    // status: see the XML; `instance` is set on "ok" only.
-    void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
-    // LaunchItem's answer, with the statuses of launchFinished.
-    void launchItemFinished(const QString &item, const QString &profile, const QString &status, const QString &instance);
-    void stopFinished(const QString &instance, const QString &status);
-    // status: "ok" | "unknown-instance" | "not-allowed" | "failed"
-    void killFinished(const QString &instance, const QString &status);
-    // status: "ok" | "invalid" | "not-running" | "not-allowed" | "failed"
-    void freezeFinished(const QString &instance, const QString &status);
-    void thawFinished(const QString &instance, const QString &status);
-    void frozenChanged(const QString &instance, bool frozen);
-    // status: "ok" | "invalid" | "not-found" (or "failed" when the call failed); `instance` on "ok".
-    void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
-    void appStarted(const QString &instance, const QString &appId);
-    // The instance entered "stopping" (RUY-1235), whoever asked for the stop: Stop, Kill, the system going
-    // down, a parent's Stop or Kill. It comes before the FrozenChanged(false) of the same stop.
-    void appStopping(const QString &instance, const QString &appId);
-    // reason: "quit" | "crashed" | "killed" | "launch-failed"
-    void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 };

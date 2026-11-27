@@ -582,6 +582,39 @@ Item {
             checkCalls()
         }
 
+        // Lock destroys the pads of a stopping game too (06 section 5.2: the stop hold ends at a sign-out), and the
+        // same profile signing in again BEFORE the game has exited does not bring the hold back: the game is
+        // still listed as stopping and still the profile's, so a hold that outlived the Lock would take the pads
+        // again on the sign-in. The route stays "shell" with no pads until (and after) the exit.
+        function test_a_lock_during_a_stop_ends_the_hold_and_a_sign_in_before_the_exit_does_not_bring_it_back() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            Session.mockStopDelay(3000)
+            Session.mockStopAll()
+            tryVerify(() => recordOf(run.instance).state === "stopping", 2000, "AppStopping: the game is stopping")
+            tryCompare(tc.shell, "stopPadHold", run.instance, 2000, "the stop hold is taken")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the stopping game in front")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            compare(tc.shell.stopPadHold, "", "the sign-out ended the hold")
+            expectRoute("locked", "", "", "", "locked with the game stopping")
+            verify(!Input.mockPads(), "Lock destroys the pads of the stopping game")
+            signIn(1, "p2")
+            verify(recordOf(run.instance) !== undefined && recordOf(run.instance).state === "stopping",
+                   "the game has not exited yet")
+            const from = Input.mockCalls().length
+            compare(tc.shell.stopPadHold, "", "the sign-in does not bring the hold back")
+            expectRoute("shell", "", "", "p2", "signed in again, the game still stopping")
+            verify(!Input.mockPads(), "no pads for the stopping game after the sign-in")
+            tryVerify(() => recordOf(run.instance) === undefined, 6000, "the game quit")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            verify(!Input.mockPads(), "still no pads")
+            verify(Input.mockCalls().slice(from).every(c => c.route === "shell"), "no overlay was sent after the sign-in")
+            checkCalls()
+        }
+
         // A refused Stop ends the hold: nothing is stopping, so a game that is not frozen behind Home (the
         // Hub's pause off) loses its pads at Home as before.
         function test_a_refused_stop_releases_the_hold() {

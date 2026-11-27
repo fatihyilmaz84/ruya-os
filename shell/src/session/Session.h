@@ -17,7 +17,7 @@
 // ListRunning reply replaces the whole list (one computed before a stop can say "running" again).
 // `item` is the Library1 item id ("flatpak:<appId>", or "steam:<appid>" for a Steam game) and `parent`
 // the instance of the Steam instance a game runs under ("" for every other record), ADR-041.
-class Session : public QObject
+class Session : public SessionSignals
 {
     Q_OBJECT
     QML_ELEMENT
@@ -96,24 +96,9 @@ public:
     Q_INVOKABLE QStringList mockCalls() const;
 
 signals:
+    // The Session1 signals (launchFinished ... appExited) are SessionSignals', declared once for the backend
+    // and this facade (RUY-1242).
     void runningChanged();
-    // status: see api/dbus/org.ruyaos.Session1.xml; `instance` is set on "ok" only.
-    void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
-    void launchItemFinished(const QString &item, const QString &profile, const QString &status, const QString &instance);
-    void stopFinished(const QString &instance, const QString &status);
-    void killFinished(const QString &instance, const QString &status);
-    void freezeFinished(const QString &instance, const QString &status);
-    void thawFinished(const QString &instance, const QString &status);
-    // The two signals of a record that changes in place: `frozen` after frozenChanged, `state` "stopping" after
-    // appStopping (Session1 AppStopping, RUY-1235: whoever asked for the stop). appStopping is sent just before
-    // the record changes, so a handler sees what held when the stop began.
-    void frozenChanged(const QString &instance, bool frozen);
-    void appStopping(const QString &instance, const QString &appId);
-    // status: "ok" | "invalid" | "not-found" | "failed"; `instance` is set on "ok" only.
-    void instanceOfPidFinished(int pid, const QString &status, const QString &instance);
-    void appStarted(const QString &instance, const QString &appId);
-    // reason: "quit" | "crashed" | "killed" | "launch-failed"
-    void appExited(const QString &instance, const QString &appId, int exitCode, const QString &reason);
 
 private:
     // Sets `key` of the running record of `instance` in place (runningChanged when it changed).
