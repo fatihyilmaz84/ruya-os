@@ -15,10 +15,9 @@
 #   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
 #                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
 #   - vm-profiles-check.sh the `guests` mode (RUY-125) and the guest role of `create` (RUY-728) against a fake Profiles1: each assertion can FAIL;
-#                          `private` and `migrate` (RUY-1130, ADR-049): an unhidden root unit or alias, an unlisted exception, a
+#                          `private` (RUY-1130, ADR-049): an unhidden root unit or alias, an unlisted exception, a
 #                          unit that sees the store or its /sysroot copy, a dumpable ruya-profiles (also to its own uid taken
-#                          with CAP_SETUID), vacuous probes, the modes and owner, the old store left, a service that does not
-#                          move it or hand it over, a PIN that no longer signs in; `helper` (ADR-049): ruya-profiles' uids and
+#                          with CAP_SETUID), vacuous probes, the modes and owner; `helper` (ADR-049): ruya-profiles' uids and
 #                          capability sets, the helper socket's mode, each refusal of the helper, ruya-shell kept, its journal
 #   - vm-input-check.sh    the `players` mode (RUY-121): no probe or a refused CreateProfile fails, the probe gets the
 #                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
@@ -1127,14 +1126,14 @@ for case in \
     expect_contains "create, bug $bug: caught" "$out" "$needle"
     [ "$rc" = 1 ] && pass "create, bug $bug: exit 1" || fail "create, bug $bug: exit $rc"
 done
-# private and migrate (RUY-1130): fake systemctl (units from a table: unit|User|InaccessiblePaths|MainPID|
+# private (RUY-1130, ADR-049): fake systemctl (units from a table: unit|User|InaccessiblePaths|MainPID|
 # CapabilityBoundingSet|SystemCallFilter), nsenter (a pid sees the store when $PRIV_NS/<pid> exists, its
 # /sysroot copy when $PRIV_NS/<pid>.sysroot does), systemd-run (the /proc/<pid>/root probe: answers DENIED
 # with ruya-play's capabilities, READ for FAKE_BUG=dumpable, SELFCHECK-FAILED for selfcheck, and fails to
 # start without them or for runfails; the setpriv probe as ruya-profiles with ruya-store's capabilities the
 # same for setuid_read, setuid_selfcheck and setuid_runfails), stat (a path's "<mode> <owner>" from
-# <path>.mode) and chown (a no-op: the fixture's modes are the .mode files).
-echo "vm-profiles-check.sh private and migrate: each assertion can fail"
+# <path>.mode).
+echo "vm-profiles-check.sh private: each assertion can fail"
 mkdir -p "$tmp/priv-bin"
 cat > "$tmp/priv-bin/systemctl" <<'SHIMEOF'
 #!/bin/sh
@@ -1144,14 +1143,9 @@ show)
     unit="$(echo "$2" | sed 's/@[^.]*\.service$/@.service/')"
     grep "^$unit|" "$PRIV_UNITS" | awk -F'|' '{ print "User=" $2; print "DynamicUser=no"; print "InaccessiblePaths=" $3; print "MainPID=" $4; print "CapabilityBoundingSet=" $5; print "SystemCallFilter=" $6 }'
     ;;
-start)
-    [ "${FAKE_BUG:-}" = no_move ] || mv "$RUYA_STATE_ROOT/profiles.toml" "$RUYA_STATE_ROOT/profiles/profiles.toml"
-    [ "${FAKE_BUG:-}" = no_chown ] && echo "600 root:root" > "$RUYA_STATE_ROOT/profiles/profiles.toml.mode"
-    ;;
 esac
 exit 0
 SHIMEOF
-printf '#!/bin/sh\nexit 0\n' > "$tmp/priv-bin/chown"
 cat > "$tmp/priv-bin/nsenter" <<'SHIMEOF'
 #!/bin/sh
 case "$*" in
@@ -1195,7 +1189,6 @@ runpriv() { # <mode>; FAKE_BUG picks the broken fixture
     [ "$bug" = proc_blind ] || { mkdir -p "$p/proc/100/root/var/lib/ruyaos/profiles"; touch "$p/proc/100/root/var/lib/ruyaos/profiles/profiles.toml"; }
     [ "$bug" = dirmode ] && echo "755 ruya-profiles:ruya-profiles" > "$p/state/profiles.mode"
     [ "$bug" = rootowned ] && echo "600 root:root" > "$p/state/profiles/profiles.toml.mode"
-    [ "$bug" = old ] && echo 'next_id = 1' > "$p/state/profiles.toml"
     [ "$bug" = owner_blind ] || touch "$p/ns/100"
     [ "$bug" = sees ] && touch "$p/ns/200"
     [ "$bug" = alias_sees ] && touch "$p/ns/200.sysroot"
@@ -1251,27 +1244,12 @@ for case in \
     "setuid_read|FAIL: a process with ruya-store's capabilities (cap_chown cap_setgid cap_setuid) as ruya-profiles READ the store" \
     "setuid_runfails|FAIL: the /proc/100/root probe as ruya-profiles with ruya-store's capabilities did not answer DENIED or READ (exit 1)" \
     "setuid_selfcheck|as ruya-profiles with ruya-store's capabilities did not answer DENIED or READ (exit 0): 'SELFCHECK-FAILED'" \
-    "old|FAIL: the old store" \
     "owner_blind|FAIL: ruya-profiles (pid 100) does not see"; do
     bug="${case%%|*}"; needle="${case#*|}"
     out="$(FAKE_BUG="$bug" runpriv private)"; rc=$?
     expect_contains "private, bug $bug: caught" "$out" "$needle"
     [ "$rc" = 1 ] && pass "private, bug $bug: exit 1" || fail "private, bug $bug: exit $rc"
 done
-out="$(runpriv migrate)"; rc=$?
-expect_contains "migrate, a good service: the old store is gone" "$out" "PASS: the old store"
-expect_contains "migrate, a good service: the PIN signs in" "$out" "PASS: SwitchTo p1 with the PIN after the move"
-expect_lacks "migrate, a good service: no FAIL" "$out" "FAIL"
-[ "$rc" = 0 ] && pass "migrate, a good service: exit 0" || fail "migrate, a good service: exit $rc"
-out="$(FAKE_BUG=no_chown runpriv migrate)"; rc=$?
-expect_contains "migrate, a store not handed to ruya-profiles: caught" "$out" "profiles.toml is '600 root:root', want 600 ruya-profiles:ruya-profiles"
-[ "$rc" = 1 ] && pass "migrate, no chown: exit 1" || fail "migrate, no chown: exit $rc"
-out="$(FAKE_BUG=no_move runpriv migrate)"; rc=$?
-expect_contains "migrate, a service that does not move the store: caught" "$out" "still there after the start"
-[ "$rc" = 1 ] && pass "migrate, no move: exit 1" || fail "migrate, no move: exit $rc"
-out="$(ADMIN_PIN=0000 runpriv migrate)"; rc=$?
-expect_contains "migrate, a PIN that no longer signs in: caught" "$out" "FAIL: SwitchTo p1 after the move"
-[ "$rc" = 1 ] && pass "migrate, wrong PIN: exit 1" || fail "migrate, wrong PIN: exit $rc"
 # helper (ADR-049, RUY-1264): fake getent (ruya-profiles and ruya-shell), systemctl (MainPID 100 or 0), stat (the
 # .mode files), journalctl (the helper's create line) and setpriv (the helper's reply per user and request line, as
 # the real helper answers; FAKE_BUG makes one answer wrong); /proc/100/status is a file of the fixture.

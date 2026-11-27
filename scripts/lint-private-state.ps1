@@ -26,12 +26,17 @@
 #   4. the owner unit exists and does not hide it;
 #   5. when the entry names a "user" (ADR-049: ruya-profiles holds the PIN hashes as its own user), the
 #      owner unit runs as that user (its last User=), its CapabilityBoundingSet= is empty (set, and the
-#      last assignment is empty) and it has no AmbientCapabilities=;
+#      last assignment is empty), it has no AmbientCapabilities=, and no Exec*= command of it runs
+#      with full or root privileges (a "+" or "!" prefix): no step of the owner runs as root;
 #   6. when the entry names a "source" (the owner's src/ folder), no line of its *.rs files but a
 #      comment starts a program (Command::new, process::Command, CommandExt, exec*, fexecve,
 #      posix_spawn, fork): a child is dumpable again after execve and lives in the owner's mount
 #      namespace; and one makes the process non-dumpable (DumpableBehavior::NotDumpable), which a
-#      peer that takes the owner's uid with CAP_SETUID meets (ADR-049 consequences).
+#      peer that takes the owner's uid with CAP_SETUID meets (ADR-049 consequences). It scans that
+#      folder only, not the dependencies: zbus 5 can start a program for a `unixexec:` or `launchd:`
+#      bus address, which it reaches only through DBUS_SYSTEM_BUS_ADDRESS (or a session address);
+#      ruya-profiles.service sets no such variable and the service connects with
+#      Builder::system(), so that path stays closed (RUY-1264 review).
 # A new root unit is covered without a list to edit: it fails here until it carries the line.
 # -SelfTest proves each rule on a temporary tree.
 #
@@ -179,6 +184,12 @@ function Find-PrivateStateProblems([string]$root) {
             if ($ranAs -cne $user) { $out.Add("$($owner): runs as '$(if ($ranAs) { $ranAs } else { 'root' })', want User=$user (the owner of $path)") }
             if (-not $os.ContainsKey("CapabilityBoundingSet") -or (Get-Last $os "CapabilityBoundingSet") -ne "") { $out.Add("$($owner): its CapabilityBoundingSet= is not empty (none set = all); want 'CapabilityBoundingSet=' as the last assignment") }
             if (@(Get-PathList $os "AmbientCapabilities").Count -gt 0) { $out.Add("$($owner): has AmbientCapabilities=; the owner of $path holds no capability") }
+            # The command prefixes of systemd.service(5): "+" (full privileges) and "!" (User= not applied).
+            foreach ($key in @($os.Keys | Where-Object { $_ -clike "Exec*" } | Sort-Object)) {
+                foreach ($cmd in $os[$key]) {
+                    if ($cmd -match '^[-@:|]*[+!]') { $out.Add("$($owner): $key=$cmd runs with root privileges ('+' or '!'); no step of the owner of $path runs as root") }
+                }
+            }
         }
         if ($e.source) {
             # Rule 6: the owner starts no program and is not dumpable.
@@ -320,6 +331,9 @@ if ($SelfTest) {
             @{ Name = "no bounding set"; Owner = @("User=x-owner"); Main = $goodMain; Want = "ruya-owner.service: its CapabilityBoundingSet= is not empty*" },
             @{ Name = "a capability after the empty set"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "CapabilityBoundingSet=CAP_CHOWN"); Main = $goodMain; Want = "ruya-owner.service: its CapabilityBoundingSet= is not empty*" },
             @{ Name = "ambient"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "AmbientCapabilities=CAP_CHOWN"); Main = $goodMain; Want = "ruya-owner.service: has AmbientCapabilities=*" },
+            @{ Name = "a root step (+)"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStartPre=+/usr/bin/x --migrate"); Main = $goodMain; Want = "ruya-owner.service: ExecStartPre=+/usr/bin/x --migrate runs with root privileges*" },
+            @{ Name = "a root step behind '-' (!)"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStopPost=-!/usr/bin/x"); Main = $goodMain; Want = "ruya-owner.service: ExecStopPost=-!/usr/bin/x runs with root privileges*" },
+            @{ Name = "a plain ExecStartPre"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStartPre=-/usr/bin/x"); Main = $goodMain; Want = "" },
             @{ Name = "Command::new"; Owner = $goodOwner; Main = ($goodMain + @("fn f() { std::process::Command::new(`"useradd`").status(); }")); Want = "src/main.rs:5: starts a program (process::Command)*" },
             @{ Name = "execve"; Owner = $goodOwner; Main = ($goodMain + @("fn f() { rustix::runtime::execve(p, a, e); }")); Want = "src/main.rs:5: starts a program (execve)*" },
             @{ Name = "fork"; Owner = $goodOwner; Main = ($goodMain + @("    let pid = libc::fork ();")); Want = "src/main.rs:5: starts a program (fork (*" },

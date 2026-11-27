@@ -113,11 +113,9 @@ fn ruya_profiles_runs_as_its_own_user_without_a_capability() {
     assert!(values(&profiles, "AmbientCapabilities").is_empty());
     assert!(values(&profiles, "Wants").contains(&"ruya-accounts.socket".to_owned()));
     assert!(values(&profiles, "After").contains(&"ruya-accounts.socket".to_owned()));
-    // The one root step: the store's move and its chown, by the same binary.
-    assert_eq!(
-        one(&profiles, "ExecStartPre"),
-        "+/usr/bin/ruya-profiles --migrate"
-    );
+    // No step runs as root: one ExecStart, without a "+" or "!" prefix, and nothing before it.
+    assert_eq!(one(&profiles, "ExecStart"), "/usr/bin/ruya-profiles");
+    assert!(values(&profiles, "ExecStartPre").is_empty());
     let sysusers = repo_file("image/rootfs/usr/lib/sysusers.d/ruyaos.conf");
     assert!(
         sysusers

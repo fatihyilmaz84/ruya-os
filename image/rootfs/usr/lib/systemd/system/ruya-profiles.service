@@ -15,11 +15,10 @@ BusName=org.ruyaos.Profiles1
 # Account work goes to ruya-accounts.socket; whether an id is taken is asked in-process.
 User=ruya-profiles
 Group=ruya-profiles
-# The one root step, before the service starts: the same binary moves an earlier image's
-# /var/lib/ruyaos/profiles.toml into profiles/ (RUY-1130) and chowns profiles/ and its files to
-# ruya-profiles (an image before ADR-049 ran as root and wrote them as root), then exits. It is not
-# dumpable either and runs no program.
-ExecStartPre=+/usr/bin/ruya-profiles --migrate
+# No step of this unit runs as root (no "+" or "!" Exec prefix, lint-private-state.ps1 rule 5):
+# there is no migration of an older image's store (owner, 2026-11-27: RuyaOS has no installs to
+# migrate). A store an older image wrote as root is not readable here: the service then fails
+# (EACCES), it never starts with an empty store.
 ExecStart=/usr/bin/ruya-profiles
 Restart=on-failure
 # /var/lib/ruyaos/profiles/profiles.toml: the directory 0700 and the file 0600, both ruya-profiles'.

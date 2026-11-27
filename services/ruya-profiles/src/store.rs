@@ -3,10 +3,8 @@
 //! owned by the service's own user `ruya-profiles`, ADR-049), which every other root `ruya-*` unit
 //! but the listed exceptions hides with `InaccessiblePaths=` (RUY-1130, `01` section 3 item 11). A
 //! hidden directory holds across the store's tmp + rename; a hidden file would not (the overmount
-//! stays on the old inode). `Store::open_in` moves the store of earlier images,
-//! `/var/lib/ruyaos/profiles.toml`, into that directory once, and `hand_over` gives the directory
-//! and its files to the service's user; both run as root before the service starts
-//! (`ruya-profiles --migrate`).
+//! stays on the old inode). The directory is the unit's `StateDirectory` (and a tmpfiles line);
+//! nothing moves an older image's store (owner, 2026-11-27: there are no installs to migrate).
 
 use std::fs;
 use std::io::{self, Write};
@@ -14,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 /// The store's own directory under the state directory (RUY-1130).
 pub const STORE_DIR: &str = "profiles";
-/// The store file, in `STORE_DIR` (and, before RUY-1130, directly in the state directory).
+/// The store file, in `STORE_DIR`.
 pub const STORE_FILE: &str = "profiles.toml";
 
 use serde::{Deserialize, Serialize};
@@ -100,14 +98,10 @@ pub struct Store {
 
 impl Store {
     /// Opens the store; a missing file is an empty store. A corrupt file is an error and is
-    /// never overwritten silently.
+    /// never overwritten silently, and so is a file that cannot be read (`data_of`).
     pub fn open(path: impl Into<PathBuf>) -> io::Result<Store> {
         let path = path.into();
-        let data = match fs::read(&path) {
-            Ok(bytes) => parse(&bytes)?,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Data::default(),
-            Err(e) => return Err(e),
-        };
+        let data = data_of(fs::read(&path))?;
         Ok(Store { path, data })
     }
 
@@ -193,21 +187,6 @@ impl Store {
             .insert(index.min(self.data.profiles.len()), profile);
     }
 
-    /// Opens the store of a state directory, `<state_dir>/profiles/profiles.toml`, after making
-    /// sure its directory exists with mode 0700 and moving an earlier image's store,
-    /// `<state_dir>/profiles.toml`, into it (`migrate`). Returns what the move did.
-    /// It needs root (the old store is root's, in root's directory), so the image runs it in the
-    /// unit's `ExecStartPre=+` step (`ruya-profiles --migrate`), followed by `hand_over`; the
-    /// service itself, as its own user, opens `file_in(state_dir)` with `Store::open`.
-    pub fn open_in(state_dir: &Path) -> io::Result<(Store, Migration)> {
-        let path = file_in(state_dir);
-        if let Some(dir) = path.parent() {
-            ensure_private_dir(dir)?;
-        }
-        let migration = migrate(&state_dir.join(STORE_FILE), &path)?;
-        Ok((Store::open(path)?, migration))
-    }
-
     pub fn save(&self) -> io::Result<()> {
         let text = toml::to_string_pretty(&self.data)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -220,103 +199,22 @@ pub fn file_in(state_dir: &Path) -> PathBuf {
     state_dir.join(STORE_DIR).join(STORE_FILE)
 }
 
-/// The step after `migrate` (ADR-049): the service runs as its own user, so the store's directory
-/// and every entry in it (the store, a tmp file a crash left, a `.rollback`) are handed to that
-/// user with `chown`, which must not follow a link (`lchown` in the image). The directory goes
-/// first, then its entries in name order; the paths handed over are returned. Running it again
-/// changes nothing; an older image that ran as root and wrote the store again as root (a
-/// rollback, then this image) is put right at the next start.
-pub fn hand_over(
-    dir: &Path,
-    chown: &mut dyn FnMut(&Path) -> io::Result<()>,
-) -> io::Result<Vec<PathBuf>> {
-    let mut entries = fs::read_dir(dir)?
-        .map(|e| e.map(|e| e.path()))
-        .collect::<io::Result<Vec<PathBuf>>>()?;
-    entries.sort();
-    let mut handed = vec![dir.to_path_buf()];
-    handed.extend(entries);
-    for path in &handed {
-        chown(path)?;
+/// The store's data from the read of its file: only a missing file is an empty store. Any other
+/// failure is an error, never an empty store: in the image a store this user cannot read
+/// (`PermissionDenied`: an older image, running as root, wrote it as root) stops the service, so
+/// nobody is handed the first-run setup and its unguarded first admin (01 section 4).
+fn data_of(read: io::Result<Vec<u8>>) -> io::Result<Data> {
+    match read {
+        Ok(bytes) => parse(&bytes),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Data::default()),
+        Err(e) => Err(e),
     }
-    Ok(handed)
-}
-
-/// What `migrate` did with the store of an earlier image.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Migration {
-    /// There was no old store: nothing to move.
-    Nothing,
-    /// The old store was renamed to the new path.
-    Moved,
-    /// Both were there with the same bytes: the old one is removed.
-    OldRemoved,
-    /// Both were there and differed: an older image, after a rollback, wrote a store of its own.
-    /// The new one wins (changes made after the rollback are not merged) and the old one is kept,
-    /// hidden, at `rollback_path(new)`.
-    OldKept,
-}
-
-/// Where `migrate` keeps an old store that differs from the new one: `<new>.rollback`, in the
-/// store's hidden directory (a later one replaces it).
-pub fn rollback_path(new: &Path) -> PathBuf {
-    let mut name = new.file_name().unwrap_or_default().to_os_string();
-    name.push(".rollback");
-    new.with_file_name(name)
-}
-
-/// Moves the store at `old` to `new` (in the same filesystem; `new`'s directory exists), once, by
-/// `rename(2)`: at every instant exactly one of the two paths names the store, its inode and mode
-/// carry over, and both directories are flushed after it. When both exist (a rollback to an older
-/// image, then this one again) the new store wins: the old file is removed when its bytes are the
-/// same, else renamed to `rollback_path(new)`. A store that does not parse is an error and is left
-/// where it is, as `Store::open` never overwrites a corrupt store. Running it again changes nothing.
-pub fn migrate(old: &Path, new: &Path) -> io::Result<Migration> {
-    // An earlier image's crash between its write and its rename left the hashes in a tmp file
-    // next to the old store, where every root service can read them.
-    remove_if_present(&tmp_path(old))?;
-    let old_bytes = match fs::read(old) {
-        Ok(bytes) => bytes,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Migration::Nothing),
-        Err(e) => return Err(e),
-    };
-    let migration = match fs::read(new) {
-        Ok(new_bytes) => {
-            parse(&new_bytes)?;
-            if new_bytes == old_bytes {
-                fs::remove_file(old)?;
-                Migration::OldRemoved
-            } else {
-                let kept = rollback_path(new);
-                fs::rename(old, &kept)?;
-                restrict_permissions(&kept, 0o600)?;
-                Migration::OldKept
-            }
-        }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            parse(&old_bytes)?;
-            fs::rename(old, new)?;
-            restrict_permissions(new, 0o600)?;
-            Migration::Moved
-        }
-        Err(e) => return Err(e),
-    };
-    sync_parent(new)?;
-    sync_parent(old)?;
-    Ok(migration)
 }
 
 fn parse(bytes: &[u8]) -> io::Result<Data> {
     let text =
         std::str::from_utf8(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     toml::from_str(text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-}
-
-fn remove_if_present(path: &Path) -> io::Result<()> {
-    match fs::remove_file(path) {
-        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
-        _ => Ok(()),
-    }
 }
 
 fn tmp_path(path: &Path) -> PathBuf {
@@ -343,13 +241,6 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     restrict_permissions(&tmp, 0o600)?;
     fs::rename(&tmp, path)?;
     sync_parent(path)
-}
-
-/// Makes the store's directory if needed and sets it to 0700 (also when it was there with
-/// another mode, made by hand or by an older tmpfiles line).
-fn ensure_private_dir(dir: &Path) -> io::Result<()> {
-    create_private_dir_all(dir)?;
-    restrict_permissions(dir, 0o700)
 }
 
 #[cfg(unix)]
@@ -490,197 +381,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn only_a_missing_file_is_an_empty_store() {
+        assert!(data_of(Err(io::ErrorKind::NotFound.into()))
+            .unwrap()
+            .profiles
+            .is_empty());
+        // A store the service user cannot read (an older image wrote it as root) is an error,
+        // never an empty store; so is any other failed read.
+        for kind in [
+            io::ErrorKind::PermissionDenied,
+            io::ErrorKind::Interrupted,
+            io::ErrorKind::Other,
+        ] {
+            assert_eq!(data_of(Err(kind.into())).unwrap_err().kind(), kind);
+        }
+    }
+
     /// A store file with one profile named `name` (with a PIN hash), saved at `path`.
+    #[cfg(unix)]
     fn saved_store(path: &Path, name: &str) -> Vec<u8> {
         let mut store = Store::open(path).unwrap();
         let id = store.insert(profile(name, Role::Admin)).id.clone();
         store.get_mut(&id).unwrap().pin_hash = Some("$argon2id$x".into());
         store.save().unwrap();
         fs::read(path).unwrap()
-    }
-
-    fn names(store: &Store) -> Vec<&str> {
-        store.profiles().iter().map(|p| p.name.as_str()).collect()
-    }
-
-    #[test]
-    fn a_fresh_state_dir_gets_the_store_directory_and_nothing_to_move() {
-        let state = tempfile::tempdir().unwrap();
-        let (mut store, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::Nothing);
-        assert!(store.profiles().is_empty());
-        assert!(state.path().join(STORE_DIR).is_dir());
-        assert!(!state.path().join(STORE_FILE).exists());
-
-        store.insert(profile("Ada", Role::Admin));
-        store.save().unwrap();
-        assert!(state.path().join(STORE_DIR).join(STORE_FILE).is_file());
-        assert!(!state.path().join(STORE_FILE).exists());
-        let (reopened, again) = Store::open_in(state.path()).unwrap();
-        assert_eq!((names(&reopened), again), (vec!["Ada"], Migration::Nothing));
-    }
-
-    #[test]
-    fn an_old_store_alone_is_renamed_into_the_directory() {
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        let bytes = saved_store(&old, "Ada");
-        // An earlier image's crash before its rename left this next to the old store.
-        fs::write(state.path().join("profiles.toml.tmp"), "half").unwrap();
-
-        let (store, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::Moved);
-        assert_eq!(names(&store), vec!["Ada"]);
-        assert!(store.profiles()[0].has_pin());
-        let new = state.path().join(STORE_DIR).join(STORE_FILE);
-        assert_eq!(fs::read(&new).unwrap(), bytes);
-        assert!(!old.exists(), "the old store is renamed away");
-        assert!(!state.path().join("profiles.toml.tmp").exists());
-
-        // Idempotent: the next start finds nothing to move and the same store.
-        let (again, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(
-            (names(&again), migration),
-            (vec!["Ada"], Migration::Nothing)
-        );
-        assert_eq!(fs::read(&new).unwrap(), bytes);
-    }
-
-    #[test]
-    fn after_the_move_the_directory_and_every_file_in_it_are_handed_over() {
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        saved_store(&old, "Ada");
-        let (store, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::Moved);
-        let dir = state.path().join(STORE_DIR);
-        // What a crash and a rollback leave next to the store.
-        fs::write(dir.join("profiles.toml.tmp"), "half").unwrap();
-        fs::write(rollback_path(store.path()), "old").unwrap();
-
-        let mut chowned = Vec::new();
-        let handed = hand_over(&dir, &mut |p| {
-            chowned.push(p.to_path_buf());
-            Ok(())
-        })
-        .unwrap();
-        let want = vec![
-            dir.clone(),
-            dir.join("profiles.toml"),
-            dir.join("profiles.toml.rollback"),
-            dir.join("profiles.toml.tmp"),
-        ];
-        assert_eq!((&handed, &chowned), (&want, &want));
-        assert_eq!(store.path(), file_in(state.path()));
-        assert!(!old.exists());
-
-        // Idempotent: the next start hands over the same paths again.
-        let mut again = Vec::new();
-        hand_over(&dir, &mut |p| {
-            again.push(p.to_path_buf());
-            Ok(())
-        })
-        .unwrap();
-        assert_eq!(again, want);
-        // A failed chown stops the start (the service could not read its store).
-        let err = hand_over(&dir, &mut |_| Err(io::Error::other("EPERM"))).unwrap_err();
-        assert_eq!(err.to_string(), "EPERM");
-    }
-
-    #[test]
-    fn with_both_stores_the_new_one_wins_and_a_different_old_one_is_kept_hidden() {
-        // A rollback to an older image, which wrote a store at the old path, then this image again.
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        let old_bytes = saved_store(&old, "Old");
-        fs::create_dir(state.path().join(STORE_DIR)).unwrap();
-        let new = state.path().join(STORE_DIR).join(STORE_FILE);
-        let new_bytes = saved_store(&new, "New");
-
-        let (store, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::OldKept);
-        assert_eq!(
-            names(&store),
-            vec!["New"],
-            "changes after a rollback are not merged"
-        );
-        assert!(!old.exists(), "nothing is left at the old, unhidden path");
-        assert_eq!(fs::read(&new).unwrap(), new_bytes);
-        assert_eq!(fs::read(rollback_path(&new)).unwrap(), old_bytes);
-        assert_eq!(
-            rollback_path(&new),
-            state.path().join(STORE_DIR).join("profiles.toml.rollback")
-        );
-
-        let (_, again) = Store::open_in(state.path()).unwrap();
-        assert_eq!(again, Migration::Nothing);
-        assert_eq!(fs::read(rollback_path(&new)).unwrap(), old_bytes);
-    }
-
-    #[test]
-    fn with_both_stores_the_same_the_old_one_is_removed() {
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        let bytes = saved_store(&old, "Ada");
-        fs::create_dir(state.path().join(STORE_DIR)).unwrap();
-        let new = state.path().join(STORE_DIR).join(STORE_FILE);
-        fs::write(&new, &bytes).unwrap();
-
-        let (store, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::OldRemoved);
-        assert_eq!(names(&store), vec!["Ada"]);
-        assert!(!old.exists());
-        assert!(!rollback_path(&new).exists());
-        assert_eq!(fs::read(&new).unwrap(), bytes);
-    }
-
-    #[test]
-    fn a_corrupt_store_stops_the_move_and_both_files_stay() {
-        // A corrupt old store is not copied: the error is the service's, as for Store::open.
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        fs::write(&old, "this is = = not toml").unwrap();
-        let err = Store::open_in(state.path()).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
-        assert!(old.exists());
-        assert!(!state.path().join(STORE_DIR).join(STORE_FILE).exists());
-
-        // A corrupt new store does not win: the old one is kept for a person to look at.
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        saved_store(&old, "Ada");
-        fs::create_dir(state.path().join(STORE_DIR)).unwrap();
-        fs::write(state.path().join(STORE_DIR).join(STORE_FILE), "= nope").unwrap();
-        let err = Store::open_in(state.path()).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
-        assert!(old.exists());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn the_store_directory_is_0700_and_the_moved_file_0600() {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
-        let state = tempfile::tempdir().unwrap();
-        let old = state.path().join(STORE_FILE);
-        saved_store(&old, "Ada");
-        // An old store with a looser mode (set by hand) is 0600 once moved.
-        fs::set_permissions(&old, fs::Permissions::from_mode(0o644)).unwrap();
-        // A directory that was there with another mode is set to 0700 too.
-        fs::create_dir(state.path().join(STORE_DIR)).unwrap();
-        fs::set_permissions(
-            state.path().join(STORE_DIR),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
-        let (_, migration) = Store::open_in(state.path()).unwrap();
-        assert_eq!(migration, Migration::Moved);
-        assert_eq!(mode(&state.path().join(STORE_DIR)), 0o700);
-        assert_eq!(mode(&state.path().join(STORE_DIR).join(STORE_FILE)), 0o600);
-
-        let fresh = tempfile::tempdir().unwrap();
-        Store::open_in(fresh.path()).unwrap();
-        assert_eq!(mode(&fresh.path().join(STORE_DIR)), 0o700);
     }
 
     #[cfg(unix)]

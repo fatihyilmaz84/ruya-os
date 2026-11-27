@@ -36,7 +36,8 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update \
     && install -Dm755 target/release/ruya-notifications /out/usr/bin/ruya-notifications \
     && install -Dm755 target/release/ruya-platform /out/usr/bin/ruya-platform \
-    && install -Dm755 target/release/ruya-platform-identify /out/usr/libexec/ruya-platform-identify     && install -Dm755 target/release/ruya-accounts /out/usr/libexec/ruya-accounts \
+    && install -Dm755 target/release/ruya-platform-identify /out/usr/libexec/ruya-platform-identify \
+    && install -Dm755 target/release/ruya-accounts /out/usr/libexec/ruya-accounts \
     && install -Dm755 target/release/ruya-play /out/usr/bin/ruya-play
 # The .play launcher (ADR-038): a static program (glibc with crt-static, static-pie), so the
 # freedesktop runtime branch an app runs on does not matter. It must not use NSS, iconv or dlopen
