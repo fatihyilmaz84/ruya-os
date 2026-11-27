@@ -15,7 +15,7 @@
 #   2. `allow` appears only in `user="root"` and `user="ruya-shell"` policies, plus:
 #      - `user="ruya-link"` (ADR-029): every allow names `send_destination` AND `send_member`
 #        (never a whole destination or interface), and never `own`;
-#      - a service user (ruya-library, ruya-input) may `allow own`, plus one declared signal allow per entry of
+#      - a service user (ruya-library, ruya-input, ruya-profiles: ADR-049) may `allow own`, plus one declared signal allow per entry of
 #        image/security-baseline.json "service_signals" (ADR-045 amendment, owner 2026-11-25, RUY-1196): exactly the
 #        attributes send_destination, send_type="signal", send_path, send_interface, send_member, all exact (no
 #        wildcard, none empty), equal to an entry of that user, and the member is a <signal> of that interface in
@@ -41,7 +41,7 @@ param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $Root) { $Root = $Repo }
-$ownerOnlyUsers = @("ruya-library", "ruya-input")
+$ownerOnlyUsers = @("ruya-library", "ruya-input", "ruya-profiles")
 
 # The attributes that narrow a receive rule in dbus-daemon(1): with one of them the rule matches only some signals.
 # Attribute names are matched case-insensitively here and in the receive-deny check on purpose: a rule that

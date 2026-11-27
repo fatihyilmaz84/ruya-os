@@ -1,35 +1,20 @@
 //! Unix accounts backing each profile (ADR-004: one Unix user per profile).
 //!
-//! Regular profiles take their uid from useradd below the guest range; temporary guests (RUY-125,
-//! ADR-017 point 7) get an explicit uid from `GUEST_UIDS`, which the service hands out only once.
+//! ruya-profiles holds the PIN hashes and runs no program (ADR-049): a child would be dumpable
+//! again after `execve` and live in its mount namespace, where the store is. Making and removing
+//! a profile's user needs root, so the bus-less helper `ruya-accounts` does it: `HelperAccounts`
+//! sends it one request line per account change over its socket (`ruya_accounts::wire`). Whether
+//! an id is taken is asked in-process (`getpwuid_r`, `getgrgid_r` through `ruya-users`), not with
+//! `getent`. What the users look like (the `useradd` arguments, the guest uid range, the passwd
+//! markers) is the helper crate's (`ruya_accounts::account`).
 
 use std::io;
-use std::ops::RangeInclusive;
 
-use ruya_ids::user_of;
-
-/// Uids (and gids) of temporary guests. Regular profiles never get one (`REGULAR_ID_MAX`).
-pub const GUEST_UIDS: RangeInclusive<u32> = 50000..=59999;
-/// The highest uid and gid useradd may pick for a regular profile.
-pub const REGULAR_ID_MAX: u32 = 49999;
-/// The passwd comment of a regular profile user. ruya-inputd accepts every comment that starts
-/// with it (`profile_uid_in_passwd`).
-pub const PROFILE_COMMENT: &str = "RuyaOS profile";
-/// The passwd comment of a temporary guest user: the marker the wipe checks before `userdel`.
-pub const GUEST_COMMENT: &str = "RuyaOS profile (guest)";
-
-/// Which kind of profile user to make.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AccountKind {
-    /// A kept profile: useradd picks the uid, at most `REGULAR_ID_MAX`.
-    Regular,
-    /// A temporary guest with this uid (and the same gid) from `GUEST_UIDS`.
-    Guest { uid: u32 },
-}
+pub use ruya_accounts::account::{useradd_args, AccountKind, GUEST_UIDS};
 
 pub trait Accounts {
     fn create(&self, profile_id: &str, kind: AccountKind) -> io::Result<()>;
-    /// Removes the Unix user and its home directory.
+    /// Removes the Unix user and its home.
     fn remove(&self, profile_id: &str) -> io::Result<()>;
     /// Removes a temporary guest's user and home, but only when the user carries the guest
     /// marker (comment, home, a uid in `GUEST_UIDS` equal to `uid`); a user that does not exist
@@ -54,81 +39,6 @@ impl<T: Accounts + ?Sized> Accounts for Box<T> {
     }
 }
 
-/// The `useradd` arguments for a profile user. A regular profile is kept below the guest range
-/// (`-K UID_MAX`, `-K GID_MAX`); a guest gets its uid, and its user group the same gid or
-/// useradd fails (`GID_MIN` = `GID_MAX` = uid), so a taken uid or gid is refused, never shared.
-pub fn useradd_args(profile_id: &str, kind: AccountKind) -> Vec<String> {
-    let user = user_of(profile_id);
-    let mut args: Vec<String> = vec![
-        "--create-home".into(),
-        "--home-dir".into(),
-        format!("/var/home/{user}"),
-        "--user-group".into(),
-        "--shell".into(),
-        "/usr/sbin/nologin".into(),
-        "--comment".into(),
-    ];
-    match kind {
-        AccountKind::Regular => {
-            args.push(PROFILE_COMMENT.into());
-            for key in ["UID_MAX", "GID_MAX"] {
-                args.push("-K".into());
-                args.push(format!("{key}={REGULAR_ID_MAX}"));
-            }
-        }
-        AccountKind::Guest { uid } => {
-            args.push(GUEST_COMMENT.into());
-            args.push("--uid".into());
-            args.push(uid.to_string());
-            for key in ["GID_MIN", "GID_MAX"] {
-                args.push("-K".into());
-                args.push(format!("{key}={uid}"));
-            }
-            // A temporary user gets no /etc/subuid and /etc/subgid range.
-            for key in ["SUB_UID_COUNT", "SUB_GID_COUNT"] {
-                args.push("-K".into());
-                args.push(format!("{key}=0"));
-            }
-        }
-    }
-    args.push(user);
-    args
-}
-
-/// What the wipe may do with the passwd line of a temporary guest's user.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuestEntry {
-    /// No such user: nothing to remove.
-    Missing,
-    /// The user carries the guest marker: `userdel --remove` may run.
-    Guest,
-    /// Some other user has the name: it is never deleted.
-    NotAGuest,
-}
-
-/// Classifies `getent passwd ruya-<id>`'s line ("" when there is none) for a guest with `uid`.
-pub fn guest_entry(passwd_line: &str, profile_id: &str, uid: u32) -> GuestEntry {
-    let line = passwd_line.trim_end_matches(['\r', '\n']);
-    if line.is_empty() {
-        return GuestEntry::Missing;
-    }
-    let user = user_of(profile_id);
-    let fields: Vec<&str> = line.split(':').collect();
-    if fields.len() < 7 || fields[0] != user {
-        return GuestEntry::NotAGuest;
-    }
-    let listed_uid: Option<u32> = fields[2].parse().ok();
-    let is_guest = listed_uid == Some(uid)
-        && GUEST_UIDS.contains(&uid)
-        && fields[4] == GUEST_COMMENT
-        && fields[5] == format!("/var/home/{user}");
-    if is_guest {
-        GuestEntry::Guest
-    } else {
-        GuestEntry::NotAGuest
-    }
-}
-
 /// For tests and non-Linux development hosts.
 #[derive(Debug, Default)]
 pub struct NoAccounts;
@@ -148,153 +58,141 @@ impl Accounts for NoAccounts {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn userdel(user: &str) -> io::Result<std::process::ExitStatus> {
-    std::process::Command::new("userdel")
-        .arg("--remove")
-        .arg(user)
-        .status()
-}
-
-/// `getent <db> <key>`: Some(output) when found, None when not (exit 2).
-#[cfg(target_os = "linux")]
-fn getent(db: &str, key: &str) -> io::Result<Option<String>> {
-    let out = std::process::Command::new("getent")
-        .args([db, key])
-        .output()?;
-    match out.status.code() {
-        Some(0) => Ok(Some(String::from_utf8_lossy(&out.stdout).into_owned())),
-        Some(2) => Ok(None),
-        _ => Err(io::Error::other(format!(
-            "getent {db} {key} failed: {}",
-            out.status
+/// The helper's reply as the result of an account change: `ok` is done, every other answer (or
+/// none: the helper died, timed out or sent something else) is an error naming the request.
+pub fn reply_result(request: &ruya_accounts::Request, reply: &[u8]) -> io::Result<()> {
+    use ruya_accounts::Reply;
+    match Reply::decode(reply) {
+        Some(Reply::Ok) => Ok(()),
+        Some(Reply::Error(code)) => Err(io::Error::other(format!(
+            "ruya-accounts: {}: {}",
+            request.line(),
+            code.as_str()
         ))),
+        None => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("ruya-accounts: {}: no reply", request.line()),
+        )),
     }
 }
 
-/// Creates real users with `useradd`. Homes live in /var/home (persistent on bootc).
+/// An errno of the user database as an I/O error.
+fn nss_error(errno: i32) -> io::Error {
+    io::Error::from_raw_os_error(errno)
+}
+
+/// Real users, made and removed by the `ruya-accounts` helper (`/run/ruya-accounts.sock`). Homes
+/// live in /var/home (persistent on bootc).
 #[cfg(target_os = "linux")]
-#[derive(Debug, Default)]
-pub struct UnixAccounts;
+#[derive(Debug)]
+pub struct HelperAccounts {
+    socket: std::path::PathBuf,
+}
 
 #[cfg(target_os = "linux")]
-impl UnixAccounts {
-    /// Ends the user's manager and apps, drops the linger, then `userdel --remove`.
-    fn delete_user(user: &str) -> io::Result<()> {
-        // `ruya-session` keeps a profile's systemd manager running (linger) once an app was
-        // launched as it, and userdel refuses a user with processes. End the manager and its
-        // apps and drop the linger first; both are no-ops for a user that never launched.
-        for args in [["terminate-user", user], ["disable-linger", user]] {
-            match std::process::Command::new("loginctl").args(args).status() {
-                Ok(_) => {}
-                Err(err) => eprintln!("ruya-profiles: loginctl {}: {err}", args[0]),
-            }
-        }
-        // terminate-user returns before the processes are gone: userdel exits 8 until they are.
-        let mut status = userdel(user)?;
-        for _ in 0..10 {
-            if status.code() != Some(8) {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            status = userdel(user)?;
-        }
-        // userdel exits 6 when the user does not exist: nothing left to remove.
-        if status.success() || status.code() == Some(6) {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!("userdel {user} failed: {status}")))
+impl Default for HelperAccounts {
+    fn default() -> HelperAccounts {
+        HelperAccounts {
+            socket: std::path::PathBuf::from(ruya_accounts::wire::SOCKET),
         }
     }
 }
 
 #[cfg(target_os = "linux")]
-impl Accounts for UnixAccounts {
+impl HelperAccounts {
+    /// How long one request may take: `delete` waits up to 5 s for userdel while the user's apps
+    /// end (`ruya-accounts@.service` stops the helper after `RuntimeMaxSec=`, below this).
+    const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+    /// One request on a new connection, then the one reply.
+    fn ask(&self, request: &ruya_accounts::Request) -> io::Result<()> {
+        use rustix::net::sockopt::{set_socket_timeout, Timeout};
+        use rustix::net::{
+            connect, recv, send, socket_with, AddressFamily, RecvFlags, SendFlags, SocketAddrUnix,
+            SocketFlags, SocketType,
+        };
+        let sock = socket_with(
+            AddressFamily::UNIX,
+            SocketType::SEQPACKET,
+            SocketFlags::CLOEXEC,
+            None,
+        )?;
+        set_socket_timeout(&sock, Timeout::Send, Some(Self::TIMEOUT))?;
+        set_socket_timeout(&sock, Timeout::Recv, Some(Self::TIMEOUT))?;
+        connect(&sock, &SocketAddrUnix::new(&self.socket)?)?;
+        let line = request.encode();
+        if send(&sock, &line, SendFlags::NOSIGNAL)? != line.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                "the request was cut",
+            ));
+        }
+        // One byte more than the longest reply, so a longer one is seen (and refused).
+        let mut reply = [0u8; ruya_accounts::wire::MAX_REPLY + 1];
+        let (_, n) = recv(&sock, &mut reply[..], RecvFlags::empty())?;
+        reply_result(request, &reply[..n.min(reply.len())])
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Accounts for HelperAccounts {
     fn create(&self, profile_id: &str, kind: AccountKind) -> io::Result<()> {
-        let user = user_of(profile_id);
-        let status = std::process::Command::new("useradd")
-            .args(useradd_args(profile_id, kind))
-            .status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!("useradd {user} failed: {status}")))
-        }
+        self.ask(&ruya_accounts::Request::Create {
+            id: profile_id.to_owned(),
+            kind,
+        })
     }
 
     fn remove(&self, profile_id: &str) -> io::Result<()> {
-        Self::delete_user(&user_of(profile_id))
+        self.ask(&ruya_accounts::Request::Delete {
+            id: profile_id.to_owned(),
+        })
     }
 
     fn remove_guest(&self, profile_id: &str, uid: u32) -> io::Result<()> {
-        let user = user_of(profile_id);
-        let line = getent("passwd", &user)?.unwrap_or_default();
-        match guest_entry(&line, profile_id, uid) {
-            GuestEntry::Missing => Ok(()),
-            GuestEntry::Guest => Self::delete_user(&user),
-            GuestEntry::NotAGuest => Err(io::Error::other(format!(
-                "{user} is not a temporary guest user (uid {uid}): not removed"
-            ))),
-        }
+        self.ask(&ruya_accounts::Request::RemoveGuest {
+            id: profile_id.to_owned(),
+            uid,
+        })
     }
 
     fn id_in_use(&self, id: u32) -> io::Result<bool> {
-        let key = id.to_string();
-        Ok(getent("passwd", &key)?.is_some() || getent("group", &key)?.is_some())
+        id_in_use(id)
     }
+}
+
+/// True when a user or a group has the id, asked in-process (no `getent`, ADR-049 point 3).
+pub fn id_in_use(id: u32) -> io::Result<bool> {
+    Ok(ruya_users::uid_in_use(id).map_err(nss_error)?
+        || ruya_users::gid_in_use(id).map_err(nss_error)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_accounts::wire::Code;
+    use ruya_accounts::{Reply, Request};
 
     #[test]
-    fn a_regular_profile_stays_below_the_guest_range() {
-        let args = useradd_args("p3", AccountKind::Regular);
-        let joined = args.join(" ");
-        assert!(joined.contains("-K UID_MAX=49999"), "{joined}");
-        assert!(joined.contains("-K GID_MAX=49999"), "{joined}");
-        assert!(!joined.contains("--uid"), "{joined}");
-        assert!(joined.contains("--comment RuyaOS profile -K"), "{joined}");
-        assert_eq!(args.last().map(String::as_str), Some("ruya-p3"));
-        assert!(REGULAR_ID_MAX < *GUEST_UIDS.start());
-    }
-
-    #[test]
-    fn a_guest_gets_its_uid_and_the_same_gid() {
-        let args = useradd_args("p7", AccountKind::Guest { uid: 50004 });
-        let joined = args.join(" ");
-        assert!(joined.contains("--uid 50004"), "{joined}");
-        assert!(
-            joined.contains("-K GID_MIN=50004 -K GID_MAX=50004"),
-            "{joined}"
-        );
-        assert!(joined.contains("--home-dir /var/home/ruya-p7"), "{joined}");
-        let comment = args.iter().position(|a| a == "--comment").unwrap();
-        assert_eq!(args[comment + 1], GUEST_COMMENT);
-        assert!(GUEST_COMMENT.starts_with(PROFILE_COMMENT));
-        assert_eq!(args.last().map(String::as_str), Some("ruya-p7"));
-    }
-
-    #[test]
-    fn only_a_marked_guest_user_is_wiped() {
-        let guest =
-            "ruya-p7:x:50004:50004:RuyaOS profile (guest):/var/home/ruya-p7:/usr/sbin/nologin\n";
-        assert_eq!(guest_entry(guest, "p7", 50004), GuestEntry::Guest);
-        assert_eq!(guest_entry("", "p7", 50004), GuestEntry::Missing);
-        // A regular profile user with that name, the wrong uid, a uid outside the range, another
-        // home or another user: never deleted.
-        let regular = "ruya-p7:x:1003:1003:RuyaOS profile:/var/home/ruya-p7:/usr/sbin/nologin";
-        assert_eq!(guest_entry(regular, "p7", 50004), GuestEntry::NotAGuest);
-        let not_marked = guest.replace(GUEST_COMMENT, PROFILE_COMMENT);
-        assert_eq!(guest_entry(&not_marked, "p7", 50004), GuestEntry::NotAGuest);
-        let other_uid = guest.replace("50004:50004", "50005:50005");
-        assert_eq!(guest_entry(&other_uid, "p7", 50004), GuestEntry::NotAGuest);
-        let low = guest.replace("50004:50004", "1004:1004");
-        assert_eq!(guest_entry(&low, "p7", 1004), GuestEntry::NotAGuest);
-        let home = guest.replace("/var/home/ruya-p7", "/root");
-        assert_eq!(guest_entry(&home, "p7", 50004), GuestEntry::NotAGuest);
-        assert_eq!(guest_entry(guest, "p8", 50004), GuestEntry::NotAGuest);
-        assert_eq!(guest_entry("garbage", "p7", 50004), GuestEntry::NotAGuest);
+    fn only_an_ok_reply_is_done() {
+        let request = Request::Delete { id: "p3".into() };
+        assert!(reply_result(&request, &Reply::Ok.encode()).is_ok());
+        for code in [
+            Code::NotAllowed,
+            Code::BadRequest,
+            Code::NotAProfileUser,
+            Code::Failed,
+        ] {
+            let err = reply_result(&request, &Reply::Error(code).encode()).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("ruya-accounts: delete p3: {}", code.as_str())
+            );
+        }
+        // The helper died before it answered, or answered something else.
+        for bad in [&b""[..], b"ok", b"okay\n", b"ok\nok\n"] {
+            let err = reply_result(&request, bad).unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        }
     }
 }

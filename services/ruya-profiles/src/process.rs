@@ -2,12 +2,14 @@
 //! anyone who reaches it through `/proc/<pid>/root`: the kernel lets a root peer with the same
 //! capabilities in (ptrace access mode read). A non-dumpable process is closed to every peer
 //! without CAP_SYS_PTRACE, whatever its uid, so the service drops the attribute at start; the
-//! kernel then writes no core dump of it either. It does not cover the children (`accounts.rs`:
-//! useradd, userdel, loginctl, getent): `execve` makes a process dumpable again, so a root peer with
-//! a capability superset (ruya-play, ruya-store) can open `/proc/<child>/root` while one runs. That
-//! window stays until ADR-049 (ruya-profiles as its own user, a bus-less root accounts helper).
-//! The units that hold CAP_SYS_PTRACE are the named exceptions in
-//! `image/security-baseline.json` `private_state` (`01` section 3 item 11).
+//! kernel then writes no core dump of it either. It would not cover a child: `execve` makes a
+//! process dumpable again. So ruya-profiles runs no program (ADR-049): its account work goes to the
+//! `ruya-accounts` helper over a socket, and whether an id is taken is asked in-process
+//! (`accounts.rs`); `scripts/lint-private-state.ps1` refuses an exec in `src/`. Since it runs as
+//! its own user, a peer with CAP_SETUID (ruya-store) that takes the `ruya-profiles` uid meets this
+//! attribute too: the same uid is not enough without CAP_SYS_PTRACE. The units that hold
+//! CAP_SYS_PTRACE are the named exceptions in `image/security-baseline.json` `private_state` (`01`
+//! section 3 item 11).
 
 use std::io;
 

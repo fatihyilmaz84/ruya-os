@@ -31,11 +31,15 @@
     },
     "ruya-profiles.service": {
       "max_exposure": 1.6,
-      "reason": "root for useradd, 01-platform.md section 3 (T-126); measured 0.0.61"
+      "reason": "own user ruya-profiles (ADR-049, RUY-1264), empty capability set, no network, writes only its StateDirectory, runs no program; the ExecStartPre=+ store move is root. Was 1.6 as root for useradd (T-126, measured 0.0.61); kept as the ceiling until the first VM run of vm-profiles-check.sh security measures the new unit"
     },
     "ruya-session.service": {
       "max_exposure": 1.1,
       "reason": "root, empty capability set, no network, 01-platform.md section 3 (T-162); measured 0.0.61"
+    },
+    "ruya-accounts@.service": {
+      "max_exposure": 1.8,
+      "reason": "estimate (RUY-1264, ADR-049), not measured yet: root, socket-activated per request of ruya-profiles only (0660 root:ruya-profiles socket, SO_PEERCRED), the useradd capabilities ruya-profiles held before (CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID), no bus name (loginctl is its one bus client, so not InaccessiblePaths=/run/dbus), no network, 8 tasks, 20 s, the PIN store hidden; the old ruya-profiles hardening (1.6) plus the tasks for its commands. vm-profiles-check.sh security measures it"
     },
     "ruya-platform.service": {
       "max_exposure": 1.1,
@@ -77,7 +81,9 @@
       "path": "/var/lib/ruyaos/profiles",
       "aliases": ["/sysroot"],
       "owner": "ruya-profiles.service",
-      "reason": "The PIN hashes never leave ruya-profiles (RUY-1130, ADR-022 decision 4): root reads any file whatever its mode, so the store has its own 0700 directory and every other ruya-* unit that runs as root (or holds a reading capability) hides it, and /sysroot (on bootc /var is a bind of /sysroot/ostree/deploy/<stateroot>/var, so the same directory is there too), with InaccessiblePaths=, and a unit with CAP_DAC_READ_SEARCH keeps open_by_handle_at out of its SystemCallFilter allow list; ruya-profiles is not dumpable, so its own /proc/<pid>/root is closed to every peer without CAP_SYS_PTRACE (and it writes no core dump). The hiding is one layer, not the boundary: ruya-profiles' children (useradd, userdel, loginctl, getent; src/accounts.rs) are dumpable again after execve, so while one runs a root peer with a capability superset (ruya-play, ruya-store) can read the store through /proc/<child>/root, until ADR-049 (ruya-profiles as its own user, a bus-less root accounts helper). A directory, not the file: the store's tmp + rename would undo a hidden file. Read by scripts/lint-private-state.ps1 (host) and vm-profiles-check.sh private (the running units).",
+      "user": "ruya-profiles",
+      "source": "services/ruya-profiles/src",
+      "reason": "The PIN hashes never leave ruya-profiles (RUY-1130, ADR-022 decision 4, ADR-049): root reads any file whatever its mode, so the store has its own 0700 directory, owned by ruya-profiles, which runs as that user with no capability, and every other ruya-* unit that runs as root (or holds a reading capability) hides it, and /sysroot (on bootc /var is a bind of /sysroot/ostree/deploy/<stateroot>/var, so the same directory is there too), with InaccessiblePaths=, and a unit with CAP_DAC_READ_SEARCH keeps open_by_handle_at out of its SystemCallFilter allow list; ruya-profiles is not dumpable, so its own /proc/<pid>/root is closed to every peer without CAP_SYS_PTRACE (and it writes no core dump), a CAP_SETUID peer that takes its uid (ruya-store) included, and it runs no program, so no dumpable child of it lives in its mount namespace (ADR-049: account work goes to the bus-less root helper ruya-accounts@, which hides the store too). The hiding stays as defence in depth. A directory, not the file: the store's tmp + rename would undo a hidden file. Read by scripts/lint-private-state.ps1 (host: the hiding, and the owner's user, empty bounding set, no exec in source and non-dumpable) and vm-profiles-check.sh private (the running units).",
       "exceptions": [
         {
           "unit": "ruya-update.service",
@@ -132,6 +138,10 @@
     {
       "process": "ruya-platform-identify",
       "reason": "RUY-1129, like every ruya-* service (seen only while a request runs, a few milliseconds): no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (RUY-20)"
+    },
+    {
+      "process": "ruya-accounts",
+      "reason": "RUY-1264, like every ruya-* service (seen only while a request runs): no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (RUY-20)"
     },
     {
       "process": "ruya-play",

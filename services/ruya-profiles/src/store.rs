@@ -1,10 +1,12 @@
-//! Profile records persisted as one root-only TOML file, written atomically (mode 0600). In the
-//! image it is `/var/lib/ruyaos/profiles/profiles.toml`: the store has its own directory (0700
-//! root), which every other root `ruya-*` unit but the listed exceptions hides with
-//! `InaccessiblePaths=` (RUY-1130, `01` section 3 item 11). A hidden directory holds across the
-//! store's tmp + rename; a hidden file would not (the overmount stays on the old inode).
-//! `Store::open_in` moves the store of earlier images, `/var/lib/ruyaos/profiles.toml`, into that
-//! directory once.
+//! Profile records persisted as one private TOML file, written atomically (mode 0600). In the
+//! image it is `/var/lib/ruyaos/profiles/profiles.toml`: the store has its own directory (0700,
+//! owned by the service's own user `ruya-profiles`, ADR-049), which every other root `ruya-*` unit
+//! but the listed exceptions hides with `InaccessiblePaths=` (RUY-1130, `01` section 3 item 11). A
+//! hidden directory holds across the store's tmp + rename; a hidden file would not (the overmount
+//! stays on the old inode). `Store::open_in` moves the store of earlier images,
+//! `/var/lib/ruyaos/profiles.toml`, into that directory once, and `hand_over` gives the directory
+//! and its files to the service's user; both run as root before the service starts
+//! (`ruya-profiles --migrate`).
 
 use std::fs;
 use std::io::{self, Write};
@@ -194,10 +196,14 @@ impl Store {
     /// Opens the store of a state directory, `<state_dir>/profiles/profiles.toml`, after making
     /// sure its directory exists with mode 0700 and moving an earlier image's store,
     /// `<state_dir>/profiles.toml`, into it (`migrate`). Returns what the move did.
+    /// It needs root (the old store is root's, in root's directory), so the image runs it in the
+    /// unit's `ExecStartPre=+` step (`ruya-profiles --migrate`), followed by `hand_over`; the
+    /// service itself, as its own user, opens `file_in(state_dir)` with `Store::open`.
     pub fn open_in(state_dir: &Path) -> io::Result<(Store, Migration)> {
-        let dir = state_dir.join(STORE_DIR);
-        ensure_private_dir(&dir)?;
-        let path = dir.join(STORE_FILE);
+        let path = file_in(state_dir);
+        if let Some(dir) = path.parent() {
+            ensure_private_dir(dir)?;
+        }
         let migration = migrate(&state_dir.join(STORE_FILE), &path)?;
         Ok((Store::open(path)?, migration))
     }
@@ -207,6 +213,33 @@ impl Store {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         write_atomic(&self.path, text.as_bytes())
     }
+}
+
+/// The store file of a state directory: `<state_dir>/profiles/profiles.toml`.
+pub fn file_in(state_dir: &Path) -> PathBuf {
+    state_dir.join(STORE_DIR).join(STORE_FILE)
+}
+
+/// The step after `migrate` (ADR-049): the service runs as its own user, so the store's directory
+/// and every entry in it (the store, a tmp file a crash left, a `.rollback`) are handed to that
+/// user with `chown`, which must not follow a link (`lchown` in the image). The directory goes
+/// first, then its entries in name order; the paths handed over are returned. Running it again
+/// changes nothing; an older image that ran as root and wrote the store again as root (a
+/// rollback, then this image) is put right at the next start.
+pub fn hand_over(
+    dir: &Path,
+    chown: &mut dyn FnMut(&Path) -> io::Result<()>,
+) -> io::Result<Vec<PathBuf>> {
+    let mut entries = fs::read_dir(dir)?
+        .map(|e| e.map(|e| e.path()))
+        .collect::<io::Result<Vec<PathBuf>>>()?;
+    entries.sort();
+    let mut handed = vec![dir.to_path_buf()];
+    handed.extend(entries);
+    for path in &handed {
+        chown(path)?;
+    }
+    Ok(handed)
 }
 
 /// What `migrate` did with the store of an earlier image.
@@ -511,6 +544,47 @@ mod tests {
             (vec!["Ada"], Migration::Nothing)
         );
         assert_eq!(fs::read(&new).unwrap(), bytes);
+    }
+
+    #[test]
+    fn after_the_move_the_directory_and_every_file_in_it_are_handed_over() {
+        let state = tempfile::tempdir().unwrap();
+        let old = state.path().join(STORE_FILE);
+        saved_store(&old, "Ada");
+        let (store, migration) = Store::open_in(state.path()).unwrap();
+        assert_eq!(migration, Migration::Moved);
+        let dir = state.path().join(STORE_DIR);
+        // What a crash and a rollback leave next to the store.
+        fs::write(dir.join("profiles.toml.tmp"), "half").unwrap();
+        fs::write(rollback_path(store.path()), "old").unwrap();
+
+        let mut chowned = Vec::new();
+        let handed = hand_over(&dir, &mut |p| {
+            chowned.push(p.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+        let want = vec![
+            dir.clone(),
+            dir.join("profiles.toml"),
+            dir.join("profiles.toml.rollback"),
+            dir.join("profiles.toml.tmp"),
+        ];
+        assert_eq!((&handed, &chowned), (&want, &want));
+        assert_eq!(store.path(), file_in(state.path()));
+        assert!(!old.exists());
+
+        // Idempotent: the next start hands over the same paths again.
+        let mut again = Vec::new();
+        hand_over(&dir, &mut |p| {
+            again.push(p.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(again, want);
+        // A failed chown stops the start (the service could not read its store).
+        let err = hand_over(&dir, &mut |_| Err(io::Error::other("EPERM"))).unwrap_err();
+        assert_eq!(err.to_string(), "EPERM");
     }
 
     #[test]
