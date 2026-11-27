@@ -81,6 +81,66 @@ polkit_expect() {
     if [ "$rc" = "$want" ]; then ok "$text"; else bad "polkit verdict for $action: exit $rc (want $want)"; fi
 }
 
+# Samples the process list ten times a second for $2 seconds and counts the pw-dump and wpctl
+# processes other than the monitor $1 (each lives some tens of ms; the 1 s poll started a pair every
+# second, so it would be caught many times). Prints each one and leaves the count in $spawned.
+count_spawns() {
+    seen=" "; samples=$(($2 * 10)); i=0
+    while [ "$i" -lt "$samples" ]; do
+        for p in $(pgrep -x 'pw-dump|wpctl'); do
+            [ "$p" = "$1" ] && continue
+            case "$seen" in *" $p "*) ;; *) seen="$seen$p "
+                echo "spawned: $(ps -o pid=,ppid=,etimes=,args= -p "$p" 2>/dev/null) parent: $(ps -o args= -p "$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')" 2>/dev/null)";; esac
+        done
+        sleep 0.1; i=$((i + 1))
+    done
+    spawned="$(echo $seen | wc -w)"
+}
+
+# RUY-1251: every UI sound is a stream of the shell's own that appears in the graph, plays and goes
+# away (and the nodes it woke suspend ~5 s later); the service re-read the graph 3 times for each
+# (pw-dump + wpctl). It must start no pw-dump or wpctl for one: a silent stream with the shell's
+# binary name plays for 3 s, the process list is watched for 9 s. $1 = the monitor's pid.
+ui_sound_check() {
+    echo "--- a UI sound is not a change of the graph (RUY-1251)"
+    if ! command -v pw-cat >/dev/null 2>&1; then
+        echo "UNVERIFIED: pw-cat is not installed: no stream was played"
+        return
+    fi
+    play() { as_shell timeout "$1" pw-cat -p -P 'application.process.binary=ruya-shell node.name=pw-cat-test' --raw --rate 48000 --channels 2 --format s16 /dev/zero >/dev/null 2>&1; }
+    # First, that such a stream is what the shell's sounds are: a running Stream/Output/Audio of
+    # ruya-shell. (This pw-dump is the check's own and is not counted.)
+    play 3 &
+    player=$!
+    sleep 1.5
+    mine="$(as_shell pw-dump 2>/dev/null | python3 -I -c '
+import json, sys
+try:
+    objs = json.load(sys.stdin)
+except Exception:
+    objs = []
+for o in objs:
+    p = (o.get("info") or {}).get("props") or {}
+    if o.get("type") == "PipeWire:Interface:Node" and p.get("media.class") == "Stream/Output/Audio" \
+            and p.get("application.process.binary") == "ruya-shell" and p.get("node.name") == "pw-cat-test":
+        print("yes")
+')"
+    if [ "$mine" = yes ]; then echo "the test stream is a Stream/Output/Audio of ruya-shell"; else echo "UNVERIFIED: the test stream did not show as a ruya-shell output stream in pw-dump"; fi
+    wait "$player"
+    # The tail of that stream settles (the suspend of the nodes it woke), then the counted run.
+    quiet=0; waited=0
+    while [ "$quiet" -lt 80 ] && [ "$waited" -lt 250 ]; do
+        if pgrep -x 'pw-dump|wpctl' | grep -v -x "$1" | grep -q .; then quiet=0; else quiet=$((quiet + 1)); fi
+        sleep 0.1; waited=$((waited + 1))
+    done
+    play 3 &
+    player=$!
+    count_spawns "$1" 9
+    wait "$player"
+    echo "pw-dump/wpctl processes seen around one UI sound (besides the monitor): $spawned"
+    if [ "$spawned" = 0 ]; then ok "a UI sound starts no pw-dump and no wpctl"; else bad "$spawned pw-dump/wpctl around one UI sound (the service re-read the graph)"; fi
+}
+
 # T-133: PipeWire is followed by events (one long-running pw-dump --monitor), not polled.
 # $1 = seconds to watch the idle system for spawned processes (0 skips that part).
 events_check() {
@@ -119,23 +179,15 @@ events_check() {
         # Idle: sample the process list ten times a second; the 1 s poll started a pw-dump and a
         # wpctl every second (each lives some tens of ms), so it would be caught many times.
         cpu0="$(as_shell systemctl --user show ruya-devices -p CPUUsageNSec --value)"
-        seen=" "; samples=$((idle * 10)); i=0
-        while [ "$i" -lt "$samples" ]; do
-            for p in $(pgrep -x 'pw-dump|wpctl'); do
-                [ "$p" = "$monitor" ] && continue
-                case "$seen" in *" $p "*) ;; *) seen="$seen$p "
-                    echo "spawned: $(ps -o pid=,ppid=,etimes=,args= -p "$p" 2>/dev/null) parent: $(ps -o args= -p "$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')" 2>/dev/null)";; esac
-            done
-            sleep 0.1; i=$((i + 1))
-        done
+        count_spawns "$monitor" "$idle"
         cpu1="$(as_shell systemctl --user show ruya-devices -p CPUUsageNSec --value)"
-        spawned="$(echo $seen | wc -w)"
         cpu_ms=$(( (cpu1 - cpu0) / 1000000 ))
         echo "pw-dump/wpctl processes seen in ${idle} s idle (besides the monitor): $spawned; ruya-devices used ${cpu_ms} ms of CPU"
         if [ "$spawned" = 0 ]; then ok "idle: no pw-dump or wpctl started"; else bad "$spawned short-lived pw-dump/wpctl in ${idle} s idle"; fi
         if [ "$cpu_ms" -lt 200 ]; then ok "idle: the service used ${cpu_ms} ms of CPU"; else bad "idle CPU ${cpu_ms} ms"; fi
         [ "$(pgrep -x pw-dump | wc -l)" = 1 ] && ok "still only the monitor" || bad "more than the monitor"
     fi
+    ui_sound_check "$(pgrep -x pw-dump | head -1)"
     echo "restarting PipeWire"
     as_shell systemctl --user restart pipewire.service
     n=0

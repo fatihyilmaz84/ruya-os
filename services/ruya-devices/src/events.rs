@@ -14,6 +14,7 @@ use futures_lite::future;
 use serde_json::Value;
 
 use crate::debounce::{Debounce, MAX_WAIT};
+use crate::pipewire::shells_own;
 
 /// A burst of graph updates (a device appearing changes many objects) gives one refresh once it
 /// has been quiet this long. Shorter than the other watchers' `debounce::QUIET` on purpose: a
@@ -79,15 +80,21 @@ impl BatchSplitter {
 /// Decides which batches mean "the audio graph changed". `pw-dump --monitor` is itself a
 /// PipeWire client and reports changes of its own and of every other client over and over (500
 /// batches in 12 s on an idle system), so entries about clients are not changes of the outputs.
+/// The same holds for what nothing reads from the dump: the ports and links of the graph, and
+/// the shell's own streams (every UI sound is a stream that appears, links, runs and goes away
+/// again: 3 whole-graph reads per key press, RUY-1251). Another app's stream is a change: it
+/// is what `Playing` follows.
 #[derive(Debug, Default)]
 pub struct Relevance {
-    clients: HashSet<u64>,
+    /// The ids of the objects whose entries are chatter. A removal carries no type, so the id
+    /// is how it is told from a change; it leaves the set with the removal.
+    quiet: HashSet<u64>,
 }
 
 impl Relevance {
-    /// Whether a batch holds anything but updates of PipeWire clients. The first batch (the
-    /// whole graph) always does; text that cannot be read counts as a change, so a format
-    /// change in `pw-dump` costs CPU, not correctness.
+    /// Whether a batch holds anything but chatter. The first batch (the whole graph) always
+    /// does; text that cannot be read counts as a change, so a format change in `pw-dump`
+    /// costs CPU, not correctness.
     pub fn is_change(&mut self, batch: &str) -> bool {
         let Ok(Value::Array(entries)) = serde_json::from_str::<Value>(batch) else {
             return true;
@@ -95,22 +102,40 @@ impl Relevance {
         let mut change = false;
         for entry in &entries {
             let id = entry["id"].as_u64();
-            match entry["type"].as_str() {
-                Some("PipeWire:Interface:Client") => {
-                    if let Some(id) = id {
-                        self.clients.insert(id);
+            match (entry["type"].as_str(), id) {
+                (Some(kind), Some(id)) => {
+                    if self.quiet.contains(&id) || is_chatter(kind, &entry["info"]["props"]) {
+                        self.quiet.insert(id);
+                    } else {
+                        change = true;
                     }
                 }
-                // A removal carries no type: it is a client's when the id was one.
-                None if id.is_some_and(|id| self.clients.contains(&id)) => {
+                // A removal carries no type: it is chatter when the id was.
+                (None, Some(id)) if self.quiet.contains(&id) => {
                     if entry["info"].is_null() {
-                        self.clients.remove(&id.unwrap_or_default());
+                        self.quiet.remove(&id);
                     }
                 }
                 _ => change = true,
             }
         }
         change
+    }
+}
+
+/// Whether an object of this type and with these properties never changes what the service
+/// shows: clients, ports and links, and the shell's own streams (the ones `parse_playing`
+/// leaves out too).
+fn is_chatter(kind: &str, props: &Value) -> bool {
+    match kind {
+        "PipeWire:Interface:Client" | "PipeWire:Interface:Port" | "PipeWire:Interface:Link" => true,
+        "PipeWire:Interface:Node" => {
+            props["media.class"]
+                .as_str()
+                .is_some_and(|class| class.starts_with("Stream/"))
+                && shells_own(props)
+        }
+        _ => false,
     }
 }
 
@@ -369,6 +394,89 @@ mod tests {
         assert!(r.is_change(
             r#"[{"id":57,"type":"PipeWire:Interface:Client","info":{}},{"id":43,"type":"PipeWire:Interface:Node","info":{}}]"#
         ));
+    }
+
+    /// The graph on start-up: a sink, the `default` metadata and a client.
+    const GRAPH: &str = r#"[
+      {"id":57,"type":"PipeWire:Interface:Client","info":{"props":{}}},
+      {"id":43,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Sink","node.name":"out"}}},
+      {"id":31,"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},
+       "metadata":[{"subject":0,"key":"default.audio.sink","type":"Spa:String:JSON","value":{"name":"out"}}]}]"#;
+
+    /// A playback stream node (`Stream/Output/Audio`) of this binary, as a UI sound makes one.
+    fn stream(id: u32, binary: &str) -> String {
+        format!(
+            r#"{{"id":{id},"type":"PipeWire:Interface:Node","info":{{"state":"idle","props":{{
+               "media.class":"Stream/Output/Audio","application.process.binary":"{binary}"}}}}}}"#
+        )
+    }
+
+    #[test]
+    fn a_sound_of_the_shell_is_not_a_change() {
+        let mut r = Relevance::default();
+        assert!(r.is_change(GRAPH));
+        // What one UI sound does to the graph: the stream, its port and its link appear,
+        // change state, and go away again (a removal has no type).
+        let own = stream(90, "ruya-shell");
+        assert!(!r.is_change(&format!("[{own}]")), "the stream appears");
+        assert!(!r.is_change(
+            r#"[{"id":91,"type":"PipeWire:Interface:Port","info":{"props":{"node.id":90}}},
+                {"id":92,"type":"PipeWire:Interface:Link","info":{"props":{"link.output.node":90,"link.input.node":43}}}]"#
+        ));
+        assert!(
+            !r.is_change(r#"[{"id":90,"type":"PipeWire:Interface:Node","info":{"state":"running","change-mask":["state"]}}]"#),
+            "it runs: an update with no properties"
+        );
+        assert!(!r.is_change(
+            r#"[{"id":92,"type":"PipeWire:Interface:Link","info":{"state":"active"}}]"#
+        ));
+        assert!(
+            !r.is_change(r#"[{"id":92,"info":null},{"id":91,"info":null},{"id":90,"info":null}]"#)
+        );
+        // The ids are free again: a removal of one that was a change stays one.
+        assert!(r.is_change(r#"[{"id":90,"info":null}]"#));
+        // The same stream id coming back, with the sink's volume changing in the same batch.
+        assert!(r.is_change(&format!(
+            r#"[{own},{{"id":43,"type":"PipeWire:Interface:Node","info":{{"change-mask":["params"]}}}}]"#
+        )));
+    }
+
+    #[test]
+    fn what_the_service_shows_is_still_a_change() {
+        let sink = r#"{"id":44,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Sink","node.name":"hdmi"}}}"#;
+        let source = r#"{"id":45,"type":"PipeWire:Interface:Node","info":{"props":{"media.class":"Audio/Source","node.name":"mic"}}}"#;
+        let default = r#"{"id":31,"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},"metadata":[{"subject":0,"key":"default.audio.sink","type":"Spa:String:JSON","value":{"name":"hdmi"}}]}"#;
+        let props = r#"{"id":43,"type":"PipeWire:Interface:Node","info":{"change-mask":["params"],"params":{"Props":[{"volume":1.0,"mute":false,"channelVolumes":[0.5]}]}}}"#;
+        let device =
+            r#"{"id":50,"type":"PipeWire:Interface:Device","info":{"change-mask":["params"]}}"#;
+        for (what, batch) in [
+            ("a sink appears", sink),
+            ("a microphone appears", source),
+            ("the default changes", default),
+            ("the volume changes (Props)", props),
+            ("a route changes", device),
+            (
+                "another app's stream appears (Playing follows it)",
+                &stream(95, "somegame") as &str,
+            ),
+            ("a sink goes away", r#"{"id":43,"info":null}"#),
+        ] {
+            let mut r = Relevance::default();
+            assert!(r.is_change(GRAPH));
+            assert!(r.is_change(&format!("[{batch}]")), "{what}");
+        }
+        // A stream of another app that changes state later is a change as well.
+        let mut r = Relevance::default();
+        assert!(r.is_change(GRAPH));
+        assert!(r.is_change(&format!("[{}]", stream(95, "somegame"))));
+        assert!(r.is_change(
+            r#"[{"id":95,"type":"PipeWire:Interface:Node","info":{"state":"running"}}]"#
+        ));
+        assert!(r.is_change(r#"[{"id":95,"info":null}]"#));
+        // A stream of the shell's binary that is not an audio stream is not special.
+        let mut r = Relevance::default();
+        let capture = stream(96, "ruya-shell").replace("Stream/Output/Audio", "Audio/Sink");
+        assert!(r.is_change(&format!("[{capture}]")));
     }
 
     #[test]
