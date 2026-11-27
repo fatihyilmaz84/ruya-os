@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check clean security perms
+# modes: check clean playmanaged security perms
 # Checks ruya-store (org.ruyaos.Store1, T-134) inside a running VM, as root. It builds a tiny signed
 # Flatpak repository (one runtime, one app, no download), adds it through the service and drives
 # install / uninstall over the system bus. Copy and run:
@@ -180,6 +180,19 @@ perms_clean() {
     rm -rf "$pwork"
 }
 
+# --- playmanaged (RUY-1244): the Store leaves a .play app to Play1
+# The console's own remote, where ruya-play installs every .play app from (`ruya_play_art::PLAY_REMOTE`).
+play_remote=ruyaos-play-local
+# The status of a Store1 job call (busctl: `ss "play-managed" ""`), on stdin.
+store_status_of() { sed -n 's/^ss "\([^"]*\)".*/\1/p'; }
+# Whether the system installation has the remote already (a .play app was installed on this VM).
+play_remote_exists() { flatpak remotes --system --columns=name 2>/dev/null | grep -qx "$play_remote"; }
+playmanaged_clean() {
+    flatpak uninstall --system -y --noninteractive "$papp" "$prt" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$play_remote" >/dev/null 2>&1
+    rm -rf "$pwork"
+}
+
 case "${1:-check}" in
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
@@ -192,6 +205,51 @@ clean)
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     perms_clean
+    # The stand-in remote of `playmanaged`, only when the test app is what was installed from it (the real
+    # remote of a .play app is never removed here).
+    flatpak list --system --app --columns=application,origin 2>/dev/null | grep -q "^$papp.*$play_remote\$" && playmanaged_clean
+    ;;
+playmanaged)
+    # RUY-1244: Play1 owns a .play app's install, update, rollback and removal; Store1 answers play-managed to
+    # Install, Update, Uninstall and Rollback of an app installed from the console's own remote and runs no
+    # Flatpak command, so the app is still installed and still starts. The test app of the perms repository
+    # stands in for a .play app: the rule is the Flatpak origin, not the id (a real package is installed by
+    # vm-play-check.sh; the remote is the one thing the Store reads). The remote is added here, as ruya-play
+    # does on its first install; a VM that has it already (a .play app was installed) is not touched.
+    echo "flatpak: $(flatpak --version)"
+    if play_remote_exists; then
+        echo "UNVERIFIED: this VM already has the remote $play_remote (a .play app was installed); the stand-in cannot use it. Run on a VM without one."
+        exit 0
+    fi
+    perms_clean
+    perms_repo && ok "test repository built" || { bad "cannot build the test repository"; exit 1; }
+    flatpak remote-add --system --noninteractive "$play_remote" "$pwork/perms.flatpakrepo" >/dev/null 2>&1 \
+        && ok "the stand-in remote $play_remote is added" || { bad "cannot add the remote $play_remote"; playmanaged_clean; exit 1; }
+    flatpak install --system -y --noninteractive "$play_remote" "$papp" >/dev/null 2>&1 \
+        && ok "the test app is installed from $play_remote" || { bad "cannot install $papp from $play_remote"; playmanaged_clean; exit 1; }
+    flatpak list --system --app --columns=application,origin | grep -q "^$papp.*$play_remote\$" \
+        && ok "flatpak says the app's origin is $play_remote" || bad "flatpak origin of $papp: $(flatpak list --system --app --columns=application,origin | grep "$papp")"
+    n=0
+    until perms_call ListInstalled | grep -q "$papp" || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
+    perms_call ListInstalled | grep -q "$papp" && ok "the Store lists the app" || { bad "the Store does not list $papp"; playmanaged_clean; exit 1; }
+    probe_before="$(perms_probe)"
+    case "$probe_before" in *"net="*) ok "the app starts before the calls: $probe_before";; *) bad "the app does not start: '$probe_before'";; esac
+
+    jobs_before="$(perms_call ListJobs | grep -o "$papp" | wc -l)"
+    for call in "Uninstall sb $papp true" "Uninstall sb $papp false" "Update s $papp" "Install s $papp" "Rollback ss $papp abcdef123456"; do
+        # shellcheck disable=SC2086
+        got="$(perms_call $call | store_status_of)"
+        [ "$got" = play-managed ] && ok "$call: play-managed" || bad "$call: '$got'"
+    done
+    sleep 2   # a job the refusal wrongly queued would be running by now
+    [ "$(perms_call ListJobs | grep -o "$papp" | wc -l)" = "$jobs_before" ] && ok "no job was queued for the app" || bad "a job for $papp was queued"
+    flatpak list --system --app --columns=application | grep -qx "$papp" && ok "the app is still installed" || bad "the app was removed"
+    probe_after="$(perms_probe)"
+    case "$probe_after" in *"net="*) ok "the app still starts: $probe_after";; *) bad "the app no longer starts: '$probe_after'";; esac
+    # The other answers are the Store's own still.
+    other="$(perms_call Update s "org.ruyaos.NoSuchApp" | store_status_of)"
+    [ "$other" = unknown-app ] && ok "an unknown app is still unknown-app" || bad "Update of an unknown app: '$other'"
+    playmanaged_clean
     ;;
 perms)
     # RUY-744: (a) a withdrawn network is gone inside the sandbox, (b) withdrawn devices keep /dev/input and

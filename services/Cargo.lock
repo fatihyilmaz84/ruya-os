@@ -1249,6 +1249,7 @@ dependencies = [
  "rustix",
  "ruya-contract-test",
  "ruya-flatpak",
+ "ruya-play-art",
  "tempfile",
  "zbus",
 ]

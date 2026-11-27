@@ -240,10 +240,8 @@ impl<F: Flatpak> Store<F> {
         }
         for app in &mut catalogue {
             if let Some(i) = installed.iter().find(|i| i.id == app.id) {
-                app.installed = true;
-                app.installed_size = app.installed_size.max(i.installed_size);
                 app.update_available = updates.contains(&app.id);
-                set_installed_version(app, &i.version);
+                mark_installed(app, i);
             }
         }
         catalogue.sort_by_key(|a| a.name.to_lowercase());
@@ -387,15 +385,12 @@ impl<F: Flatpak> Store<F> {
         }
         for app in &mut state.catalogue {
             match installed.iter().find(|i| i.id == app.id) {
-                Some(i) => {
-                    app.installed = true;
-                    app.installed_size = app.installed_size.max(i.installed_size);
-                    set_installed_version(app, &i.version);
-                }
+                Some(i) => mark_installed(app, i),
                 None => {
                     app.installed = false;
                     app.update_available = false;
                     app.installed_version.clear();
+                    app.origin.clear();
                 }
             }
         }
@@ -441,6 +436,11 @@ impl<F: Flatpak> Store<F> {
         let Some(app) = state.catalogue.iter().find(|a| a.id == id).cloned() else {
             return (Status::UnknownApp, String::new());
         };
+        // The one place every mutation passes: Play1 owns a `.play` app (RUY-1244), so the Store
+        // runs nothing on it, whatever the method.
+        if app.is_play_managed() {
+            return (Status::PlayManaged, String::new());
+        }
         if let Some(refused) = check(&app) {
             return (refused, String::new());
         }
@@ -1069,6 +1069,15 @@ fn unoffered_app(installed: &InstalledApp, api_level: u32) -> App {
     app.source = trust_of(&installed.remote).to_owned();
     app.installed_size = installed.installed_size;
     app
+}
+
+/// What `flatpak list` says of an installed app: the installed flag, its size, version and origin
+/// (`refresh` and `sync_installed` both apply it, so the origin is never older than the flag).
+fn mark_installed(app: &mut App, installed: &InstalledApp) {
+    app.installed = true;
+    app.installed_size = app.installed_size.max(installed.installed_size);
+    app.origin = installed.remote.clone();
+    set_installed_version(app, &installed.version);
 }
 
 /// What flatpak says is installed; an app with no update is at the catalogue's newest release
@@ -2238,8 +2247,7 @@ mod tests {
     // ---- A `.play` app (RUY-854): a normal system-installation app from the console's own remote ----
 
     const PLAY: &str = "play.com.example.game";
-    /// `ruya_play_art::PLAY_REMOTE`; ruya-store does not depend on that crate for a name.
-    const PLAY_REMOTE: &str = "ruyaos-play-local";
+    const PLAY_REMOTE: &str = ruya_play_art::PLAY_REMOTE;
     /// What the importer's generated metadata holds for a package that asks for the network, all
     /// devices and USB drives (05 section 8): the always-granted lines and the three requests.
     const PLAY_META: &str = "[Application]
@@ -2257,6 +2265,97 @@ filesystems=/run/media:ro;
         let s = perm_store(fake().with_installed_metadata(PLAY, PLAY_META));
         s.flatpak.add_installed(PLAY_REMOTE, PLAY, 9_000_000);
         s
+    }
+
+    // ---- Play1 owns a `.play` app's mutations (RUY-1244) ----
+
+    /// Every method that queues a transaction answers `play-managed` for `id` and queues nothing:
+    /// no job, no Flatpak command.
+    fn assert_play_managed(s: &Store<FakeFlatpak>, id: &str) {
+        for (method, (status, job)) in [
+            ("install", s.install(id, &mut none)),
+            ("update", s.update(id, &mut none)),
+            ("uninstall", s.uninstall(id, true, &mut none)),
+            ("rollback", s.rollback(id, "abcdef123456", &mut none)),
+        ] {
+            assert_eq!(status, Status::PlayManaged, "{method}");
+            assert_eq!(job, "", "{method}: no job");
+        }
+        assert!(!s.run_next(&mut none), "nothing is queued");
+        assert!(s.flatpak.ran().is_empty(), "no Flatpak command ran");
+        assert_eq!(Status::PlayManaged.as_str(), "play-managed");
+    }
+
+    #[test]
+    fn a_play_app_the_catalogue_read_is_refused_by_every_mutation() {
+        let s = store(
+            fake()
+                .with_installed(PLAY_REMOTE, PLAY, 9_000_000)
+                .with_update(PLAY),
+        );
+        assert_play_managed(&s, PLAY);
+    }
+
+    #[test]
+    fn a_play_app_installed_behind_the_stores_back_is_refused_too() {
+        let s = play_store();
+        assert_play_managed(&s, PLAY);
+    }
+
+    #[test]
+    fn a_play_app_is_refused_before_the_other_checks() {
+        // No update is available: still `play-managed`, not `no-update`.
+        let s = store(fake().with_installed(PLAY_REMOTE, PLAY, 9_000_000));
+        assert!(!s.get_app(PLAY).1.update_available);
+        assert_play_managed(&s, PLAY);
+    }
+
+    #[test]
+    fn an_app_of_another_origin_or_with_none_read_is_not_a_play_app() {
+        // `.play` is a real top-level domain: Flathub may ship a `play.*` app, and an origin the
+        // listing did not give is not proof of anything.
+        const HUB: &str = "play.org.example.hub";
+        const UNREAD: &str = "play.org.example.unread";
+        let s = store(
+            fake()
+                .with_installed("flathub", HUB, 1)
+                .with_installed("", UNREAD, 1)
+                .with_installed(PLAY_REMOTE, PLAY, 1)
+                .with_update(HUB)
+                .with_update(UNREAD),
+        );
+        for id in [HUB, UNREAD] {
+            assert_eq!(s.update(id, &mut none).0, Status::Ok, "{id}: update");
+            drain(&s);
+            assert_eq!(
+                s.rollback(id, "abcdef123456", &mut none).0,
+                Status::Ok,
+                "{id}: rollback"
+            );
+            drain(&s);
+            assert_eq!(
+                s.uninstall(id, false, &mut none).0,
+                Status::Ok,
+                "{id}: uninstall"
+            );
+            drain(&s);
+        }
+        assert_eq!(s.flatpak.ran().len(), 6);
+        // The `.play` app next to them is still refused.
+        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::PlayManaged);
+    }
+
+    #[test]
+    fn a_play_app_that_is_not_installed_has_no_origin_to_refuse() {
+        // Once Play1 removed it (the local remote may still offer the commit), the Store's own
+        // not-installed answers again.
+        let s = store(fake().with_app(PLAY_REMOTE, PLAY, 1));
+        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::NotInstalled);
+        let f = &s.flatpak;
+        f.add_installed(PLAY_REMOTE, PLAY, 1);
+        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::PlayManaged);
+        f.remove_installed(PLAY);
+        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::NotInstalled);
     }
 
     fn writes(s: &Store<FakeFlatpak>) -> Vec<Vec<String>> {

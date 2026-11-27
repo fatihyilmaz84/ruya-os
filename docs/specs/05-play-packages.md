@@ -588,6 +588,8 @@ Follows 03 §4.5a without change: per-profile `~/.var/app/play.<id>/{data,config
 
 Principle: **updates are signed, ordered by `build`, run by the OS and never by the game.** There are three ways, in priority order.
 
+**One owner (RUY-1244): `Play1` owns install, update, rollback and removal of a `.play` app; `Store1` only lists it.** `ruya-store` answers `play-managed` to `Install`, `Update`, `Rollback` and `Uninstall` of an installed app whose Flatpak origin is `ruyaos-play-local` and runs no Flatpak command, so nothing bypasses `installed.json` and the trust records. An app whose origin cannot be read is not treated as `.play`. Where an item below says `ruya-store` updates a `.play` app, it is the old design.
+
 1. **From a store (replaced by §18 item 1 and `10-stores.md` §11: the store's signed index, the same importer; the text of this item is the old design).** If the package was installed from the `ruyaos` or a developer remote, `ruya-store` updates it like any other app (OSTree deltas, `Rollback(id, commit)`, the permission-diff flow). The manifest's `update` block is ignored. This is the recommended path for anything distributed publicly: one trusted place, one update mechanism, no per-game servers contacted. *Yes: the Store should be the update channel for Store packages.*
 2. **Self-hosted feed (sideloaded packages).** `update.feed` is an https URL of a signed JSON feed:
    ```json
@@ -603,7 +605,7 @@ Principle: **updates are signed, ordered by `build`, run by the OS and never by 
 3. **By hand:** the player installs a newer `.play` over the old one (from USB or a download). Same verification; same-key rule; keeps the data. A package with a different key for the same id is refused with "This isn't the same developer".
 
 Details:
-- **Rollback:** the previous deployment stays until the next successful launch of the new one; "Roll back to 1.4.2" uses `Store1.Rollback`. A downgrade that is not a rollback of an installed deployment is refused.
+- **Rollback:** the previous deployment stays until the next successful launch of the new one; "Roll back to 1.4.2" is `Play1`'s (RUY-1245), never `Store1.Rollback`, which answers `play-managed` for a `.play` app. A downgrade that is not a rollback of an installed deployment is refused.
 - **Prefix / runner changes** are handled by `epoch` (§6.3). A runner update (system Wine) is an update of the extension, not of the game; the Compatibility screen shows the runner in use, and "Try the bundled runner" is the escape.
 - **Delta updates (not v1):** `play.files` already hashes every file, so a future feed can list changed files only and the service can fetch just those objects (HTTP range / object URLs); Store builds already get OSTree deltas.
 - **Size accounting:** an update downloads the whole new package in v1. The feed's `size` is shown before the download; the free-space check covers old + new.

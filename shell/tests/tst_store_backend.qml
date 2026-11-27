@@ -379,6 +379,27 @@ Item {
             compare(finished.signalArguments[1][1], "ok", "the level now fits")
         }
 
+        // RUY-1244: Play1 owns a .play app, so the Store answers play-managed to every mutation and starts no job.
+        function test_a_play_app_is_refused_play_managed() {
+            const id = "play.com.example.starhopper"
+            Store.mockInstallOutside(id, "starhopper", ["network"])
+            Store.refreshInstalled()
+            tryVerify(() => isInstalled(id))
+            Store.update(id)
+            Store.uninstall(id, false)
+            Store.install(id)
+            tryCompare(finished, "count", 3)
+            for (let i = 0; i < 3; ++i) {
+                compare(finished.signalArguments[i][0], id)
+                compare(finished.signalArguments[i][1], "play-managed")
+            }
+            verify(isInstalled(id), "nothing was removed")
+            compare(Object.keys(Store.jobs).length, 0, "no job was started")
+            // An app that is not a .play app keeps its own answers.
+            Store.uninstall("org.example.Puzzle", false)
+            tryCompare(finished, "count", 4)
+        }
+
         function test_update() {
             verify(Store.app("org.example.Chess").updateAvailable)
             Store.update("org.example.Chess")

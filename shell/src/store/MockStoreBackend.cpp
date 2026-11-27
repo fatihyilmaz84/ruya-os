@@ -468,11 +468,20 @@ void MockStoreBackend::pauseJobs(bool paused)
         m_timer.start();
 }
 
+// Store1's `play-managed` (RUY-1244): the service refuses every mutation of an installed app whose origin is the console's
+// own `.play` remote. The mock has no origin: an installed app named play.<x> is the one Play1 installed.
+static bool playManaged(const QString &id, bool installed)
+{
+    return installed && id.startsWith(QLatin1String("play."));
+}
+
 void MockStoreBackend::install(const QString &id)
 {
     const int i = indexOf(id);
     if (i < 0)
         reject(id, QStringLiteral("unknown-app"));
+    else if (playManaged(id, m_apps.at(i).installed))
+        reject(id, QStringLiteral("play-managed"));
     else if (m_apps.at(i).installed)
         reject(id, QStringLiteral("already-installed"));
     else if (!m_apps.at(i).compatible)
@@ -486,6 +495,8 @@ void MockStoreBackend::uninstall(const QString &id, bool deleteData)
     const int i = indexOf(id);
     if (i < 0) {
         reject(id, QStringLiteral("unknown-app"));
+    } else if (playManaged(id, m_apps.at(i).installed)) {
+        reject(id, QStringLiteral("play-managed"));
     } else if (!m_apps.at(i).installed) {
         reject(id, QStringLiteral("not-installed"));
     } else {
@@ -502,6 +513,8 @@ void MockStoreBackend::update(const QString &id)
     const int i = indexOf(id);
     if (i < 0)
         reject(id, QStringLiteral("unknown-app"));
+    else if (playManaged(id, m_apps.at(i).installed))
+        reject(id, QStringLiteral("play-managed"));
     else if (!m_apps.at(i).installed)
         reject(id, QStringLiteral("not-installed"));
     else if (!m_apps.at(i).updateAvailable)

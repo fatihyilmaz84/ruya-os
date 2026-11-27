@@ -943,6 +943,19 @@ expect_contains "vm-store-check.sh perms: a failed call has no count" \
 # (the real sleep: the section's shim `sleep` does not wait)
 ms="$(perms_ms /usr/bin/sleep 0.3)"
 { [ "$ms" -ge 250 ] && [ "$ms" -lt 1500 ]; } && pass "vm-store-check.sh perms: perms_ms measures the wall clock of a command ($ms ms for 0.3 s)" || fail "vm-store-check.sh perms: perms_ms says $ms ms for a 0.3 s command"
+# RUY-1244 playmanaged: the status out of a job call's busctl line, and the remote the check stands in for is the
+# one ruya-play installs from.
+eval "$(grep '^store_status_of()' "$here/vm-store-check.sh")"
+expect_contains "vm-store-check.sh playmanaged: the refusal is read from busctl's reply" \
+    "[$(echo 'ss "play-managed" ""' | store_status_of)]" '[play-managed]'
+expect_contains "vm-store-check.sh playmanaged: a queued job is not a refusal" \
+    "[$(echo 'ss "ok" "job-3"' | store_status_of)]" '[ok]'
+expect_contains "vm-store-check.sh playmanaged: a failed call has no status" \
+    "[$(echo 'Call failed: Access denied' | store_status_of)]" '[]'
+grep -q '^play_remote=ruyaos-play-local$' "$here/vm-store-check.sh" \
+    && grep -q 'pub const PLAY_REMOTE: &str = "ruyaos-play-local";' "$here/../services/ruya-play-art/src/lib.rs" \
+    && pass "vm-store-check.sh playmanaged: the stand-in remote is ruya_play_art::PLAY_REMOTE" \
+    || fail "vm-store-check.sh playmanaged: play_remote differs from ruya_play_art::PLAY_REMOTE"
 storexml1190="$here/../api/dbus/org.ruyaos.Store1.xml"
 grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="status" type="s" direction="out"' \
     && grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="counts" type="a{su}" direction="out"' \
