@@ -617,7 +617,8 @@ FocusScope {
     // The stop hold: the instance whose pads stay until it has exited. It is set on Session's appStopping
     // (sent before the record says "stopping") and by Close itself before its Stop, and it holds by
     // itself, not by the record's `state`: a ListRunning reply computed before the stop may say "running"
-    // again afterwards. Only AppExited, a refused Stop (or Kill) and a sign-out release it.
+    // again afterwards. Only AppExited, a refused Stop (or Kill), a sign-out and the record vanishing from the
+    // list release it.
     property string stopPadHold: ""
     function holdPadsOfStop(instance) {
         if (inputRoute.routeInstance === instance)
@@ -664,6 +665,8 @@ FocusScope {
         function onRunningChanged() {
             if (root.gapInstance !== "" && !Session.running.some(r => r.instance === root.gapInstance))
                 root.endWindowGap()
+            if (root.stopPadHold !== "" && !Session.running.some(r => r.instance === root.stopPadHold))
+                root.stopPadHold = ""       // the record is gone without an AppExited: nothing is left to hold
         }
     }
     // The front window's instance lookup is pending (InputRoute holds the route meanwhile).
