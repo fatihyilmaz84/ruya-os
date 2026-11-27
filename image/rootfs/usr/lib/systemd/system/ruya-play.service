@@ -26,6 +26,9 @@ ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 PrivateIPC=yes
+# The PIN store is ruya-profiles' alone, also through /sysroot, where /var comes from (RUY-1130,
+# scripts/lint-private-state.ps1).
+InaccessiblePaths=/var/lib/ruyaos/profiles /sysroot
 NoNewPrivileges=yes
 # Root for the commit: the staged tree is owned by the helper's released dynamic uid and is made
 # root's (chown, chmod) before ostree commits it; flatpak's checkout writes files of root. No

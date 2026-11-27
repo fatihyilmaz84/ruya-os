@@ -17,6 +17,9 @@ ReadWritePaths=/var/lib/flatpak /var/tmp
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+# The PIN store is ruya-profiles' alone, also through /sysroot, where /var comes from (RUY-1130,
+# scripts/lint-private-state.ps1).
+InaccessiblePaths=/var/lib/ruyaos/profiles /sysroot
 NoNewPrivileges=yes
 # Hardening (RUY-18): root, but every file it writes is root's own (/var/lib/flatpak), so it needs no
 # capability. No UMask=0077: the remote's files must stay readable to ruya-library and the profile users.

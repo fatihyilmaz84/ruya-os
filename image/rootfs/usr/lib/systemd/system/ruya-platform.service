@@ -34,6 +34,9 @@ PrivateTmp=yes
 PrivateNetwork=yes
 PrivateDevices=yes
 PrivateIPC=yes
+# The PIN store is ruya-profiles' alone, also through /sysroot, where /var comes from (RUY-1130,
+# scripts/lint-private-state.ps1).
+InaccessiblePaths=/var/lib/ruyaos/profiles /sysroot
 NoNewPrivileges=yes
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
