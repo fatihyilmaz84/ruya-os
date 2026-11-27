@@ -620,7 +620,7 @@ mod linux {
     use std::time::{Duration, Instant};
 
     use super::{card_state, find_sink, parse_snapshot, parse_state, plan_switch};
-    use crate::audio::PipeWire;
+    use crate::audio::{PipeWire, Snapshot};
     use crate::output_policy::{tone_wav, Output};
 
     const DEFAULT_SINK: &str = "@DEFAULT_AUDIO_SINK@";
