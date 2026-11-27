@@ -131,9 +131,10 @@ Item {
             tryCompare(find("page_appDetail"), "hasRecord", true)
             compare(find("page_appDetail").installed, false)
             compare(find("page_appDetail").primaryKind, "")
-            tc.shell.openPage("appDetail", { appId: "org.example.Racer" })
-            tryCompare(find("page_appDetail"), "appId", "org.example.Racer")
-            tryCompare(find("page_appDetail"), "primaryKind", "install")
+            // (A Store app's Install is covered by test_install_from_detail.)
+            Store.mockReset()
+            Store.mockCatalogChanged()                   // the reset does not announce the catalogue
+            tryVerify(() => Store.app(id).id === undefined)
         }
 
         function test_controller_filter() {

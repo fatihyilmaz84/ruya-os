@@ -410,6 +410,9 @@ Item {
             compare(finished.signalArguments[0][1], "play-managed")
             verify(!isInstalled(id))
             compare(Object.keys(Store.jobs).length, 0, "no job was started")
+            Store.mockReset()
+            Store.mockCatalogChanged()                   // the reset does not announce the catalogue
+            tryVerify(() => Store.catalogue.length === 13)
         }
 
         function test_update() {
