@@ -83,6 +83,8 @@ jobs:
         run: |
           pwsh -NoProfile -File scripts/lint-app-table.ps1
           pwsh -NoProfile -File scripts/lint-app-table.ps1 -SelfTest
+      - name: Private state lint (the PIN store hidden from every other root unit, RUY-1130)
+        run: pwsh -NoProfile -File scripts/lint-private-state.ps1 -SelfTest
 
   services:
     runs-on: ubuntu-24.04

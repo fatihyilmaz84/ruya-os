@@ -1196,6 +1196,7 @@ dependencies = [
  "argon2",
  "futures-lite",
  "password-hash",
+ "rustix",
  "ruya-contract-test",
  "ruya-ids",
  "serde",

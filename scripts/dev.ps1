@@ -1162,6 +1162,13 @@ function Test-AppTable {
     Record "app table lint self-test" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-private-state.ps1 (shared with CI): the PIN store is hidden from every other root unit (RUY-1130).
+function Test-PrivateState {
+    Step "private state lint (every other root ruya-* unit hides /var/lib/ruyaos/profiles with InaccessiblePaths=)"
+    & (Join-Path $PSScriptRoot "lint-private-state.ps1") -SelfTest
+    Record "private state lint (with its self-test)" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
 function Test-VmChecks {
     Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
@@ -1606,6 +1613,7 @@ function Test-ScriptSelfChecks {
     Test-Ids
     Test-RegexAnchors
     Test-AppTable
+    Test-PrivateState
     Test-TranslationSelfCheck
     Test-LUpdateProjectSelfCheck
     Test-BusPolicies

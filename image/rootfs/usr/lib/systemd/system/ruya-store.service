@@ -19,6 +19,9 @@ ProtectHome=read-only
 PrivateTmp=yes
 PrivateDevices=yes
 PrivateIPC=yes
+# The PIN store is ruya-profiles' alone, also through /sysroot, where /var comes from (RUY-1130,
+# scripts/lint-private-state.ps1).
+InaccessiblePaths=/var/lib/ruyaos/profiles /sysroot
 NoNewPrivileges=yes
 # Root only for ostree/flatpak (checkouts owned by root, files of every owner) and for the
 # switch to a profile's user when its app data is removed.

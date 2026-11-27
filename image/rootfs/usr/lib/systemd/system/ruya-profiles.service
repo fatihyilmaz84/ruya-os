@@ -7,7 +7,13 @@ Type=dbus
 BusName=org.ruyaos.Profiles1
 ExecStart=/usr/bin/ruya-profiles
 Restart=on-failure
-# /var/lib/ruyaos/profiles.toml (0600) and new profile users in /etc + /var/home.
+# /var/lib/ruyaos/profiles/profiles.toml (the directory 0700, the file 0600) and new profile users
+# in /etc + /var/home. The whole of /var/lib/ruyaos is writable here: the first start of this image
+# renames an older image's /var/lib/ruyaos/profiles.toml into profiles/ (RUY-1130). Every other
+# root ruya-* unit but the exceptions in image/security-baseline.json private_state hides profiles/
+# and /sysroot (InaccessiblePaths, scripts/lint-private-state.ps1), and the service makes itself
+# non-dumpable at start, so /proc/<pid>/root does not lead around that; 0755 here keeps the tree's
+# other directories (library, notifications, platform) reachable.
 StateDirectory=ruyaos
 StateDirectoryMode=0755
 ReadWritePaths=/etc /var/home

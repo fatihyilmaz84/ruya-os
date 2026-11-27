@@ -5,6 +5,7 @@ pub mod accounts;
 pub mod dbus;
 pub mod lockout;
 pub mod pin;
+pub mod process;
 pub mod service;
 pub mod store;
 

@@ -14,7 +14,10 @@
 #                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
 #   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
 #                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
-#   - vm-profiles-check.sh the `guests` mode (RUY-125) and the guest role of `create` (RUY-728) against a fake Profiles1: each assertion can FAIL
+#   - vm-profiles-check.sh the `guests` mode (RUY-125) and the guest role of `create` (RUY-728) against a fake Profiles1: each assertion can FAIL;
+#                          `private` and `migrate` (RUY-1130): an unhidden root unit or alias, an unlisted exception, a unit that
+#                          sees the store or its /sysroot copy, a dumpable ruya-profiles, vacuous probes, the modes, the old store
+#                          left, a service that does not move it, a PIN that no longer signs in
 #   - vm-input-check.sh    the `players` mode (RUY-121): no probe or a refused CreateProfile fails, the probe gets the
 #                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
 #                          reply and ListPlayers parsing (test-vm-input-probe.py); the `seathold` mode (RUY-627): the
@@ -1094,6 +1097,112 @@ for case in \
     expect_contains "create, bug $bug: caught" "$out" "$needle"
     [ "$rc" = 1 ] && pass "create, bug $bug: exit 1" || fail "create, bug $bug: exit $rc"
 done
+# private and migrate (RUY-1130): fake systemctl (units from a table: unit|User|InaccessiblePaths|MainPID|
+# CapabilityBoundingSet), nsenter (a pid sees the store when $PRIV_NS/<pid> exists, its /sysroot copy when
+# $PRIV_NS/<pid>.sysroot does), systemd-run (the /proc/<pid>/root probe: reads only when ruya-play's
+# capabilities are not passed or FAKE_BUG=dumpable) and stat (a path's "<mode> <owner>" from <path>.mode).
+echo "vm-profiles-check.sh private and migrate: each assertion can fail"
+mkdir -p "$tmp/priv-bin"
+cat > "$tmp/priv-bin/systemctl" <<'SHIMEOF'
+#!/bin/sh
+case "$1" in
+list-unit-files) cut -d'|' -f1 "$PRIV_UNITS" | sed 's/$/ enabled enabled/' ;;
+show)
+    unit="$(echo "$2" | sed 's/@[^.]*\.service$/@.service/')"
+    grep "^$unit|" "$PRIV_UNITS" | awk -F'|' '{ print "User=" $2; print "DynamicUser=no"; print "InaccessiblePaths=" $3; print "MainPID=" $4; print "CapabilityBoundingSet=" $5 }'
+    ;;
+start) [ "${FAKE_BUG:-}" = no_move ] || mv "$RUYA_STATE_ROOT/profiles.toml" "$RUYA_STATE_ROOT/profiles/profiles.toml" ;;
+esac
+exit 0
+SHIMEOF
+cat > "$tmp/priv-bin/nsenter" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*sysroot*) [ -e "$PRIV_NS/$3.sysroot" ] ;;
+*) [ -e "$PRIV_NS/$3" ] ;;
+esac
+SHIMEOF
+cat > "$tmp/priv-bin/systemd-run" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*"CapabilityBoundingSet=cap_chown cap_dac_override "*) [ "${FAKE_BUG:-}" = dumpable ] ;;
+*) exit 0 ;;
+esac
+SHIMEOF
+cat > "$tmp/priv-bin/stat" <<'SHIMEOF'
+#!/bin/sh
+for last in "$@"; do :; done
+if [ -e "$last.mode" ] && [ -e "$last" ]; then cat "$last.mode"; else exec /usr/bin/stat "$@"; fi
+SHIMEOF
+chmod +x "$tmp/priv-bin"/*
+runpriv() { # <mode>; FAKE_BUG picks the broken fixture
+    local p="$tmp/priv" bug="${FAKE_BUG:-}"
+    rm -rf "$p" "$tmp/prof"; mkdir -p "$p/state/profiles" "$p/ns" "$tmp/prof/home"
+    echo 'next_id = 1' > "$p/state/profiles/profiles.toml"
+    echo "700 root:root" > "$p/state/profiles.mode"
+    echo "600 root:root" > "$p/state/profiles/profiles.toml.mode"
+    [ "$bug" = no_alias_copy ] || mkdir -p "$p/sysroot/ostree/deploy/default/var/lib/ruyaos/profiles"
+    [ "$bug" = proc_blind ] || { mkdir -p "$p/proc/100/root/var/lib/ruyaos/profiles"; touch "$p/proc/100/root/var/lib/ruyaos/profiles/profiles.toml"; }
+    [ "$bug" = dirmode ] && echo "755 root:root" > "$p/state/profiles.mode"
+    [ "$bug" = old ] && echo 'next_id = 1' > "$p/state/profiles.toml"
+    [ "$bug" = owner_blind ] || touch "$p/ns/100"
+    [ "$bug" = sees ] && touch "$p/ns/200"
+    [ "$bug" = alias_sees ] && touch "$p/ns/200.sysroot"
+    local session_hides="/run/x /var/lib/ruyaos/profiles /sysroot" thing_hides="/var/lib/ruyaos/profiles /sysroot" exceptions='[{"unit": "ruya-update.service", "reason": "fixture"}]'
+    [ "$bug" = unhidden ] && session_hides="/run/x /sysroot"
+    [ "$bug" = alias_unhidden ] && session_hides="/run/x /var/lib/ruyaos/profiles"
+    [ "$bug" = template ] && thing_hides="/sysroot"
+    [ "$bug" = noexception ] && exceptions='[]'
+    printf '{"private_state": [{"path": "/var/lib/ruyaos/profiles", "aliases": ["/sysroot"], "owner": "ruya-profiles.service", "exceptions": %s}]}\n' "$exceptions" > "$p/baseline.json"
+    printf '%s\n' "ruya-profiles.service|||100|cap_chown cap_dac_override cap_dac_read_search" \
+        "ruya-session.service||$session_hides|200|" "ruya-play.service||/var/lib/ruyaos/profiles /sysroot|400|cap_chown cap_dac_override cap_dac_read_search" \
+        "ruya-thing@.service||$thing_hides|0|" "ruya-update.service||/run/x|0|cap_sys_admin" \
+        "ruya-library.service|ruya-library||300|" > "$p/units"
+    PRIV_UNITS="$p/units" PRIV_NS="$p/ns" RUYA_STATE_ROOT="$p/state" RUYA_PROC_ROOT="$p/proc" RUYA_SYSROOT="$p/sysroot" \
+        PROFILES_BASELINE="$p/baseline.json" \
+        PROF_PY="$tmp/fake-profiles.py" PROF_STATE="$tmp/prof/state.json" PROF_HOMES="$tmp/prof/home" \
+        PATH="$tmp/priv-bin:$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" "$1" 2>&1
+}
+out="$(runpriv private)"; rc=$?
+expect_contains "private, a good image passes" "$out" "ALL CHECKS PASSED"
+expect_contains "private: the template unit is checked" "$out" "PASS: ruya-thing@.service hides /var/lib/ruyaos/profiles"
+expect_contains "private: the alias is checked" "$out" "PASS: ruya-session.service hides /sysroot"
+expect_contains "private: a running unit is looked into" "$out" "PASS: ruya-session.service (pid 200) cannot see"
+expect_contains "private: and through /sysroot" "$out" "PASS: ruya-session.service (pid 200) cannot see it under /sysroot"
+expect_contains "private: the /proc/<pid>/root probe" "$out" "PASS: a root process with ruya-play's capabilities cannot read"
+expect_contains "private: a unit of its own user is skipped" "$out" "skip: ruya-library.service runs as ruya-library"
+expect_contains "private: a listed exception is skipped" "$out" "skip: ruya-update.service is a private_state exception"
+expect_lacks "private, a good image: no FAIL" "$out" "FAIL"
+[ "$rc" = 0 ] && pass "private, a good image: exit 0" || fail "private, a good image: exit $rc"
+for case in \
+    "unhidden|FAIL: ruya-session.service runs as root and does not hide /var/lib/ruyaos/profiles" \
+    "alias_unhidden|FAIL: ruya-session.service runs as root and does not hide /sysroot" \
+    "template|FAIL: ruya-thing@.service runs as root and does not hide /var/lib/ruyaos/profiles" \
+    "noexception|FAIL: ruya-update.service runs as root and does not hide" \
+    "sees|FAIL: ruya-session.service (pid 200) sees" \
+    "alias_sees|FAIL: ruya-session.service (pid 200) sees the store's directory under /sysroot" \
+    "dumpable|FAIL: a root process with ruya-play's capabilities" \
+    "no_alias_copy|the alias probe below would prove nothing" \
+    "proc_blind|the ruya-play probe would prove nothing" \
+    "dirmode|profiles is '755 root:root', want 700 root:root" \
+    "old|FAIL: the old store" \
+    "owner_blind|FAIL: ruya-profiles (pid 100) does not see"; do
+    bug="${case%%|*}"; needle="${case#*|}"
+    out="$(FAKE_BUG="$bug" runpriv private)"; rc=$?
+    expect_contains "private, bug $bug: caught" "$out" "$needle"
+    [ "$rc" = 1 ] && pass "private, bug $bug: exit 1" || fail "private, bug $bug: exit $rc"
+done
+out="$(runpriv migrate)"; rc=$?
+expect_contains "migrate, a good service: the old store is gone" "$out" "PASS: the old store"
+expect_contains "migrate, a good service: the PIN signs in" "$out" "PASS: SwitchTo p1 with the PIN after the move"
+expect_lacks "migrate, a good service: no FAIL" "$out" "FAIL"
+[ "$rc" = 0 ] && pass "migrate, a good service: exit 0" || fail "migrate, a good service: exit $rc"
+out="$(FAKE_BUG=no_move runpriv migrate)"; rc=$?
+expect_contains "migrate, a service that does not move the store: caught" "$out" "still there after the start"
+[ "$rc" = 1 ] && pass "migrate, no move: exit 1" || fail "migrate, no move: exit $rc"
+out="$(ADMIN_PIN=0000 runpriv migrate)"; rc=$?
+expect_contains "migrate, a PIN that no longer signs in: caught" "$out" "FAIL: SwitchTo p1 after the move"
+[ "$rc" = 1 ] && pass "migrate, wrong PIN: exit 1" || fail "migrate, wrong PIN: exit $rc"
 # --- vm-input-check.sh uinput (RUY-1063): the probe and its module, the two profiles, a probe FAIL fails ----------
 echo "vm-input-check.sh uinput: the probe gets both profiles and vm_uinput_trust.py next to it"
 ui="$tmp/uinput"; mkdir -p "$ui/bin" "$ui/alone" "$ui/nomod" "$ui/with" "$ui/tmp"

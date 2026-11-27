@@ -72,6 +72,28 @@
       "reason": "Library1.Rescan asks root ruya-session for a profile's Steam scan (ADR-045 amendment, owner 2026-11-25). dbus-broker checks a broadcast's send rules against each receiver's names, so without this allow Session1's default deny drops the signal. The only signal a service user may send to another service; read by scripts/lint-bus-policies.ps1 (rule 2)."
     }
   ],
+  "private_state": [
+    {
+      "path": "/var/lib/ruyaos/profiles",
+      "aliases": ["/sysroot"],
+      "owner": "ruya-profiles.service",
+      "reason": "The PIN hashes never leave ruya-profiles (RUY-1130, ADR-022 decision 4): root reads any file whatever its mode, so the store has its own 0700 directory and every other ruya-* unit that runs as root (or holds a reading capability) hides it, and /sysroot (on bootc /var is a bind of /sysroot/ostree/deploy/<stateroot>/var, so the same directory is there too), with InaccessiblePaths=; ruya-profiles is not dumpable, so /proc/<pid>/root is closed to every peer without CAP_SYS_PTRACE. A directory, not the file: the store's tmp + rename would undo a hidden file. Read by scripts/lint-private-state.ps1 (host) and vm-profiles-check.sh private (the running units).",
+      "exceptions": [
+        {
+          "unit": "ruya-update.service",
+          "reason": "bootc needs CAP_SYS_ADMIN (it remounts /sysroot writable in its own mount namespace and writes the deployment there, so /sysroot cannot be hidden) and CAP_SYS_PTRACE (it reads /proc/1/ns/mnt): either undoes a hide. It reads the store like any root process with those capabilities; RUY-1130 does not change it."
+        },
+        {
+          "unit": "ruya-platform-identify@.service",
+          "reason": "Its job is CAP_SYS_PTRACE + CAP_DAC_READ_SEARCH (another uid's /proc/<pid>/root/.flatpak-info, ADR-022 decision 4, RUY-1129), which also opens a non-dumpable ruya-profiles' /proc/<pid>/root. Socket-activated by ruya-platform only, one task, no bus, no network, 5 s, reads only a file the request's uid owns."
+        },
+        {
+          "unit": "ruya-grub-menu.service",
+          "reason": "Root oneshot with CAP_SYS_ADMIN and @mount to remount /boot writable for its copy: it could unmount the cover. Runs once at boot, no network, writes only /boot/grub2/custom.cfg."
+        }
+      ]
+    }
+  ],
   "ports": [
     {
       "port": "tcp:any:22",
