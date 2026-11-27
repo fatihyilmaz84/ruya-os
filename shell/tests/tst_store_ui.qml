@@ -87,6 +87,56 @@ Item {
             fail("no card for " + id)
         }
 
+        // RUY-1244: the Installed row names a .play app from its package's title (the Library's), not the id's last
+        // part, and its page offers no Store update; the Store's own apps keep the Store's names.
+        function test_a_play_app_in_the_installed_row_is_named_by_its_package() {
+            const id = "play.com.example.starhopper"
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:" + id).play === true)
+            Store.mockInstallOutside(id, "starhopper", ["network"])
+            Store.refreshInstalled()
+            tryVerify(() => Store.installed.some(a => a.id === id))
+            Store.mockCatalogChanged()                   // the real service lists it in the catalogue too (RUY-854)
+            tryVerify(() => Store.app(id).installed === true)
+            openStore()
+            tryVerify(() => find("storeRow_installed").ids.indexOf(id) >= 0)
+            keyClick(Qt.Key_Down, Qt.NoModifier)
+            keyClick(Qt.Key_Down, Qt.NoModifier)
+            keyClick(Qt.Key_Down, Qt.NoModifier)
+            tryVerify(() => find("storeCards_installed").activeFocus, 2000, "the Installed row has focus")
+            tryVerify(() => find("appCard_" + id) !== null, 2000, "its card is built")
+            const card = find("appCard_" + id)
+            compare(card.title, "Star Hopper")
+            verify(card.Accessible.name === "Star Hopper, Installed", "accessible name: " + card.Accessible.name)
+            compare(card.app.source, "developer", "the badge says Developer")
+            compare(find("appCard_org.example.Puzzle").title, "Block Puzzle")
+            // The page has no Update, whatever the Store's record says: Play1 updates it.
+            Store.mockSetUpdateAvailable(id, true)
+            tryVerify(() => Store.app(id).updateAvailable === true)
+            openApp(id)
+            compare(find("page_appDetail").app.updateAvailable, true, "the Store's record has an update")
+            compare(find("page_appDetail").hasUpdate, false)
+            compare(find("page_appDetail").secondaryKeys.indexOf("update"), -1)
+            compare(find("page_appDetail").title, "Star Hopper")
+        }
+
+        // RUY-1244: Play1.Remove leaves the commit in the local remote, so the Store still lists a removed .play app;
+        // its page must not offer to install it (the service answers play-managed), and the Store's own apps do.
+        function test_a_removed_play_app_has_no_install_button() {
+            const id = "play.com.example.removed"
+            Store.mockOffer(id, "removed")
+            tryVerify(() => Store.app(id).installed === false)
+            tc.shell.openPage("appDetail", { appId: id })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "hasRecord", true)
+            compare(find("page_appDetail").installed, false)
+            compare(find("page_appDetail").primaryKind, "")
+            // (A Store app's Install is covered by test_install_from_detail.)
+            Store.mockReset()
+            Store.mockCatalogChanged()                   // the reset does not announce the catalogue
+            tryVerify(() => Store.app(id).id === undefined)
+        }
+
         function test_controller_filter() {
             openStore()
             // Hidden by default: the three apps without controller support.

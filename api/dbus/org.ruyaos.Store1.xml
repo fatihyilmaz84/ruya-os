@@ -16,6 +16,14 @@
     "incompatible"      Install/Update of an app whose x-ruya-min-api-level is above this console's
                         RUYA_API_LEVEL (checked after already-installed / not-installed / no-update;
                         Uninstall and Rollback are not gated)
+    "play-managed"      Install/Update/Uninstall/Rollback of a .play app (RUY-1244): Play1 owns its
+                        install, update, rollback and removal; the Store only lists it. A .play app is
+                        an installed app whose Flatpak origin is the console's own remote
+                        "ruyaos-play-local", or an app that is not installed and is offered by that
+                        remote (Play1.Remove leaves the commit there, so a removed game is still
+                        listed, and Install of it is Play1's too). Answered before every other check
+                        (after "invalid" and "unknown-app"), runs no Flatpak command. An installed
+                        app whose origin could not be read is not treated as .play.
     "busy"              a job for that app is already queued or running
     "forbidden"         the caller is not allowed (AddRemote and the permission changes need an
                         admin; high-risk permissions need the admin PIN at install, which the shell

@@ -10,6 +10,7 @@ rust-version.workspace = true
 quick-xml = "0.37"  # AppStream metadata (pure Rust, no libappstream to link)
 flate2 = "1"  # appstream.xml.gz written by flatpak (pure Rust backend)
 ruya-flatpak = { path = "../ruya-flatpak" }  # app ids, the override command lines (RUY-923) and the OARS age label (RUY-914)
+ruya-play-art = { path = "../ruya-play-art" }  # PLAY_REMOTE, the remote a .play app is installed from, shared with ruya-play and ruya-library (it pulls in image and moxcms, which ruya-store does not call; RUY-1244)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
 async-io = "2"  # timers; already in the tree through zbus

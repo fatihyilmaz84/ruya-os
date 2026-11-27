@@ -304,18 +304,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+246"/>
+        <location filename="../qml/AppDetailPage.qml" line="+249"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+82"/>
+        <location line="+83"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
     <message>
-        <location line="-82"/>
+        <location line="-83"/>
         <source>Community</source>
         <translation>Community</translation>
     </message>
@@ -485,7 +485,12 @@ This can&apos;t be undone.</translation>
         <translation>Another change is running. Try again in a moment.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
+        <source>This game is managed by the Play service, not the Store.</source>
+        <translation>This game is managed by the Play service, not the Store.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Something went wrong. You can try again.</source>
         <translation>Something went wrong. You can try again.</translation>
     </message>
@@ -627,7 +632,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-948"/>
+        <location line="-949"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -638,13 +643,13 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location line="+687"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
     <message>
-        <location line="-586"/>
-        <location line="+586"/>
+        <location line="-587"/>
+        <location line="+587"/>
         <source>Needs a newer RuyaOS</source>
         <translation>Needs a newer RuyaOS</translation>
     </message>
@@ -665,7 +670,7 @@ This can&apos;t be undone.</translation>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-714"/>
+        <location line="-715"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -703,7 +708,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+403"/>
+        <location line="+404"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -5091,7 +5096,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PrivacyPane</name>
     <message>
-        <location filename="../qml/PrivacyPane.qml" line="+54"/>
+        <location filename="../qml/PrivacyPane.qml" line="+51"/>
         <source>App permissions</source>
         <translation>App permissions</translation>
     </message>
@@ -6199,7 +6204,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+770"/>
+        <location filename="../qml/Shell.qml" line="+799"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -6258,17 +6263,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+150"/>
-        <location line="+29"/>
+        <location line="+30"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-29"/>
         <source>Could not close the running app.</source>
         <translation>Could not close the running app.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+93"/>
         <source>Could not force quit %1.</source>
         <translation>Could not force quit %1.</translation>
     </message>
@@ -6283,7 +6288,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
     <message>
-        <location line="+153"/>
+        <location line="+151"/>
         <source>%1 has no window yet.</source>
         <translation>%1 has no window yet.</translation>
     </message>
@@ -6433,7 +6438,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2103"/>
+        <location line="-2102"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6464,7 +6469,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1060"/>
+        <location line="+1059"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>Same game as the %1 version?</translation>
@@ -6837,12 +6842,12 @@ This can&apos;t be undone.</translation>
         <translation>Packages on this drive</translation>
     </message>
     <message>
-        <location line="+142"/>
+        <location line="+155"/>
         <source>Why</source>
         <translation>Why</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-182"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
@@ -6937,13 +6942,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+176"/>
+        <location line="+179"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-195"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -6958,7 +6963,7 @@ This can&apos;t be undone.</translation>
         <translation>Community</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+124"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Update available</translation>

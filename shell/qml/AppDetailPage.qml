@@ -49,7 +49,8 @@ Page {
     // The job of the service that owns the app (the Store, or Play for a .play app: the Uninstall dialog knows which).
     readonly property var job: appId === "" ? null : (uninstallConfirm?.jobOf(appId) ?? null)
     readonly property bool installed: hasRecord ? (app.installed ?? false) : hasItem
-    readonly property bool hasUpdate: hasRecord && installed && (app.updateAvailable ?? false)
+    // A .play app is updated by Play1, never offered the Store's update (the service answers play-managed, RUY-1244).
+    readonly property bool hasUpdate: hasRecord && installed && !isPlay && (app.updateAvailable ?? false)
     // False: the app needs a newer API level than this console has (RUY-156). An older service does not say.
     readonly property bool compatible: app.compatible ?? true
 
@@ -154,8 +155,10 @@ Page {
     readonly property string primaryKind: {
         if (working)
             return "busy"
+        // A .play app is installed by Play1 only; one it removed is still in the catalogue (the local remote keeps the
+        // commit) and the Store refuses to install it (play-managed, RUY-1244).
         if (!installed)
-            return hasRecord ? "install" : ""
+            return hasRecord && !isPlay ? "install" : ""
         if (noLaunch)
             return ""
         if (!hasItem)       // installed, but the Library does not list it (yet): nothing to start, an update is the verb
@@ -307,6 +310,7 @@ Page {
         case "disk-full": return qsTr("There is not enough space on this device.")
         case "busy": return qsTr("Another change is running. Try again in a moment.")
         case "incompatible": return qsTr("Needs a newer RuyaOS")
+        case "play-managed": return qsTr("This game is managed by the Play service, not the Store.")
         }
         return qsTr("Something went wrong. You can try again.")
     }

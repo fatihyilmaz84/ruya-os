@@ -978,6 +978,31 @@ expect_contains "vm-store-check.sh perms: a failed call has no count" \
 # (the real sleep: the section's shim `sleep` does not wait)
 ms="$(perms_ms /usr/bin/sleep 0.3)"
 { [ "$ms" -ge 250 ] && [ "$ms" -lt 1500 ]; } && pass "vm-store-check.sh perms: perms_ms measures the wall clock of a command ($ms ms for 0.3 s)" || fail "vm-store-check.sh perms: perms_ms says $ms ms for a 0.3 s command"
+# RUY-1244 playmanaged: the status out of a job call's busctl line, and the remote the check stands in for is the
+# one ruya-play installs from.
+eval "$(grep '^store_status_of()' "$here/vm-store-check.sh")"
+expect_contains "vm-store-check.sh playmanaged: the refusal is read from busctl's reply" \
+    "[$(echo 'ss "play-managed" ""' | store_status_of)]" '[play-managed]'
+expect_contains "vm-store-check.sh playmanaged: a queued job is not a refusal" \
+    "[$(echo 'ss "ok" "job-3"' | store_status_of)]" '[ok]'
+expect_contains "vm-store-check.sh playmanaged: a failed call has no status" \
+    "[$(echo 'Call failed: Access denied' | store_status_of)]" '[]'
+grep -q '^play_remote=ruyaos-play-local$' "$here/vm-store-check.sh" \
+    && grep -q 'pub const PLAY_REMOTE: &str = "ruyaos-play-local";' "$here/../services/ruya-play-art/src/lib.rs" \
+    && pass "vm-store-check.sh playmanaged: the stand-in remote is ruya_play_art::PLAY_REMOTE" \
+    || fail "vm-store-check.sh playmanaged: play_remote differs from ruya_play_art::PLAY_REMOTE"
+# The clean-up removes only the stand-in this check made (by its URL), never the console's real remote, and the
+# check traps EXIT so a killed run leaves none.
+play_remote=ruyaos-play-local; pwork=/var/lib/ruya-store-perms-test
+eval "$(grep '^playmanaged_remote_is_ours()' "$here/vm-store-check.sh")"
+flatpak() { printf 'flathub\thttps://dl.flathub.org/repo/\nruyaos-play-local\t%s\n' "$FAKE_PLAY_URL"; }
+FAKE_PLAY_URL="file://$pwork/repo"
+playmanaged_remote_is_ours && pass "vm-store-check.sh playmanaged: the stand-in remote is recognised by its URL" || fail "vm-store-check.sh playmanaged: the stand-in is not recognised"
+FAKE_PLAY_URL="file:///var/lib/ruya-play/repo"
+playmanaged_remote_is_ours && fail "vm-store-check.sh playmanaged: the console's real remote would be removed" || pass "vm-store-check.sh playmanaged: the console's real remote is not the stand-in"
+unset -f flatpak
+grep -q '^    trap playmanaged_clean EXIT$' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh playmanaged: an EXIT trap removes the stand-in remote and the app" || fail "vm-store-check.sh playmanaged: no EXIT trap"
 storexml1190="$here/../api/dbus/org.ruyaos.Store1.xml"
 grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="status" type="s" direction="out"' \
     && grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="counts" type="a{su}" direction="out"' \

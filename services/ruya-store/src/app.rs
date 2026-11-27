@@ -17,6 +17,8 @@ pub enum Status {
     Invalid,
     /// A permission the console does not withdraw (WithdrawPermission, RestorePermission).
     NotWithdrawable,
+    /// Install, Update, Uninstall or Rollback of an installed `.play` app: `Play1` owns those (RUY-1244).
+    PlayManaged,
     Failed,
 }
 
@@ -33,6 +35,7 @@ impl Status {
             Status::Forbidden => "forbidden",
             Status::Invalid => "invalid",
             Status::NotWithdrawable => "not-withdrawable",
+            Status::PlayManaged => "play-managed",
             Status::Failed => "failed",
         }
     }
@@ -119,9 +122,26 @@ pub struct App {
     pub update_available: bool,
     /// Where to install it from (not part of the record).
     pub remote: String,
+    /// The remote Flatpak says the installed app came from (`flatpak list`'s origin column), "" when
+    /// it is not installed or the column was empty. Not part of the record; `is_play_managed` reads it.
+    pub origin: String,
 }
 
 impl App {
+    /// An app of the console's own `.play` remote: `Play1` installs, updates, rolls back and removes
+    /// it, so the Store's mutations refuse it (RUY-1244). An installed app is judged by the origin
+    /// Flatpak reports; one that is not installed by the remote that would install it, because
+    /// `Play1.Remove` leaves the commit in that remote and the catalogue still offers it. An
+    /// installed app with an unread origin is not `.play`: `play.*` is also a name Flathub may ship.
+    pub fn is_play_managed(&self) -> bool {
+        let from = if self.installed {
+            &self.origin
+        } else {
+            &self.remote
+        };
+        from == ruya_play_art::PLAY_REMOTE
+    }
+
     /// Name, summary or id contains the query, ignoring case. "" matches everything.
     pub fn matches(&self, query: &str) -> bool {
         let query = query.trim().to_lowercase();

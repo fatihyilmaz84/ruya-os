@@ -143,6 +143,16 @@ void MockStoreBackend::setMinApiLevel(const QString &id, int level)
     emit catalogChanged();
 }
 
+void MockStoreBackend::setUpdateAvailable(const QString &id, bool available)
+{
+    const int at = indexOf(id);
+    if (at < 0)
+        return;
+    m_apps[at].updateAvailable = available;
+    emit installedChanged();
+    emit catalogChanged();
+}
+
 void MockStoreBackend::setArtDir(const QString &dir)
 {
     for (int i = 0; i < m_apps.size(); ++i)
@@ -182,6 +192,15 @@ void MockStoreBackend::installOutside(const QString &id, const QString &name, co
     a.name = name;
     a.installed = true;
     m_apps.append(a);
+}
+
+void MockStoreBackend::offer(const QString &id, const QString &name)
+{
+    AppInfo a = app("", "", "", "", "developer", "none", "all", {}, 9);
+    a.id = id;
+    a.name = name;
+    m_apps.append(a);
+    emit catalogChanged();
 }
 
 void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
@@ -468,11 +487,21 @@ void MockStoreBackend::pauseJobs(bool paused)
         m_timer.start();
 }
 
+// Store1's `play-managed` (RUY-1244): the service refuses every mutation of an app of the console's own `.play` remote, an
+// installed one (by its origin) and a removed one the remote still offers. The mock has no remotes: an app named play.<x>
+// is one of them.
+static bool playManaged(const QString &id)
+{
+    return id.startsWith(QLatin1String("play."));
+}
+
 void MockStoreBackend::install(const QString &id)
 {
     const int i = indexOf(id);
     if (i < 0)
         reject(id, QStringLiteral("unknown-app"));
+    else if (playManaged(id))
+        reject(id, QStringLiteral("play-managed"));
     else if (m_apps.at(i).installed)
         reject(id, QStringLiteral("already-installed"));
     else if (!m_apps.at(i).compatible)
@@ -486,6 +515,8 @@ void MockStoreBackend::uninstall(const QString &id, bool deleteData)
     const int i = indexOf(id);
     if (i < 0) {
         reject(id, QStringLiteral("unknown-app"));
+    } else if (playManaged(id)) {
+        reject(id, QStringLiteral("play-managed"));
     } else if (!m_apps.at(i).installed) {
         reject(id, QStringLiteral("not-installed"));
     } else {
@@ -502,6 +533,8 @@ void MockStoreBackend::update(const QString &id)
     const int i = indexOf(id);
     if (i < 0)
         reject(id, QStringLiteral("unknown-app"));
+    else if (playManaged(id))
+        reject(id, QStringLiteral("play-managed"));
     else if (!m_apps.at(i).installed)
         reject(id, QStringLiteral("not-installed"));
     else if (!m_apps.at(i).updateAvailable)

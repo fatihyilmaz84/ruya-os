@@ -214,12 +214,15 @@ Page {
         // The record from the Store's index (one lookup, not a scan of the catalogue: T-377), again
         // whenever the catalogue changes (installed flags, details).
         readonly property var app: page.catalogueRevision >= 0 ? Store.app(modelData) : ({})
+        // A .play app is named by the title of its package (the Library's), as on its page: the Store only knows the id's
+        // last part (RUY-1244). Only a play.* id asks AppName, so a card of a real catalogue costs no Library lookup.
+        readonly property string title: (Play.isPlayApp(modelData) ? AppName.of(modelData) : "") || (app.name ?? "")
         readonly property bool focused: (ListView.view ? ListView.isCurrentItem && ListView.view.activeFocus
                                                        : GridView.isCurrentItem && GridView.view.activeFocus)
 
         objectName: "appCard_" + modelData
         Accessible.role: Accessible.Button
-        Accessible.name: (app.name ?? "") + (app.updateAvailable ? ", " + qsTr("Update available")
+        Accessible.name: title + (app.updateAvailable ? ", " + qsTr("Update available")
                                               : app.installed ? ", " + qsTr("Installed") : "")
         width: page.cardWidth
         height: page.cardHeight
@@ -246,7 +249,7 @@ Page {
             u: card.u
             glowing: true
             appId: card.modelData
-            appName: card.app.name ?? ""
+            appName: card.title
             picture: card.app.tile ?? ""
 
             CardFocusLayers {
@@ -279,7 +282,7 @@ Page {
             id: nameText
             anchors { left: parent.left; right: parent.right; top: art.bottom; topMargin: Theme.spaceXs * card.u }
             textFormat: Text.PlainText
-            text: card.app.name ?? ""
+            text: card.title
             color: Theme.text
             font.pixelSize: Theme.typeCaption * card.u
             font.weight: Theme.weightDemiBold

@@ -145,10 +145,14 @@ public:
     // installed list from the next refreshInstalled(), with `permissions` (keys of the App record's) and no
     // catalogue record of its own; mockReset takes it away. Announces nothing, as the real service does not.
     Q_INVOKABLE void mockInstallOutside(const QString &appId, const QString &name, const QStringList &permissions);
+    // A catalogue app that is not installed, until mockReset (RUY-1244: a removed .play app the local remote still offers).
+    Q_INVOKABLE void mockOffer(const QString &appId, const QString &name);
     // The mock console's API level (0 until mockReset); org.example.Future needs 1 (RUY-636).
     Q_INVOKABLE void mockSetApiLevel(int level);
     // The level one app asks for, until mockReset (RUY-1181: an installed app whose update is incompatible).
     Q_INVOKABLE void mockSetMinApiLevel(const QString &appId, int level);
+    // An update the Store's record reports for an installed app, until mockReset (RUY-1244).
+    Q_INVOKABLE void mockSetUpdateAvailable(const QString &appId, bool available);
     // Every later search answers after ms, until mockReset (T-377: the Store page before the
     // service's answer to its filter).
     Q_INVOKABLE void mockSearchReplyDelay(int ms);
