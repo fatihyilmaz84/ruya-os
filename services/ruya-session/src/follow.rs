@@ -827,6 +827,18 @@ mod tests {
         w
     }
 
+    /// A watch of the adopted unit A whose manager cannot be asked (every look fails), and that
+    /// answers `exists` when asked whether A still exists.
+    fn unreachable(exists: Option<bool>) -> (UserWatch, FakeLink, Recorder) {
+        let mut link = FakeLink {
+            exists,
+            ..FakeLink::default()
+        };
+        link.probes
+            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
+        (adopted(&[A]), link, Recorder::default())
+    }
+
     #[test]
     fn adopted_unit_exit_is_seen_without_polling() {
         let mut link = connected_link();
@@ -917,14 +929,7 @@ mod tests {
 
     #[test]
     fn an_adopted_unit_is_kept_when_polls_fail_but_the_unit_exists() {
-        let mut link = FakeLink {
-            exists: Some(true),
-            ..FakeLink::default()
-        };
-        link.probes
-            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
-        let mut f = adopted(&[A]);
-        let sink = Recorder::default();
+        let (mut f, mut link, sink) = unreachable(Some(true));
         for _ in 0..WATCH_MAX_MISSES * 3 {
             assert!(step(&mut f, &mut link, &sink).is_empty());
         }
@@ -941,14 +946,7 @@ mod tests {
 
     #[test]
     fn a_dropped_unit_is_checked_before_it_is_forgotten() {
-        let mut link = FakeLink {
-            exists: Some(false),
-            ..FakeLink::default()
-        };
-        link.probes
-            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
-        let mut f = adopted(&[A]);
-        let sink = Recorder::default();
+        let (mut f, mut link, sink) = unreachable(Some(false));
         for _ in 0..WATCH_MAX_MISSES - 1 {
             assert!(step(&mut f, &mut link, &sink).is_empty());
         }
@@ -956,14 +954,7 @@ mod tests {
         assert_eq!(step(&mut f, &mut link, &sink), [exited(A, 0, false)]);
         assert_eq!(link.exists_asked, 1, "asked once, then forgotten");
         // A manager that cannot tell either keeps the unit.
-        let mut link = FakeLink {
-            exists: None,
-            ..FakeLink::default()
-        };
-        link.probes
-            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
-        let mut f = adopted(&[A]);
-        let sink = Recorder::default();
+        let (mut f, mut link, sink) = unreachable(None);
         for _ in 0..WATCH_MAX_MISSES * 2 {
             assert!(step(&mut f, &mut link, &sink).is_empty());
         }
@@ -998,14 +989,7 @@ mod tests {
         );
         assert!(f.adopted_left());
         // The same looks without the Alive in between reach the threshold.
-        let mut link = FakeLink {
-            exists: Some(false),
-            ..FakeLink::default()
-        };
-        link.probes
-            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
-        let mut f = adopted(&[A]);
-        let sink = Recorder::default();
+        let (mut f, mut link, sink) = unreachable(Some(false));
         for _ in 0..WATCH_MAX_MISSES - 1 {
             assert!(step(&mut f, &mut link, &sink).is_empty());
         }
@@ -1340,16 +1324,24 @@ mod tests {
 
     #[test]
     fn a_scope_that_existed_before_subscribe_is_found_by_the_listing() {
+        // No signal will come for a scope made before the subscription.
+        let (_, link, sink) = launched(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
+        assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
+        assert_eq!((link.lists, link.spawns), (1, 0));
+    }
+
+    /// A watch of `USER` with the run `UNIT` of `APP` begun and its manager holding `shows`, after
+    /// its first round (connected and listed).
+    fn launched(shows: Vec<ShowUnit>) -> (UserWatch, FakeLink, Recorder) {
         let mut link = connected_link();
-        link.mgr.set(unit_show(1000, None));
-        link.mgr.set(scope_show(SCOPE, 1001, None));
+        for show in shows {
+            link.mgr.set(show);
+        }
         let sink = Recorder::default();
         let mut w = UserWatch::new(USER);
         sink.runs().begin(UNIT, USER, APP, link.now());
-        // No signal will come for a scope made before the subscription.
         step(&mut w, &mut link, &sink);
-        assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
-        assert_eq!((link.lists, link.spawns), (1, 0));
+        (w, link, sink)
     }
 
     /// Steam's run with its sandbox attached by the listing.
@@ -1445,13 +1437,8 @@ mod tests {
 
     #[test]
     fn a_lost_link_falls_back_and_recovers_with_no_lost_end() {
-        let mut link = connected_link();
-        link.mgr.set(unit_show(1000, None));
-        link.mgr.set(scope_show(SCOPE, 1001, None));
-        let sink = Recorder::default();
-        let mut w = UserWatch::new(USER);
-        sink.runs().begin(UNIT, USER, APP, link.now());
-        step(&mut w, &mut link, &sink);
+        let (mut w, mut link, sink) =
+            launched(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
         assert!(
             deliver(&sink, run_exited(3), link.now()),
             "held for the scope"
@@ -1497,13 +1484,10 @@ mod tests {
 
     #[test]
     fn a_held_end_is_released_at_the_scopes_unit_removed_inside_launch_wait() {
-        let mut link = connected_link();
-        link.mgr.set(unit_show(1000, Some(10)));
-        link.mgr.set(scope_show(SCOPE, 1001, Some(100)));
-        let sink = Recorder::default();
-        let mut w = UserWatch::new(USER);
-        sink.runs().begin(UNIT, USER, APP, link.now());
-        step(&mut w, &mut link, &sink);
+        let (mut w, mut link, sink) = launched(vec![
+            unit_show(1000, Some(10)),
+            scope_show(SCOPE, 1001, Some(100)),
+        ]);
         // A Force quit: the kill ends the unit, its end is held for the scope.
         let held = link.now();
         assert!(deliver(&sink, run_exited(137), held));
@@ -1525,15 +1509,12 @@ mod tests {
         let second = "app-flatpak-net.supertuxkart.SuperTuxKart-5000.scope";
         let sibling = "app-flatpak-net.supertuxkart.SuperTuxKart-Extra-9.scope";
         let older = "app-flatpak-net.supertuxkart.SuperTuxKart-7.scope";
-        let mut link = connected_link();
-        link.mgr.set(unit_show(1000, Some(10)));
-        link.mgr.set(scope_show(SCOPE, 1001, Some(100)));
-        link.mgr.set(scope_show(sibling, 1001, Some(1_000_000)));
-        link.mgr.set(scope_show(older, 900, Some(1_000_000)));
-        let sink = Recorder::default();
-        let mut w = UserWatch::new(USER);
-        sink.runs().begin(UNIT, USER, APP, link.now());
-        step(&mut w, &mut link, &sink);
+        let (mut w, mut link, sink) = launched(vec![
+            unit_show(1000, Some(10)),
+            scope_show(SCOPE, 1001, Some(100)),
+            scope_show(sibling, 1001, Some(1_000_000)),
+            scope_show(older, 900, Some(1_000_000)),
+        ]);
         assert_eq!(
             sink.runs().cpu_nsec(UNIT),
             Some(110),
@@ -1587,14 +1568,11 @@ mod tests {
         // T-435: an Electron app's zygote scope outlives the scope the run followed; the end of
         // the run sweeps it, and its UnitRemoved comes when nothing follows the app any more.
         const ZYGOTE: &str = "app-flatpak-net.supertuxkart.SuperTuxKart-17.scope";
-        let mut link = connected_link();
-        link.mgr.set(unit_show(1000, None));
-        link.mgr.set(scope_show(SCOPE, 1000, None));
-        link.mgr.set(scope_show(ZYGOTE, 1001, None));
-        let sink = Recorder::default();
-        let mut w = UserWatch::new(USER);
-        sink.runs().begin(UNIT, USER, APP, link.now());
-        step(&mut w, &mut link, &sink);
+        let (mut w, mut link, sink) = launched(vec![
+            unit_show(1000, None),
+            scope_show(SCOPE, 1000, None),
+            scope_show(ZYGOTE, 1001, None),
+        ]);
         assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
         assert!(deliver(&sink, run_exited(0), link.now()));
         removed(&mut link, SCOPE);
@@ -1618,12 +1596,7 @@ mod tests {
 
     #[test]
     fn a_new_scope_is_read_at_its_unit_new_so_a_change_without_its_timestamp_still_attaches() {
-        let mut link = connected_link();
-        link.mgr.set(unit_show(1000, None));
-        let sink = Recorder::default();
-        let mut w = UserWatch::new(USER);
-        sink.runs().begin(UNIT, USER, APP, link.now());
-        step(&mut w, &mut link, &sink);
+        let (mut w, mut link, sink) = launched(vec![unit_show(1000, None)]);
         // The scope's UnitNew, and a change that names its state only: what the read over the
         // bus said of it (when it became active) is what places it after the unit.
         link.mgr.set(scope_show(SCOPE, 1001, None));

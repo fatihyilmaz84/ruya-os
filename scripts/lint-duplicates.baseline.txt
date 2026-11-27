@@ -27,7 +27,6 @@ services/ruya-pack/src/inspect.rs | services/ruya-pack/src/validate.rs | 84  # d
 services/ruya-play/src/core/importer.rs | services/ruya-play/src/service/commit.rs | 86  # debt
 services/ruya-play/src/dbus.rs | services/ruya-store/src/dbus.rs | 175  # debt
 services/ruya-session/src/dbus.rs | services/ruya-session/src/dbus.rs | 205  # debt
-services/ruya-session/src/follow.rs | services/ruya-session/src/follow.rs | 99  # debt
 services/ruya-session/src/scope.rs | services/ruya-session/src/scope.rs | 286  # debt
 services/ruya-session/src/usage_tracker.rs | services/ruya-session/src/usage_tracker.rs | 173  # debt
 services/ruya-store/src/dbus.rs | services/ruya-store/src/dbus.rs | 112  # debt
