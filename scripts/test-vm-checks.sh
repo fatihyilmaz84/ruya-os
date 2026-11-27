@@ -2004,6 +2004,15 @@ grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls
 grep -q 'if \[ "\$mode" = remove \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a remove mode" || fail "vm-play-check.sh: no remove mode"
 grep -c "call Remove 'sa{sv}'" "$here/vm-play-check.sh" | grep -qx 3 && grep -A4 'name="Remove"' "$here/../api/dbus/org.ruyaos.Play1.xml" | grep -q 'name="options" type="a{sv}"' && pass "vm-play-check.sh calls Play1.Remove as (s, a{sv}), the signature of Play1.xml" || fail "vm-play-check.sh: its Remove calls do not match Play1.xml"
 grep -q '"remove", "removing", "ok"' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects kind remove, phase removing in the job table" || fail "vm-play-check.sh: the remove job is not checked in state/jobs"
+# RUY-1245: the rollback mode calls Play1 as the XML declares and looks for the refs the commit makes.
+grep -q 'if \[ "\$mode" = rollback \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a rollback mode" || fail "vm-play-check.sh: no rollback mode"
+grep -q "call Rollback 'sa{sv}'" "$here/vm-play-check.sh" && grep -A4 'name="Rollback"' "$here/../api/dbus/org.ruyaos.Play1.xml" | grep -q 'name="options" type="a{sv}"' && pass "vm-play-check.sh calls Play1.Rollback as (s, a{sv}), the signature of Play1.xml" || fail "vm-play-check.sh: its Rollback calls do not match Play1.xml"
+grep -q 'call GetPrevious s ' "$here/vm-play-check.sh" && grep -A6 'name="GetPrevious"' "$here/../api/dbus/org.ruyaos.Play1.xml" | sed -n '5p' | grep -q 'name="build" type="u"' && pass "vm-play-check.sh calls Play1.GetPrevious (s) and reads its build as the third answer, as Play1.xml has it" || fail "vm-play-check.sh: GetPrevious does not match Play1.xml"
+got="$(echo '{"type":"ssua(sss)a(sss)","data":["ok","1.0.0",3,[],[]]}' | pc nth 2)"
+[ "$got" = 3 ] && pass "play: parse nth reads a reply's argument by position" || fail "play: nth 2 read as '$got'"
+commit_rs="$here/../services/ruya-play/src/service/commit.rs"
+grep -q 'pub const PREVIOUS_BRANCH: &str = "previous";' "$commit_rs" && grep -q 'x86_64/previous app/play.\$appid/x86_64/stable"' "$here/vm-play-check.sh" && pass "play: the rollback check looks for the previous ref commit.rs makes" || fail "play: vm-play-check.sh and commit.rs disagree on the previous ref"
+grep -q '("rollback", "ok")' "$here/vm-play-check.sh" && grep -q 'JobKind::Rollback => "rollback"' "$here/../services/ruya-play/src/core/jobs.rs" && pass "vm-play-check.sh expects kind rollback in the job table, the word jobs.rs writes" || fail "vm-play-check.sh: the rollback job is not checked in state/jobs"
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
@@ -2075,7 +2084,7 @@ m = json.loads(b.read("play.json"))
 print(m["id"], m["permissions"]["network"], m["permissions"]["multiarch"], m["permissions"]["gamemode"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
 ' "$an/in.zip" "$an/out.zip")"
 [ "$got" = "org.example.hello True True True True True" ] && pass "vm-play-check.sh asknet asks for network, multiarch and gamemode and changes nothing else" || fail "vm-play-check.sh asknet: '$got'"
-grep -c 'asks_network "\$work/id.play.zip"' "$here/vm-play-check.sh" | grep -qx 2 && pass "vm-play-check.sh: perms and remove build the network-asking package with one function" || fail "vm-play-check.sh: perms and remove do not both use asks_network"
+grep -c 'asks_network "\$work/id.play.zip"' "$here/vm-play-check.sh" | grep -qx 3 && pass "vm-play-check.sh: perms, remove and rollback build the network-asking package with one function" || fail "vm-play-check.sh: perms, remove and rollback do not all use asks_network"
 rm_block="$(sed -n '/^remove_checks() {/,/^}/p' "$here/vm-play-check.sh")"
 echo "$rm_block" | grep -q 'WithdrawPermission ss "play.\$appid" network' && echo "$rm_block" | grep -q 'the removal left no override' && echo "$rm_block" | grep -q 'flatpak override --system --show "play.\$appid"' && echo "$rm_block" | grep -q 'the reinstall starts with nothing withdrawn' && pass "vm-play-check.sh remove withdraws the network, expects no override after Play1.Remove and nothing withdrawn after the reinstall (RUY-923)" || fail "vm-play-check.sh remove: the override is not checked after Play1.Remove"
 grep -A5 '^permission_list_checks() {' "$here/vm-play-check.sh" | grep -q 'override --system --reset' && fail "vm-play-check.sh perms resets an earlier run's override at the start again" || pass "vm-play-check.sh perms needs no reset of an earlier run's override (Play1.Remove drops it)"
@@ -2116,7 +2125,7 @@ out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
 ids="$(grep -o 'appid="\$(pkg_id "\$appid" [a-z]*)"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
-[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" remove)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: remove, verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
+[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" remove)" appid="$(pkg_id "$appid" rollback)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: remove, rollback, verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887, RUY-1245)" || fail "vm-play-check.sh: mode ids '$ids'"
 ! grep -Eq 'appid="\$appid\.|run_id\(\) \{ echo' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no id is made by appending a dotted part (RUY-887)" || fail "vm-play-check.sh: an id with an appended dotted part"
 # RUY-887: every mode's id keeps a last part with '-' valid (verify, perms, the library check, check).
 for part in verify perms library; do
@@ -2200,7 +2209,7 @@ expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "
 ! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '"\$playcheck" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
-[ "$n" = 4 ] && [ "$m" = 4 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
+[ "$n" = 5 ] && [ "$m" = 5 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
 echo "== vm-play-check.sh: launch and launch-windows (RUY-902) =="

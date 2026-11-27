@@ -46,9 +46,10 @@ use ruya_play_format::Problem;
 use ruya_play_format::Source;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    added_to, assess, diff, grants, inspect, is_revoked, record_install, record_uninstall,
-    select_blocklist, Context, Continuity, IdRecord, Inspection, ListCheck, PermissionDiff,
-    StoreKeys, Tier, TrustError, TrustStore,
+    added_to, assess, bind_to_manifest, diff, grants, inspect, is_revoked, record_install,
+    record_uninstall, select_blocklist, verify_signatures, Context, Continuity, IdRecord,
+    Inspection, ListCheck, PackageBytes, PackageFacts, PermissionDiff, StoreKeys, Tier, TrustError,
+    TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -287,13 +288,43 @@ pub struct Importer {
     held_all: Mutex<Option<String>>,
 }
 
-/// What [`Importer::record`] found before it wrote, to undo it.
+/// What the records were before a job wrote them, to undo it ([`Importer::roll_back`]).
 struct Prior {
     id: String,
     trust_written: bool,
     trust_before: Option<IdRecord>,
     build_written: bool,
     build_before: Option<u64>,
+    /// The kept build was written (an update, RUY-1245); `previous_before` is what it was.
+    previous_written: bool,
+    previous_before: Option<u64>,
+}
+
+impl Prior {
+    /// Nothing written yet for `id`.
+    fn of(id: &str) -> Prior {
+        Prior {
+            id: id.to_string(),
+            trust_written: false,
+            trust_before: None,
+            build_written: false,
+            build_before: None,
+            previous_written: false,
+            previous_before: None,
+        }
+    }
+}
+
+/// What `GetPrevious` answers (RUY-1245): the kept build and what a rollback to it changes in the
+/// installed app's requests (`added`: what the kept build asks for and the installed one does not).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Previous {
+    /// Its version text.
+    pub version: String,
+    /// Its build.
+    pub build: u64,
+    /// Its requests against the installed build's.
+    pub update: PermissionDiff,
 }
 
 /// A refusal of steps 1 to 3: the problems, and the inspection when the package got that far.
@@ -375,6 +406,19 @@ fn commit_problem(e: CommitError) -> Problem {
         CommitError::NoNetwork(m) => Problem::new(codes::PLATFORM_OFFLINE, "", m),
         CommitError::Failed(m) => Problem::new(codes::COMMIT_FAILED, "", m),
     }
+}
+
+/// `rollback.not_older`: what the records or the repo keep for `id` is no build older than the
+/// installed one.
+fn not_older(id: &str, kept: Option<u64>, installed: u64) -> Problem {
+    let kept = kept.map_or_else(|| "none".to_string(), |b| b.to_string());
+    Problem::new(
+        codes::ROLLBACK_NOT_OLDER,
+        "/build",
+        format!(
+            "play.{id} keeps no build older than the installed build {installed} (kept: {kept})."
+        ),
+    )
 }
 
 fn cancelled(job: &str, inspection: Option<Inspection>) -> JobResult {
@@ -900,17 +944,23 @@ impl Importer {
     }
 
     /// Steps 2 and 3 over the root files the service read back (`inspect` reads them once).
-    fn check(&self, source: &dyn Source) -> Result<Checked, Refusal> {
+    /// The block list to check against now (05 §9.2): the image's, or a fresher verified download;
+    /// an error (`blocklist.unavailable`, ...) refuses whatever it would have checked.
+    fn blocklist(&self) -> Result<Selected, TrustError> {
         let image = self.blocklists.image();
         let downloaded = self.blocklists.downloaded();
-        let selected = select_blocklist(
+        select_blocklist(
             image.as_deref(),
             downloaded
                 .as_ref()
                 .map(|(t, s)| (t.as_slice(), s.as_slice())),
             &self.store_keys,
             self.clock.now(),
-        );
+        )
+    }
+
+    fn check(&self, source: &dyn Source) -> Result<Checked, Refusal> {
+        let selected = self.blocklist();
         let inspection = {
             let trust = self.trust();
             let ctx = Context {
@@ -1415,6 +1465,313 @@ impl Importer {
         }
     }
 
+    /// `GetPrevious(app_id)` (RUY-1245): the build an update replaced and kept, for the shell's
+    /// "Roll back to ..." with the permission diff. `invalid` for an id that is not a plain name,
+    /// `unknown-app` when the app is not ours or has no record, `no-previous` when the record keeps
+    /// no older build or what the repo keeps is not older than the installed build, `failed` when
+    /// a record or a file cannot be read. Costs the record, the deployed `play.json` and
+    /// `trust.json`, and one read of the kept `play.json` from the repo (one command); nothing
+    /// when nothing is kept.
+    pub fn previous(&self, id: &str) -> Result<Previous, MethodStatus> {
+        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
+            return Err(MethodStatus::Invalid);
+        }
+        let record = match self.installed().get(id) {
+            Ok(Some(r)) => r,
+            Ok(None) => return Err(MethodStatus::UnknownApp),
+            Err(_) => return Err(MethodStatus::Failed),
+        };
+        let Some(files) = reconcile::our_files(&self.cfg.flatpak, id) else {
+            return Err(MethodStatus::UnknownApp);
+        };
+        if record.older_previous().is_none() {
+            return Err(MethodStatus::NoPrevious);
+        }
+        let failed = |what: &str| {
+            eprintln!("ruya-play: GetPrevious play.{id}: {what}");
+            MethodStatus::Failed
+        };
+        let tier = reconcile::installed_tier(&files).map_err(|p| failed(&p.message))?;
+        let installed = files
+            .open_file("play.json")
+            .ok()
+            .and_then(reconcile::read_bounded)
+            .and_then(|b| reconcile::permissions_in(&b, id))
+            .ok_or_else(|| failed("the installed play.json cannot be read"))?;
+        let kept = self
+            .commit
+            .previous_file(id, "play.json")
+            .map_err(|e| failed(&commit_problem(e).message))?;
+        if kept.len() as u64 > reconcile::MAX_PLAY_JSON_BYTES {
+            return Err(failed("the kept play.json is too long"));
+        }
+        let build = reconcile::build_in(&kept, id).ok_or_else(|| failed("the kept build"))?;
+        if build >= record.build {
+            return Err(MethodStatus::NoPrevious);
+        }
+        let version = reconcile::version_in(&kept, id).ok_or_else(|| failed("the kept version"))?;
+        let requests =
+            reconcile::permissions_in(&kept, id).ok_or_else(|| failed("the kept requests"))?;
+        Ok(Previous {
+            version,
+            build,
+            update: diff(&assess(tier, &installed), &assess(tier, &requests)),
+        })
+    }
+
+    /// `Rollback(app_id)` (RUY-1245): queue the rollback of the installed app `play.<id>` to the
+    /// build it keeps. `invalid` for an id that is not a plain name, `unknown-app` when the app is
+    /// not ours or has no record, `no-previous` when the record keeps no older build, `busy` while
+    /// any job of the same app is queued or running. The caller checked that an admin asked. No
+    /// command runs here: the job checks what the repo keeps.
+    pub fn queue_rollback(&self, id: &str) -> (MethodStatus, String) {
+        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
+            return (MethodStatus::Invalid, String::new());
+        }
+        if !reconcile::ours(&self.cfg.flatpak, id) {
+            return (MethodStatus::UnknownApp, String::new());
+        }
+        match self.installed().get(id) {
+            Ok(Some(r)) if r.older_previous().is_some() => {}
+            Ok(Some(_)) => return (MethodStatus::NoPrevious, String::new()),
+            Ok(None) => return (MethodStatus::UnknownApp, String::new()),
+            Err(_) => return (MethodStatus::Failed, String::new()),
+        }
+        self.queue_app_job(JobKind::Rollback, id, |_| true)
+    }
+
+    /// The pipeline of one rollback job (RUY-1245, 05 §11): the kept build is checked out of the
+    /// repo into `staging/rollback-<id>/files`, read back as a re-commit reads an app
+    /// ([`reconcile::installed_app`]), held to the rules of [`Self::rollback_checks`], recorded as
+    /// the installed build before the commit (as an install does, undone when the commit fails),
+    /// committed again through [`Commit::recommit`] (the re-commit path: its metadata generated
+    /// now, signed by the device key, installed from the local remote), stamped with the current
+    /// generation, and then no longer kept. The key record, the override, saves, prefixes and game
+    /// trees are never touched. The staging folder goes whatever happens.
+    fn rollback(
+        &self,
+        job: &str,
+        app: &str,
+        cancel: &AtomicBool,
+        reporter: &mut Reporter<'_>,
+    ) -> JobResult {
+        let id = app
+            .strip_prefix("play.")
+            .unwrap_or(app)
+            .to_ascii_lowercase();
+        let name = format!("rollback-{id}");
+        let job_dir = match self.staging.create_dir(&name, 0o700) {
+            Ok(d) => d,
+            Err(e) => {
+                if staging::is_changed(&e) {
+                    let _ = self.staging.remove_entry(&name);
+                }
+                return refused(job, vec![staging_problem("", &e)], None);
+            }
+        };
+        let mut result = self.rolled_back(job, &id, &job_dir, cancel, reporter);
+        drop(job_dir);
+        if let Err(e) = self.staging.remove_entry(&name) {
+            result.problems.push(staging_problem("", &e));
+            if result.status == JobStatus::Ok {
+                result.status = JobStatus::Failed;
+            }
+        }
+        result
+    }
+
+    /// The rollback inside its staging folder `job_dir`.
+    fn rolled_back(
+        &self,
+        job: &str,
+        id: &str,
+        job_dir: &Dir,
+        cancel: &AtomicBool,
+        reporter: &mut Reporter<'_>,
+    ) -> JobResult {
+        let fail = |problems: Vec<Problem>| refused(job, problems, None);
+        // What was checked at the queue, again: the deployment may have turned foreign meanwhile.
+        let Some(deployed) = reconcile::our_files(&self.cfg.flatpak, id) else {
+            return fail(vec![staging_problem(
+                "",
+                &std::io::ErrorKind::NotFound.into(),
+            )]);
+        };
+        let record = match self.installed().get(id) {
+            Ok(Some(r)) => r,
+            Ok(None) => return fail(vec![not_older(id, None, 0)]),
+            Err(p) => return fail(vec![p]),
+        };
+        if record.older_previous().is_none() {
+            return fail(vec![not_older(id, record.previous, record.build)]);
+        }
+        let files_path = job_dir.path().join("files");
+        if let Err(e) = self.commit.check_out_previous(id, &files_path) {
+            return fail(vec![commit_problem(e)]);
+        }
+        reporter.at(Phase::Staging, STAGED);
+        if cancel.load(Ordering::SeqCst) {
+            return cancelled(job, None);
+        }
+        reporter.at(Phase::Verifying, STAGED);
+        let files = match job_dir.open_dir("files") {
+            Ok(f) => f,
+            Err(e) => return fail(vec![staging_problem("files", &e)]),
+        };
+        let kept = reconcile::installed_app(&files).and_then(|kept| {
+            let installed = reconcile::installed_app(&deployed)?;
+            Ok((kept, installed))
+        });
+        let ((manifest, assessment), (installed, _)) = match kept {
+            Ok(k) => k,
+            Err(p) => return fail(vec![p]),
+        };
+        if let Err(p) = self.rollback_checks(&files, &manifest, &installed, record.build) {
+            return fail(vec![p]);
+        }
+        reporter.at(Phase::Verifying, VERIFIED);
+        // Past this point Cancel answers too-late.
+        {
+            let mut st = self.shared.lock();
+            if cancel.load(Ordering::SeqCst) {
+                drop(st);
+                return cancelled(job, None);
+            }
+            st.no_return.insert(job.to_string());
+        }
+        // The build is recorded before the commit, as an install records it: a crash then leaves
+        // a record the reconcile corrects from what is deployed.
+        if let Err(p) = self.installed().record(id, manifest.build) {
+            return fail(vec![p]);
+        }
+        let prior = Prior {
+            build_written: true,
+            build_before: Some(record.build),
+            ..Prior::of(id)
+        };
+        self.hooks.step(job, &Step::Committing);
+        reporter.at(Phase::Committing, VETTED);
+        let request = RecommitRequest {
+            files: &files_path,
+            manifest: &manifest,
+            assessment: &assessment,
+        };
+        if let Err(e) = self.commit.recommit(&request) {
+            let mut result = fail(vec![commit_problem(e)]);
+            result.problems.extend(self.roll_back(job, prior));
+            return result;
+        }
+        self.hooks.step(job, &Step::Committed);
+        // As after an install: a lost stamp costs one re-commit at the next start.
+        let _ = self.installed().stamp(id, METADATA_GENERATION);
+        // Nothing is kept any more: the record first, so a crash between the two leaves a ref
+        // nothing names (the next update replaces it, a Remove drops it), never a record that
+        // names a ref that is gone. Neither fails the job: the app is rolled back.
+        if let Err(p) = self.installed().set_previous(id, None) {
+            eprintln!(
+                "ruya-play: forgetting the kept build of play.{id} failed: {}",
+                p.message
+            );
+        }
+        if let Err(e) = self.commit.drop_previous(id) {
+            let p = commit_problem(e);
+            eprintln!(
+                "ruya-play: dropping the kept build of play.{id} failed: {}",
+                p.message
+            );
+        }
+        reporter.at(Phase::Installing, 100);
+        JobResult {
+            job: job.to_string(),
+            status: JobStatus::Ok,
+            problems: Vec::new(),
+            art: Vec::new(),
+            inspection: None,
+        }
+    }
+
+    /// What a rollback to the kept build `manifest` (checked out in `files`) must pass against the
+    /// installed build `installed` (recorded as `installed_build`): older than it; the same
+    /// `run.runner` and `run.prefix.epoch` (the players' Wine prefixes are laid out for them, and
+    /// the launcher rebuilds a prefix only for a raised epoch); signed by the key the id is
+    /// recorded under now (its signatures verified again, so a rotation since refuses); and not on
+    /// today's block list (key, id and build, content, bundled runners re-hashed from the
+    /// checkout), failing closed when the list cannot be read.
+    fn rollback_checks(
+        &self,
+        files: &Dir,
+        manifest: &ruya_play_format::manifest::Manifest,
+        installed: &ruya_play_format::manifest::Manifest,
+        installed_build: u64,
+    ) -> Result<(), Problem> {
+        let id = &manifest.id;
+        if manifest.build >= installed_build {
+            return Err(not_older(id, Some(manifest.build), installed_build));
+        }
+        // The runner first: across runners the epochs say nothing of one another.
+        if manifest.run.runner != installed.run.runner {
+            return Err(Problem::new(
+                codes::ROLLBACK_RUNNER_CHANGED,
+                "/run/runner",
+                format!(
+                    "Build {} runs on {}, the installed build on {}.",
+                    manifest.build, manifest.run.runner, installed.run.runner
+                ),
+            ));
+        }
+        let epoch =
+            |m: &ruya_play_format::manifest::Manifest| m.run.prefix.as_ref().map_or(0, |p| p.epoch);
+        if epoch(manifest) != epoch(installed) {
+            return Err(Problem::new(
+                codes::ROLLBACK_PREFIX_EPOCH,
+                "/run/prefix/epoch",
+                format!(
+                    "Build {} has prefix epoch {}, the installed build {}: the players' prefixes cannot go back with it.",
+                    manifest.build,
+                    epoch(manifest),
+                    epoch(installed)
+                ),
+            ));
+        }
+        let meta = MetaSource::read(files)?;
+        let root = |name: &str| meta.root(name);
+        let bytes = PackageBytes {
+            play_json: root("play.json").unwrap_or_default(),
+            play_files: root("play.files").unwrap_or_default(),
+            play_sig: root("play.sig"),
+            store_sig: root("store.sig"),
+        };
+        let sigs = verify_signatures(&bytes, &self.store_keys)
+            .and_then(|s| bind_to_manifest(&s, manifest).map(|()| s))
+            .map_err(|e| e.to_problem())?;
+        let owner = self.trust().get(id).map_err(|e| e.to_problem())?;
+        if owner.as_ref().map(|r| &r.key) != sigs.key() {
+            return Err(Problem::new(
+                codes::ROLLBACK_KEY_CHANGED,
+                "play.sig",
+                format!("Build {} was signed by another key than the one this game is recorded under now.", manifest.build),
+            ));
+        }
+        let selected = self.blocklist().map_err(|e| e.to_problem())?;
+        let table = verify::read_table(files)?;
+        let rehashed = unpack::rehash(files, &table)?;
+        let runners = unpack::runner_hashes(manifest, &table, &rehashed)?;
+        let mut key_ids: Vec<String> = sigs.key().map(|k| k.key_id()).into_iter().collect();
+        if let Some(s) = &sigs.store {
+            key_ids.push(s.key.key_id());
+        }
+        let facts = PackageFacts {
+            id: id.clone(),
+            build: manifest.build,
+            key_ids,
+            play_files_sha256: ruya_play_format::sha256_hex(bytes.play_files),
+        };
+        match is_revoked(&selected.list, &facts, &runners) {
+            Some(revoked) => Err(revoked.to_problem()),
+            None => Ok(()),
+        }
+    }
+
     /// The pipeline of one verify job: the deployed files against their stored `play.files`.
     fn verify(
         &self,
@@ -1506,6 +1863,9 @@ impl Importer {
             } else if kind == JobKind::Verify {
                 reporter.at(Phase::Verifying, 0);
                 self.verify(&job, &app, &flag, &mut reporter)
+            } else if kind == JobKind::Rollback {
+                reporter.at(Phase::Staging, 0);
+                self.rollback(&job, &app, &flag, &mut reporter)
             } else if kind == JobKind::Remove {
                 reporter.at(Phase::Removing, 0);
                 let result = self.remove(&job, &app, &flag);
@@ -1736,10 +2096,18 @@ impl Importer {
         // The key record and the installed build are written before the commit, so a failure
         // leaves at worst a record that refuses another key (fail closed), never a committed app
         // without one.
-        let prior = match self.record(insp) {
+        let mut prior = match self.record(insp) {
             Ok(p) => p,
             Err(problems) => return fail(problems),
         };
+        // An update keeps the build it replaces (RUY-1245), before anything of the new one lands.
+        if let Some(replaced) = prior.build_before {
+            if let Err(p) = self.keep_replaced(&mut prior, replaced) {
+                let mut result = fail(vec![p]);
+                result.problems.extend(self.roll_back(job, prior));
+                return result;
+            }
+        }
         self.hooks.step(job, &Step::Committing);
         reporter.at(Phase::Committing, VETTED);
         let request = CommitRequest {
@@ -1764,7 +2132,7 @@ impl Importer {
         if let Err(e) = committed {
             let mut result = fail(vec![commit_problem(e)]);
             // The status stays the commit's; a failed rollback is journalled and listed.
-            result.problems.extend(self.roll_back(job, insp, prior));
+            result.problems.extend(self.roll_back(job, prior));
             return result;
         }
         // The app now has this generation's metadata. A stamp that cannot be written costs one
@@ -1803,31 +2171,42 @@ impl Importer {
         )
         .map_err(|e| vec![e.to_problem()])?;
         let mut prior = Prior {
-            id,
             trust_written,
             trust_before,
-            build_written: false,
-            build_before: None,
+            ..Prior::of(&id)
         };
-        let before = self.installed().build_of(&prior.id);
+        let before = self.installed().get(&prior.id);
         let written = before.and_then(|b| {
-            prior.build_before = b;
+            prior.build_before = b.map(|r| r.build);
+            prior.previous_before = b.and_then(|r| r.previous);
             self.installed().record(&prior.id, manifest.build)
         });
         if let Err(p) = written {
             let mut problems = vec![p];
-            problems.extend(self.roll_back("", insp, prior));
+            problems.extend(self.roll_back("", prior));
             return Err(problems);
         }
         prior.build_written = true;
         Ok(prior)
     }
 
+    /// An update (RUY-1245): the build deployed now, `replaced`, is kept for a rollback before the
+    /// commit, then recorded as the kept build. A failure is the update's (`commit.failed`), and
+    /// the caller rolls the records back; a kept ref the records do not name is harmless (what
+    /// `GetPrevious` and `Rollback` read is checked against the installed build).
+    fn keep_replaced(&self, prior: &mut Prior, replaced: u64) -> Result<(), Problem> {
+        self.commit
+            .keep_previous(&prior.id)
+            .map_err(commit_problem)?;
+        prior.previous_written = true;
+        self.installed().set_previous(&prior.id, Some(replaced))
+    }
+
     /// Undo [`Self::record`] after a failed commit: a record this install created is dropped, one
     /// that existed before is put back, and so is the installed build. If that fails, the stale
     /// record can only refuse a different key later (the safe direction); it is written to the
     /// journal (`state/journal`) and returned as `rollback.failed`.
-    fn roll_back(&self, job: &str, insp: &Inspection, prior: Prior) -> Option<Problem> {
+    fn roll_back(&self, job: &str, prior: Prior) -> Option<Problem> {
         let mut faults = Vec::new();
         if prior.trust_written {
             let undone = match prior.trust_before {
@@ -1847,15 +2226,25 @@ impl Importer {
                 faults.push(format!("the installed build: {}", p.message));
             }
         }
+        // The build an update kept goes back to the one kept before (the repo's ref may already
+        // name the build deployed now: `GetPrevious` then finds it not older, so it keeps none).
+        if prior.previous_written {
+            if let Err(p) = self
+                .installed()
+                .set_previous(&prior.id, prior.previous_before)
+            {
+                faults.push(format!("the kept build: {}", p.message));
+            }
+        }
         if faults.is_empty() {
             return None;
         }
         let detail = faults.join("; ");
-        self.journal(job, &insp.package.manifest.id, &detail);
+        self.journal(job, &prior.id, &detail);
         Some(Problem::new(
             codes::ROLLBACK_FAILED,
             "",
-            format!("The install failed and its records could not be undone ({detail}); they can only refuse another key."),
+            format!("The job failed and its records could not be undone ({detail}); they can only refuse another key."),
         ))
     }
 

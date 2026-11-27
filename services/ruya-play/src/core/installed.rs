@@ -5,7 +5,8 @@
 //! trust records. The file (`<state>/installed.json`) is written atomically with mode 0600; a file
 //! that cannot be read as written is `installed.corrupt` and is never reset silently (the
 //! `ruya-profiles` rule). An entry without `generation` (written before generations existed)
-//! reads as generation 0.
+//! reads as generation 0. An entry may name the build an update replaced, `previous: {build}`
+//! (RUY-1245: the build the commit keeps for a rollback); without it nothing is kept.
 //!
 //! **Forward-compatible (RUY-900):** a key this service does not know, at the top or on an entry,
 //! is ignored, so a file written by a newer image still reads after a bootc rollback (an unknown
@@ -34,6 +35,18 @@ pub struct Installed {
     /// The generation of the metadata its commit generated; 0 when it is not known (a record
     /// from before generations, or one the reconcile made for an app it found).
     pub generation: u32,
+    /// The build an update replaced, which the commit keeps as the repository's `previous` ref
+    /// for a rollback (RUY-1245); `None` when nothing is kept (never updated, rolled back, or a
+    /// record from before rollbacks).
+    pub previous: Option<u64>,
+}
+
+impl Installed {
+    /// The kept build when it is older than the installed one: what a rollback brings back. A
+    /// kept build that is not older (records restored after a failed update) is none.
+    pub fn older_previous(&self) -> Option<u64> {
+        self.previous.filter(|p| *p < self.build)
+    }
 }
 
 /// The builds installed per id.
@@ -46,6 +59,9 @@ pub trait InstalledBuilds {
     /// The commit of the recorded `id` generated metadata of `generation`. Nothing happens for an
     /// id without a record.
     fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem>;
+    /// The recorded `id` keeps `previous` (RUY-1245; `None`: nothing). Nothing happens for an id
+    /// without a record.
+    fn set_previous(&mut self, id: &str, previous: Option<u64>) -> Result<(), Problem>;
     /// `id` was uninstalled (RUY-100's uninstall).
     fn forget(&mut self, id: &str) -> Result<(), Problem>;
     /// Every id (lower case) and its record, for the start-up reconcile (RUY-829).
@@ -87,6 +103,21 @@ fn with_generation(
     Some(next)
 }
 
+/// `records` with the recorded `id` keeping `previous`; `None` when there is nothing to change.
+fn with_previous(
+    records: &BTreeMap<String, Installed>,
+    id: &str,
+    previous: Option<u64>,
+) -> Option<BTreeMap<String, Installed>> {
+    let mut next = records.clone();
+    let entry = next.get_mut(&fold(id))?;
+    if entry.previous == previous {
+        return None;
+    }
+    entry.previous = previous;
+    Some(next)
+}
+
 /// In memory, for tests and the off-Linux mock.
 #[derive(Debug, Default, Clone)]
 pub struct MemoryInstalled {
@@ -104,6 +135,14 @@ impl MemoryInstalled {
         self.records = with_build(&self.records, id, build);
         self
     }
+
+    /// With the recorded `id` keeping `previous` (an update was installed over it).
+    pub fn keeping(mut self, id: &str, previous: u64) -> Self {
+        if let Some(next) = with_previous(&self.records, id, Some(previous)) {
+            self.records = next;
+        }
+        self
+    }
 }
 
 impl InstalledBuilds for MemoryInstalled {
@@ -116,6 +155,12 @@ impl InstalledBuilds for MemoryInstalled {
     }
     fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem> {
         if let Some(next) = with_generation(&self.records, id, generation) {
+            self.records = next;
+        }
+        Ok(())
+    }
+    fn set_previous(&mut self, id: &str, previous: Option<u64>) -> Result<(), Problem> {
+        if let Some(next) = with_previous(&self.records, id, previous) {
             self.records = next;
         }
         Ok(())
@@ -141,6 +186,15 @@ struct RawEntry {
     build: u64,
     #[serde(default)]
     generation: u32,
+    /// RUY-1245: absent for none, so an older reader (which ignores it) and this one agree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    previous: Option<RawPrevious>,
+}
+
+/// The kept build of an entry: an object, so more facts of it can be added later.
+#[derive(Serialize, Deserialize)]
+struct RawPrevious {
+    build: u64,
 }
 
 fn corrupt(detail: impl Into<String>) -> Problem {
@@ -179,6 +233,7 @@ pub fn decode(bytes: &[u8]) -> Result<BTreeMap<String, Installed>, Problem> {
         let entry = Installed {
             build: e.build,
             generation: e.generation,
+            previous: e.previous.map(|p| p.build),
         };
         if out.insert(fold(&e.id), entry).is_some() {
             return Err(corrupt("an id is listed twice"));
@@ -197,6 +252,7 @@ pub fn encode(records: &BTreeMap<String, Installed>) -> Vec<u8> {
                 id: id.clone(),
                 build: e.build,
                 generation: e.generation,
+                previous: e.previous.map(|build| RawPrevious { build }),
             })
             .collect(),
     };
@@ -257,6 +313,12 @@ impl InstalledBuilds for FileInstalled {
             None => Ok(()),
         }
     }
+    fn set_previous(&mut self, id: &str, previous: Option<u64>) -> Result<(), Problem> {
+        match with_previous(&self.records, id, previous) {
+            Some(next) => self.save(next),
+            None => Ok(()),
+        }
+    }
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
         let mut next = self.records.clone();
         if next.remove(&fold(id)).is_none() {
@@ -304,6 +366,7 @@ mod tests {
         let old = Installed {
             build: 3,
             generation: 0,
+            previous: None,
         };
         assert_eq!(f.get("com.example.old").unwrap(), Some(old));
         f.stamp("COM.EXAMPLE.OLD", 4).unwrap();
@@ -320,7 +383,8 @@ mod tests {
             all.get("com.example.old"),
             Some(&Installed {
                 build: 5,
-                generation: 4
+                generation: 4,
+                previous: None
             })
         );
         assert_eq!(all.get("com.example.new").unwrap().generation, 0);
@@ -332,9 +396,47 @@ mod tests {
             m.get("A").unwrap(),
             Some(Installed {
                 build: 2,
-                generation: 2
+                generation: 2,
+                previous: None
             })
         );
+    }
+
+    #[test]
+    fn the_kept_build_is_written_kept_by_a_record_and_absent_reads_none() {
+        let t = tempfile::tempdir().unwrap();
+        let path = t.path().join("installed.json");
+        // A file written before rollbacks: no `previous` key.
+        std::fs::write(
+            &path,
+            br#"{"format":1,"installed":[{"id":"a","build":3,"generation":2}]}"#,
+        )
+        .unwrap();
+        let mut f = FileInstalled::open(&path).unwrap();
+        assert_eq!(f.get("a").unwrap().unwrap().previous, None);
+        // An update keeps the build it replaced; the file says so and reads it back.
+        f.record("a", 4).unwrap();
+        f.set_previous("A", Some(3)).unwrap();
+        f.set_previous("none", Some(1)).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#""previous": {"#), "{text}");
+        let mut f = FileInstalled::open(&path).unwrap();
+        let a = f.get("a").unwrap().unwrap();
+        assert_eq!((a.build, a.generation, a.previous), (4, 2, Some(3)));
+        assert_eq!(a.older_previous(), Some(3));
+        assert_eq!(f.get("none").unwrap(), None);
+        // A record of the build keeps it; one that is not older is no rollback; none writes no key.
+        f.record("a", 3).unwrap();
+        assert_eq!(f.get("a").unwrap().unwrap().older_previous(), None);
+        f.set_previous("a", None).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("previous"), "{text}");
+        // The memory implementation follows the same rules.
+        let mut m = MemoryInstalled::new().with("b", 5).keeping("b", 4);
+        m.record("b", 6).unwrap();
+        assert_eq!(m.get("B").unwrap().unwrap().previous, Some(4));
+        m.set_previous("b", None).unwrap();
+        assert_eq!(m.get("b").unwrap().unwrap().previous, None);
     }
 
     #[test]
@@ -383,7 +485,8 @@ mod tests {
             f.get("a").unwrap(),
             Some(Installed {
                 build: 4,
-                generation: 2
+                generation: 2,
+                previous: None
             })
         );
         // Writing it again keeps what this reader knows.

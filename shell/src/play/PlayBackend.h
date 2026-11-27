@@ -49,6 +49,38 @@ struct PlayPermission
     QString risk; // "low" | "medium" | "high"
 };
 
+// (key, words, risk) triples as QML sees them: { key, words, risk } maps.
+inline QVariantList permissionList(const QList<PlayPermission> &from)
+{
+    QVariantList out;
+    for (const PlayPermission &p : from) {
+        out.append(QVariantMap{{QStringLiteral("key"), p.key},
+                               {QStringLiteral("words"), p.words},
+                               {QStringLiteral("risk"), p.risk}});
+    }
+    return out;
+}
+
+// What GetPrevious answers with status "ok" (RUY-1245): the build an update replaced, which Rollback
+// brings back, and what that changes in the installed app's requests.
+struct PlayPrevious
+{
+    QString version;
+    uint build = 0;
+    QList<PlayPermission> added;   // the kept build asks for these and the installed one does not
+    QList<PlayPermission> removed; // the installed build asks for these and the kept one does not
+
+    QVariantMap toVariant() const
+    {
+        return {
+            {QStringLiteral("version"), version},
+            {QStringLiteral("build"), build},
+            {QStringLiteral("permissionsAdded"), permissionList(added)},
+            {QStringLiteral("permissionsRemoved"), permissionList(removed)},
+        };
+    }
+};
+
 // The Inspect record (api/dbus/org.ruyaos.Play1.xml, "Inspect record").
 struct PlayInfo
 {
@@ -85,15 +117,7 @@ struct PlayInfo
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
     {
-        const auto list = [](const QList<PlayPermission> &from) {
-            QVariantList out;
-            for (const PlayPermission &p : from) {
-                out.append(QVariantMap{{QStringLiteral("key"), p.key},
-                                       {QStringLiteral("words"), p.words},
-                                       {QStringLiteral("risk"), p.risk}});
-            }
-            return out;
-        };
+        const auto list = permissionList;
         const QVariantList perms = list(permissions);
         QVariantList probs;
         for (const PlayProblem &p : problems) {
@@ -160,6 +184,11 @@ public:
     virtual void verify(const QString &appId) = 0;   // answered("verify", appId, status)
     // Remove an installed .play app (RUY-816); adminApproved as for install. answered("remove", appId, status)
     virtual void remove(const QString &appId, bool adminApproved) = 0;
+    // The build an update replaced (RUY-1245): answered("previous", appId, status), then previousRead on "ok".
+    virtual void readPrevious(const QString &appId) = 0;
+    // Roll an updated .play app back to that build (a job, kind "rollback"); adminApproved as for install.
+    // answered("rollback", appId, status)
+    virtual void rollback(const QString &appId, bool adminApproved) = 0;
     virtual void cancel(const QString &key) = 0;     // answered("cancel", key, status)
     // Developer mode (05 7.2): read it (answers with developerModeChanged) and set it (answered("developer-mode",
     // "", status); the new value follows as developerModeChanged).
@@ -174,7 +203,9 @@ signals:
     // The drives changed (SourcesChanged): the facade lists again.
     void sourcesChanged();
     void inspected(const QString &path, const PlayInfo &info);
-    // A method call was answered: op is "inspect" | "install" | "verify" | "remove" | "cancel", key the path,
+    void previousRead(const QString &appId, const PlayPrevious &previous);
+    // A method call was answered: op is "inspect" | "install" | "verify" | "remove" | "previous" | "rollback" |
+    // "cancel", key the path,
     // app id or job key it was about, status the method status of the XML ("ok" = accepted).
     // A transport failure is "failed".
     void answered(const QString &op, const QString &key, const QString &status);

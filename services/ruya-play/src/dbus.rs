@@ -17,7 +17,7 @@ use zbus::zvariant::{OwnedValue, Value};
 use zbus::{fdo, interface, Connection};
 
 use crate::core::art::VettedArt;
-use crate::core::importer::{Event, Importer, InspectReport};
+use crate::core::importer::{Event, Importer, InspectReport, Previous};
 use crate::core::jobs::{JobRecord, JobState};
 use crate::core::status::{JobStatus, MethodStatus};
 use crate::service::{gates, sources, Environment};
@@ -351,7 +351,7 @@ impl PlayIface {
         }
     }
 
-    /// Verify and Remove: `queue` the job for the manifest id in `app_id`, start the queue when it
+    /// Verify, Remove and Rollback: `queue` the job for the manifest id in `app_id`, start the queue when it
     /// accepted. Answers (status, job).
     fn queue_for_app(
         &self,
@@ -458,6 +458,43 @@ impl PlayIface {
         self.queue_for_app(&app_id, Importer::queue_remove)
     }
 
+    /// The build an update replaced and kept (RUY-1245). The tuple is written out (not
+    /// [`PreviousReply`]): zbus splits only a literal tuple into out arguments.
+    #[zbus(out_args("status", "version", "build", "added", "removed"))]
+    #[allow(clippy::type_complexity)]
+    async fn get_previous(
+        &self,
+        app_id: String,
+    ) -> (
+        String,
+        String,
+        u32,
+        Vec<(String, String, String)>,
+        Vec<(String, String, String)>,
+    ) {
+        let id = match package_id(&app_id) {
+            Ok(id) => id.to_string(),
+            Err(s) => return previous_reply(Err(s)),
+        };
+        let importer = self.importer.clone();
+        previous_reply(blocking::unblock(move || importer.previous(&id)).await)
+    }
+
+    /// Queue the rollback of an updated package to the build it keeps (RUY-1245).
+    #[zbus(out_args("status", "job"))]
+    async fn rollback(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        app_id: String,
+        options: HashMap<String, OwnedValue>,
+    ) -> (String, String) {
+        if let Err(s) = self.admin_gate(&options, &header, connection).await {
+            return (s.as_str().to_string(), String::new());
+        }
+        self.queue_for_app(&app_id, Importer::queue_rollback)
+    }
+
     /// Stop a queued or running job.
     async fn cancel(&self, job: String) -> String {
         self.importer.cancel(&job).as_str().to_string()
@@ -521,7 +558,36 @@ impl PlayIface {
     async fn sources_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
-/// The manifest id in a Flatpak app id of Verify and Remove: `invalid` for an empty one,
+/// GetPrevious's answer: (status, version, build, added, removed).
+pub type PreviousReply = (
+    String,
+    String,
+    u32,
+    Vec<(String, String, String)>,
+    Vec<(String, String, String)>,
+);
+
+/// GetPrevious's answer for the importer's: every argument empty or 0 unless the status is `ok`.
+pub fn previous_reply(previous: Result<Previous, MethodStatus>) -> PreviousReply {
+    match previous {
+        Ok(p) => (
+            MethodStatus::Ok.as_str().to_string(),
+            p.version,
+            u32::try_from(p.build).unwrap_or(u32::MAX),
+            permission_triples(&p.update.added),
+            permission_triples(&p.update.removed),
+        ),
+        Err(s) => (
+            s.as_str().to_string(),
+            String::new(),
+            0,
+            Vec::new(),
+            Vec::new(),
+        ),
+    }
+}
+
+/// The manifest id in a Flatpak app id of Verify, Remove, Rollback and GetPrevious: `invalid` for an empty one,
 /// `unknown-app` for one that is not `play.<id>`.
 fn package_id(app_id: &str) -> Result<&str, MethodStatus> {
     match app_id.strip_prefix("play.") {

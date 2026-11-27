@@ -42,6 +42,9 @@ pub enum JobKind {
     Verify,
     /// Uninstall an installed package (RUY-816).
     Remove,
+    /// Bring back the build an update replaced (RUY-1245). An older reader skips such a line (an
+    /// unknown word), so a table written here still reads after a bootc rollback.
+    Rollback,
 }
 
 impl JobKind {
@@ -51,6 +54,7 @@ impl JobKind {
             JobKind::Install => "install",
             JobKind::Verify => "verify",
             JobKind::Remove => "remove",
+            JobKind::Rollback => "rollback",
         }
     }
 
@@ -59,6 +63,7 @@ impl JobKind {
             "install" => Some(JobKind::Install),
             "verify" => Some(JobKind::Verify),
             "remove" => Some(JobKind::Remove),
+            "rollback" => Some(JobKind::Rollback),
             _ => None,
         }
     }

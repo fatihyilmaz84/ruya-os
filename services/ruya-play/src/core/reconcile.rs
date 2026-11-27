@@ -147,6 +147,19 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
     v.get("build")?.as_u64()
 }
 
+/// The version text in a committed app's `play.json` bytes, when its `id` is `id` (case folded)
+/// and the text is plain (no control character, at most
+/// [`crate::core::jobs::MAX_NAME_BYTES`] bytes).
+pub fn version_in(play_json: &[u8], id: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(play_json).ok()?;
+    if !v.get("id")?.as_str()?.eq_ignore_ascii_case(id) {
+        return None;
+    }
+    let version = v.get("version")?.as_str()?;
+    (version.len() <= crate::core::jobs::MAX_NAME_BYTES && !version.chars().any(char::is_control))
+        .then(|| version.to_string())
+}
+
 /// The display name in a committed app's `play.json` bytes, when its `id` is `id` (case
 /// folded): English, else the first language. `None` when there is none or it is not plain text
 /// of at most [`crate::core::jobs::MAX_NAME_BYTES`] bytes.
@@ -236,7 +249,9 @@ pub fn our_files_and_grants(installation: &Path, id: &str) -> Option<(Dir, Optio
     Some((files, grants))
 }
 
-fn read_bounded(file: std::fs::File) -> Option<Vec<u8>> {
+/// The bytes of an app's `play.json` (at most [`MAX_PLAY_JSON_BYTES`]), `None` when it cannot be
+/// read or is longer.
+pub fn read_bounded(file: std::fs::File) -> Option<Vec<u8>> {
     read_at_most(file, MAX_PLAY_JSON_BYTES)
 }
 
@@ -255,29 +270,7 @@ fn read_at_most(file: std::fs::File, limit: u64) -> Option<Vec<u8>> {
 /// whose requests the ceiling now refuses, is an `installed.unreconciled` problem that says why:
 /// it is left as it is.
 pub fn installed_app(files: &Dir) -> Result<(Manifest, Assessment), Problem> {
-    let unreadable = |what: &str| {
-        Problem::new(
-            codes::INSTALLED_UNRECONCILED,
-            "",
-            format!("The installed app cannot be committed again: {what}."),
-        )
-    };
-    let mut trust_dir = files.try_clone().map_err(|e| staging_problem("", &e))?;
-    let (folders, name) = TRUST_RECORD_IN_APP
-        .rsplit_once('/')
-        .unwrap_or(("", TRUST_RECORD_IN_APP));
-    for folder in folders.split('/').filter(|f| !f.is_empty()) {
-        trust_dir = trust_dir
-            .open_dir(folder)
-            .map_err(|_| unreadable("its trust record is missing"))?;
-    }
-    let tier = trust_dir
-        .open_file(name)
-        .ok()
-        .and_then(|f| read_at_most(f, MAX_TRUST_RECORD_BYTES as u64))
-        .and_then(|b| TrustRecord::parse(&b))
-        .and_then(|r| r.tier())
-        .ok_or_else(|| unreadable("its trust record cannot be read"))?;
+    let tier = installed_tier(files)?;
     let table = verify::read_table(files)?;
     let bytes = files
         .open_file("play.json")
@@ -299,6 +292,37 @@ pub fn installed_app(files: &Dir) -> Result<(Manifest, Assessment), Problem> {
     };
     let assessment = check_ceiling(tier, &manifest.permissions).map_err(|e| e.to_problem())?;
     Ok((manifest, assessment))
+}
+
+/// Why an app of ours cannot be read back ([`installed_app`], [`installed_tier`]).
+fn unreadable(what: &str) -> Problem {
+    Problem::new(
+        codes::INSTALLED_UNRECONCILED,
+        "",
+        format!("The installed app cannot be committed again: {what}."),
+    )
+}
+
+/// The tier of the trust record the commit wrote into an app's `/app` folder `files` (opened
+/// through [`open_ours`], or a checkout of a kept build): `installed.unreconciled` when it is
+/// missing or cannot be read.
+pub fn installed_tier(files: &Dir) -> Result<Tier, Problem> {
+    let mut trust_dir = files.try_clone().map_err(|e| staging_problem("", &e))?;
+    let (folders, name) = TRUST_RECORD_IN_APP
+        .rsplit_once('/')
+        .unwrap_or(("", TRUST_RECORD_IN_APP));
+    for folder in folders.split('/').filter(|f| !f.is_empty()) {
+        trust_dir = trust_dir
+            .open_dir(folder)
+            .map_err(|_| unreadable("its trust record is missing"))?;
+    }
+    trust_dir
+        .open_file(name)
+        .ok()
+        .and_then(|f| read_at_most(f, MAX_TRUST_RECORD_BYTES as u64))
+        .and_then(|b| TrustRecord::parse(&b))
+        .and_then(|r| r.tier())
+        .ok_or_else(|| unreadable("its trust record cannot be read"))
 }
 
 /// The `permissions` of a committed app's `play.json` bytes, when its `id` is `id` (case folded):
@@ -429,7 +453,11 @@ mod tests {
     }
 
     fn rec(build: u64, generation: u32) -> Installed {
-        Installed { build, generation }
+        Installed {
+            build,
+            generation,
+            previous: None,
+        }
     }
 
     #[test]

@@ -16,6 +16,7 @@ Item {
     property var finished: []   // { key, status, kind, name }
     property var progress: []   // { key, percent, phase }
     property var infos: []      // { path, info }
+    property var previous: []   // { appId, previous }
     property var methodSeen: [] // statuses of answered()
     property var jobSeen: []    // statuses of jobFinished()
 
@@ -32,6 +33,7 @@ Item {
                 host.jobSeen = host.jobSeen.concat([status])
         }
         function onInspected(path, info) { host.infos = host.infos.concat([{ path: path, info: info }]) }
+        function onPreviousRead(appId, previous) { host.previous = host.previous.concat([{ appId: appId, previous: previous }]) }
         function onJobsChanged() {
             for (const key of Object.keys(Play.jobs))
                 host.progress = host.progress.concat([{ key: key, percent: Play.jobs[key].percent, phase: Play.jobs[key].phase }])
@@ -52,6 +54,7 @@ Item {
             host.finished = []
             host.progress = []
             host.infos = []
+            host.previous = []
             host.methodSeen = []
             host.jobSeen = []
         }
@@ -425,6 +428,37 @@ Item {
             return found.sort()
         }
 
+        // RUY-1245: an update keeps the build it replaced; GetPrevious names it, Rollback (an admin's) brings it
+        // back as a job of kind "rollback", and afterwards nothing is kept.
+        function test_rollback_brings_the_replaced_build_back() {
+            const app = "play.com.example.pixelforest"
+            compare(runCall("previous", app, () => Play.readPrevious(app)), "no-previous", "never updated")
+            compare(installFixture("pixelforest.play.zip"), "ok")
+            compare(runCall("previous", app, () => Play.readPrevious(app)), "ok")
+            tryVerify(() => host.previous.length === 1)
+            compare(host.previous[0].appId, app)
+            const kept = host.previous[0].previous
+            compare(kept.build, 2)
+            compare(kept.version, "1.2.0")
+            compare(kept.permissionsAdded.map(x => x.key), ["network"], "build 2 used the network")
+            compare(kept.permissionsRemoved.length, 0)
+            compare(runCall("rollback", app, () => Play.rollback(app, false)), "forbidden")
+            compare(runCall("rollback", "", () => Play.rollback("", true)), "invalid")
+            compare(runCall("rollback", "play.none", () => Play.rollback("play.none", true)), "unknown-app")
+            compare(runCall("rollback", app, () => Play.rollback(app, true)), "ok")
+            verify(Play.inFlight.indexOf(app) >= 0)
+            tryVerify(() => finishFor(app) !== undefined, 5000, "the rollback finished")
+            compare(finishFor(app).status, "ok")
+            compare(finishFor(app).kind, "rollback")
+            compare(Play.inFlight.indexOf(app), -1)
+            const phases = progressOf(app).map(e => e.phase).filter((ph, i, all) => all.indexOf(ph) === i)
+            compare(phases, ["staging", "verifying", "committing", "installing"], "no art is vetted")
+            // Nothing is kept now, and build 3 is an update again.
+            compare(runCall("previous", app, () => Play.readPrevious(app)), "no-previous")
+            compare(runCall("rollback", app, () => Play.rollback(app, true)), "no-previous")
+            compare(inspect("pixelforest.play.zip").installedBuild, 2)
+        }
+
         function test_contract_statuses() {
             const path = p("starhopper")
             // Methods.
@@ -433,6 +467,8 @@ Item {
             runCall("verify", "play.none", () => Play.verify("play.none"))                        // unknown-app
             runCall("cancel", "none", () => Play.cancel("none"))                                  // unknown-job
             runCall("install", path, () => Play.install(path, false))                             // forbidden
+            const forest = "play.com.example.pixelforest"
+            runCall("rollback", forest, () => Play.rollback(forest, true))                        // no-previous
             Play.mockPauseJobs(true)
             runCall("install", path, () => Play.install(path, true))                              // ok
             runCall("install", path, () => Play.install(path, true))                              // busy

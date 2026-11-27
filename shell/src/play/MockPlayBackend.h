@@ -23,7 +23,10 @@
 //   flaky         fails while committing                                               -> failed
 //   offlinegame   its platform needs the network and there is none                     -> offline
 // A remove (RUY-816) of an installed app is a job of the same queue, phase "removing"; it forgets the
-// installed build.
+// installed build. An install over an installed build keeps that build (RUY-1245): GetPrevious names it
+// (version "1.<build>.0"; for pixelforest the diff of its fixture, reversed), and a rollback is a job
+// (staging, verifying, committing, installing; cancel until committing) that makes it the installed build
+// again and keeps nothing.
 // A job is one queue entry: the first runs, in 5 percent steps every 100 ms (10 ms with
 // RUYA_MOCK_FAST=1), through the phases staging (0-19), verifying (20-39), vetting-art (40-54),
 // committing (55-69) and installing (70-100); a failing fixture ends in the phase its cause belongs
@@ -42,6 +45,8 @@ public:
     void install(const QString &path, bool adminApproved) override;
     void verify(const QString &appId) override;
     void remove(const QString &appId, bool adminApproved) override;
+    void readPrevious(const QString &appId) override;
+    void rollback(const QString &appId, bool adminApproved) override;
     void cancel(const QString &key) override;
     void readDeveloperMode() override;
     void requestDeveloperMode(bool on, bool adminApproved) override;
@@ -56,6 +61,8 @@ public:
     // Installed payload of this app no longer matches its file table: a verify ends invalid-package.
     void corruptInstalled(const QString &appId);
     void setInstalled(const QString &appId, uint build) { m_installed.insert(appId, build); }
+    // The installed app keeps `build` for a rollback.
+    void setPrevious(const QString &appId, uint build) { m_previous.insert(manifestIdOf(appId), build); }
     void pauseJobs(bool paused);
     // The running job stands still once it has reported this percent (it then needs pauseJobs(false)).
     void pauseAtPercent(int percent) { m_pauseAt = percent; }
@@ -75,7 +82,7 @@ private:
     struct Job
     {
         QString key;
-        QString kind; // "install" | "verify" | "remove"
+        QString kind; // "install" | "verify" | "remove" | "rollback"
         QString jobId;
         QString app;
         QString name; // the app's display name, "" when no fixture has the id
@@ -96,7 +103,8 @@ private:
     void step();
     void finish(const Job &job, const QString &status, const QString &reason = QString());
     static QString phaseAt(int percent);
-    // The phase a job reports at its percent: a verify only "verifying", a remove only "removing".
+    // The phase a job reports at its percent: a verify only "verifying", a remove only "removing", a rollback
+    // no "vetting-art".
     static QString phaseOf(const Job &job);
     // "play.<id>" -> "<id>" (an id without the prefix stays as it is).
     static QString manifestIdOf(const QString &appId);
@@ -106,6 +114,7 @@ private:
     QList<Job> m_jobs; // the first runs
     QList<StoreJob> m_finishedJobs;
     QHash<QString, uint> m_installed; // manifest id -> build
+    QHash<QString, uint> m_previous;  // manifest id -> the build an update replaced (RUY-1245)
     QSet<QString> m_corrupt;
     QTimer m_timer;
     int m_stepMs = 100;

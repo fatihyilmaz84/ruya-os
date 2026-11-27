@@ -25,6 +25,9 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
     connect(m_backend.get(), &PlayBackend::inspected, this, [this](const QString &path, const PlayInfo &info) {
         emit inspected(path, info.toVariant());
     });
+    connect(m_backend.get(), &PlayBackend::previousRead, this, [this](const QString &appId, const PlayPrevious &previous) {
+        emit previousRead(appId, previous.toVariant());
+    });
     connect(m_backend.get(), &PlayBackend::developerModeChanged, this, [this](bool on) {
         if (m_developerMode == on)
             return;
@@ -169,6 +172,18 @@ void Play::remove(const QString &appId, bool adminApproved)
     m_backend->remove(appId, adminApproved);
 }
 
+void Play::readPrevious(const QString &appId)
+{
+    m_backend->readPrevious(appId);
+}
+
+void Play::rollback(const QString &appId, bool adminApproved)
+{
+    m_pending.insert(appId, QStringLiteral("rollback"));
+    emit inFlightChanged();
+    m_backend->rollback(appId, adminApproved);
+}
+
 QStringList Play::inFlight() const
 {
     QStringList keys = m_pending.keys();
@@ -235,6 +250,12 @@ void Play::mockSetInstalled(const QString &appId, uint build)
 {
     if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get()))
         mock->setInstalled(appId, build);
+}
+
+void Play::mockSetPrevious(const QString &appId, uint build)
+{
+    if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get()))
+        mock->setPrevious(appId, build);
 }
 
 void Play::mockCorruptInstalled(const QString &appId)

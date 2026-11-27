@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet bumpbuild check compat32 generation helper launch launch-windows libprobe lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
+# modes: asknet bumpbuild check compat32 generation helper launch launch-windows libprobe lstate modpath offline parse perms pkgid remove removeapp rollback runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. [RUYA_PIN=<digits>] is the PIN of the profile the launch modes sign in (tried after no PIN,
 # before 1234), as for dell-hub-check.sh; it is never printed. Modes:
@@ -42,6 +42,20 @@
 #          sample asks for the network; an admin withdraws it (Store1 WithdrawPermission, an override
 #          in /var/lib/flatpak/overrides), and the removal drops that override too (`flatpak
 #          override --system --show` is empty) so the reinstall starts with nothing withdrawn
+#   rollback RUY-1245: install the sample asking for the network (developer mode, from incoming/), then
+#          its next build (bumpbuild: payload/hello-game changed) over it. Before the update GetPrevious
+#          is no-previous; after it GetPrevious names the first build, the local repo
+#          (/var/lib/ruya-play/repo) holds exactly the app's refs previous and stable, previous is the
+#          commit Flatpak had deployed before the update and stable the one it deploys now. An admin
+#          withdraws the network (Store1). Rollback
+#          without admin_approved is forbidden; with it a job ends ok (kind rollback in state/jobs):
+#          the deployment's play.json names the first build again and hello-game has its first SHA-256,
+#          Flatpak's commit is a new one (stable in the repo, never the old commit: no flatpak
+#          update --commit), installed.json records the first build without previous, the previous
+#          ref is gone and both commits of before are pruned (ostree prune --refs-only --depth=0:
+#          the dropped previous and the new head's parent), the override still says
+#          shared=!network, and GetPrevious and a second Rollback are no-previous. The next build
+#          installs again (an update), and the removal leaves no ref of the app in the repo
 #   launch RUY-902 (ADR-037/038): the native sample installed (developer mode, from incoming/) and started as a
 #          profile through Session1.Launch (the check makes one when the VM has none, as vm-sample-check.sh
 #          does, and removes it again): AppStarted, the save in the app's data folder (plays=1), Stop ends
@@ -194,6 +208,10 @@ if what == "status":
     print(data[0] if data else "")
 elif what == "second":
     print(data[1] if len(data) > 1 else "")
+elif what == "nth":
+    # the answer at position arg (0 is the first), e.g. the build of GetPrevious (2)
+    i = int(arg)
+    print(data[i] if len(data) > i else "")
 elif what == "job":
     for j in (data[0] if data else []):
         if val(j.get("id")) == arg:
@@ -915,6 +933,77 @@ PY
     fi
 }
 
+# --- rollback (RUY-1245) ----------------------------------------------------------------------------------
+repo="$state/repo"
+# The refs of play.<id> in the service's repo, sorted, on one line.
+refs_of() { ostree refs --repo="$repo" 2>/dev/null | grep "^app/play\.$1/" | sort | tr '\n' ' ' | sed 's/ $//'; }
+# The commit Flatpak has deployed for play.<id>.
+deployed_commit() { flatpak info --system --show-commit "play.$1" 2>/dev/null | tr -d '[:space:]'; }
+# Rollback <app id> as an admin and wait for the job.
+rollback_wait() { job_wait "$(call Rollback 'sa{sv}' "$1" 1 admin_approved b true)"; }
+# The build in a play.json.
+build_in() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["build"])' "$1"; }
+
+rollback_checks() {
+    local app="/var/lib/flatpak/app/play.$appid/current/active/files" out b1 b2 sum1 c1 c2 c3 st job
+    b1="$(build_in "$app/play.json")"
+    sum1="$(sha256sum "$app/hello-game" | cut -d' ' -f1)"
+    c1="$(deployed_commit "$appid")"
+    set -- $(call GetPrevious s "play.$appid" | parse status)
+    [ "$1" = no-previous ] && ok "GetPrevious before an update is no-previous" || bad "GetPrevious before an update: $*"
+    got="$(install_wait "$state/incoming/vm-play-check-next.play.zip")"
+    [ "$got" = ok ] && ok "the next build installs over it" || { bad "the update: $got"; return; }
+    b2="$(build_in "$app/play.json")"
+    c2="$(deployed_commit "$appid")"
+    [ "$b2" -gt "$b1" ] && ok "the update is build $b2 (was $b1)" || bad "the deployed build after the update: $b2"
+    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/previous app/play.$appid/x86_64/stable" ] && ok "the repo holds the app's previous and stable refs" || bad "the repo's refs: '$(refs_of "$appid")'"
+    [ -n "$c1" ] && [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/previous" 2>&1)" = "$c1" ] && ok "previous is the commit deployed before the update" || bad "previous is not $c1"
+    [ -n "$c2" ] && [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/stable" 2>&1)" = "$c2" ] && ok "stable is the update's deployed commit" || bad "stable is not $c2"
+    out="$(call GetPrevious s "play.$appid")"
+    [ "$(echo "$out" | parse status) $(echo "$out" | parse nth 2)" = "ok $b1" ] && ok "GetPrevious names build $b1" || bad "GetPrevious after the update: $out"
+    # An admin's withdrawal, which the rollback must keep.
+    [ "$(store_call WithdrawPermission ss "play.$appid" network | parse status)" = ok ] && ok "WithdrawPermission network by root" || bad "WithdrawPermission network"
+    set -- $(call Rollback 'sa{sv}' "play.$appid" 0 | parse status)
+    [ "$1" = forbidden ] && ok "Rollback without admin_approved is forbidden" || bad "Rollback without admin_approved: $*"
+    read -r st job _ <<< "$(rollback_wait "play.$appid")"
+    [ "$st $job" = "ok ok" ] && ok "Rollback finishes ok" || { bad "Rollback: $st $job"; return; }
+    [ "$(build_in "$app/play.json")" = "$b1" ] && ok "the deployment is build $b1 again" || bad "the deployed build after the rollback: $(build_in "$app/play.json")"
+    [ "$(sha256sum "$app/hello-game" | cut -d' ' -f1)" = "$sum1" ] && ok "hello-game is the first build's again" || bad "hello-game differs from build $b1's"
+    c3="$(deployed_commit "$appid")"
+    [ -n "$c3" ] && [ "$c3" != "$c1" ] && [ "$c3" != "$c2" ] && ok "the rollback deployed a new commit" || bad "the deployed commit after the rollback: $c3 (before: $c1, $c2)"
+    [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/stable" 2>&1)" = "$c3" ] && ok "the repo's stable head is the deployed commit" || bad "stable is not $c3"
+    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/stable" ] && ok "the previous ref is gone" || bad "the repo's refs after the rollback: '$(refs_of "$appid")'"
+    # ostree prune --refs-only --depth=0 (Fedora's ostree): the dropped previous and stable's parent go.
+    for c in "$c1" "$c2"; do
+        ostree show --repo="$repo" "$c" >/dev/null 2>&1 && bad "commit $c is still in the repo" || ok "commit $c was pruned"
+    done
+    python3 - "$state/state/installed.json" "$appid" "$b1" <<'PY' && ok "installed.json records build $b1 and keeps nothing" || bad "installed.json after the rollback: $(cat "$state/state/installed.json")"
+import json, sys
+for e in json.load(open(sys.argv[1], encoding="utf-8"))["installed"]:
+    if e["id"] == sys.argv[2].lower():
+        sys.exit(0 if e["build"] == int(sys.argv[3]) and "previous" not in e else 1)
+sys.exit(1)
+PY
+    python3 - "$state/state/jobs" "$job" <<'PY' && ok "the job table records kind rollback, ok" || bad "state/jobs has no finished rollback job"
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    j = json.loads(line)
+    if j.get("job") == sys.argv[2] and (j.get("kind"), j.get("status")) == ("rollback", "ok"):
+        sys.exit(0)
+sys.exit(1)
+PY
+    flatpak override --system --show "play.$appid" | grep -q '^shared=!network;' && ok "the rollback kept the admin's withdrawal" || bad "the override after the rollback: $(override_text "play.$appid")"
+    set -- $(call GetPrevious s "play.$appid" | parse status)
+    [ "$1" = no-previous ] && ok "GetPrevious after the rollback is no-previous" || bad "GetPrevious after the rollback: $*"
+    set -- $(rollback_wait "play.$appid")
+    [ "$1" = no-previous ] && ok "a second Rollback is no-previous" || bad "the second Rollback: $*"
+    got="$(install_wait "$state/incoming/vm-play-check-next.play.zip")"
+    [ "$got" = ok ] && ok "build $b2 installs again (an update)" || bad "build $b2 after the rollback: $got"
+    set -- $(remove_wait "play.$appid")
+    [ "$1 $2" = "ok ok" ] && ok "Remove finishes ok" || bad "Remove: $*"
+    [ -z "$(refs_of "$appid")" ] && ok "the removal left no ref of the app in the repo" || bad "refs after the removal: '$(refs_of "$appid")'"
+}
+
 # --- launch and launch-windows (RUY-902) ---------------------------------------------------------------
 sesvc=org.ruyaos.Session1
 sepath=/org/ruyaos/Session1
@@ -1193,7 +1282,7 @@ cleanup() {
     [ -n "${before_dev:-}" ] && dev_mode "$before_dev" >/dev/null 2>&1
     umount "$usb" "$loose" 2>/dev/null
     rmdir "$usb" "$loose" 2>/dev/null
-    rm -rf "$work" "$state/incoming/vm-play-check.play.zip"
+    rm -rf "$work" "$state/incoming/vm-play-check.play.zip" "$state/incoming/vm-play-check-next.play.zip"
     # An exit inside the EXIT trap sets the script's status.
     [ "$removed" = 0 ] || exit 1
 }
@@ -1255,6 +1344,22 @@ if [ "$mode" = remove ]; then
     [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
     [ "$got" = ok ] && remove_checks
     [ "$fail" = 0 ] && echo "vm-play-check remove: PASS" || echo "vm-play-check remove: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = rollback ]; then
+    dev_mode true >/dev/null
+    appid="$(pkg_id "$appid" rollback)" || { bad "no rollback id for $appid"; exit 1; }
+    with_id "$zip" "$work/id.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
+    asks_network "$work/id.play.zip" "$work/rollback.play.zip" || { bad "asks_network: no copy of the sample asking for the network"; exit 1; }
+    bump_build "$work/rollback.play.zip" "$work/rollback-next.play.zip" hello-game 'rollback check: the next build' >/dev/null || { bad "bump_build: no next build of the sample"; exit 1; }
+    mkdir -p "$state/incoming"
+    install -m 0600 "$work/rollback.play.zip" "$state/incoming/vm-play-check.play.zip"
+    install -m 0600 "$work/rollback-next.play.zip" "$state/incoming/vm-play-check-next.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
+    [ "$got" = ok ] && rollback_checks
+    [ "$fail" = 0 ] && echo "vm-play-check rollback: PASS" || echo "vm-play-check rollback: FAIL"
     exit "$fail"
 fi
 

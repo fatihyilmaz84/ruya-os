@@ -159,6 +159,25 @@ impl Commit for LoggedCommit {
         eprintln!("ruya-play --session: would uninstall play.{id}");
         Ok(())
     }
+
+    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+        eprintln!("ruya-play --session: would keep the deployed build of play.{id}");
+        Ok(())
+    }
+
+    // Nothing is committed, so nothing is kept: a rollback in this mode fails `commit.failed`.
+    fn previous_file(&self, _id: &str, _name: &str) -> Result<Vec<u8>, CommitError> {
+        Err(CommitError::Failed("--session keeps no builds".into()))
+    }
+
+    fn check_out_previous(&self, _id: &str, _dest: &Path) -> Result<(), CommitError> {
+        Err(CommitError::Failed("--session keeps no builds".into()))
+    }
+
+    fn drop_previous(&self, id: &str) -> Result<(), CommitError> {
+        eprintln!("ruya-play --session: would forget the kept build of play.{id}");
+        Ok(())
+    }
 }
 
 /// The image's blocklist; `--session` may point `RUYA_PLAY_BLOCKLIST` at a copy.

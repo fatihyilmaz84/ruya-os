@@ -21,6 +21,10 @@
 //! package ([`lay_out_installed`]): the generated parts are written again over it and the same
 //! three steps follow.
 //!
+//! **Rollback** (RUY-1245): an update first keeps the deployed commit as the repo's
+//! [`previous_ref`] and prunes the repo to its refs; a rollback checks that ref out and sends the
+//! copy through the re-commit, then deletes the ref. A removal deletes both refs of the app.
+//!
 //! The command lines are pure functions with host tests; [`FlatpakCommit`] runs them through a
 //! [`Runner`] (the real one on Linux; a recording one in the tests).
 
@@ -100,6 +104,15 @@ pub fn app_id(id: &str) -> String {
 /// The ref the commit makes.
 pub fn app_ref(id: &str) -> String {
     format!("app/{}/{ARCH}/{BRANCH}", app_id(id))
+}
+
+/// The branch of the build an update replaced, in the local repo only (RUY-1245): nothing installs
+/// it; a rollback checks it out and commits it again on [`BRANCH`].
+pub const PREVIOUS_BRANCH: &str = "previous";
+
+/// The ref of the kept build.
+pub fn previous_ref(id: &str) -> String {
+    format!("app/{}/{ARCH}/{PREVIOUS_BRANCH}", app_id(id))
 }
 
 /// A value for a key file line: no control characters (a newline would start a new key), `\`
@@ -461,6 +474,86 @@ pub fn uninstall(id: &str) -> Vec<String> {
         "--noninteractive",
         "-y",
         &app_id(id),
+    ])
+}
+
+/// The commit of `play.<id>` deployed in the system installation (`flatpak info --show-commit`):
+/// the build an update keeps (RUY-1245). Not the repo's [`BRANCH`] head, which a failed update
+/// left on a build that was never deployed.
+pub fn deployed_commit(id: &str) -> Vec<String> {
+    v(&["flatpak", "info", "--system", "--show-commit", &app_id(id)])
+}
+
+/// The checksum `flatpak info --show-commit` printed: 64 lower-case hex characters.
+pub fn parse_checksum(out: &str) -> Option<String> {
+    let c = out.trim();
+    let ok = c.len() == 64
+        && c.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    ok.then(|| c.to_string())
+}
+
+/// Point the [`previous_ref`] of `play.<id>` at `checksum`, replacing what it named
+/// (`ostree refs --create --force`).
+pub fn keep_ref(paths: &Paths, id: &str, checksum: &str) -> Vec<String> {
+    v(&[
+        "ostree",
+        "refs",
+        &format!("--repo={}", s(&paths.repo)),
+        "--force",
+        &format!("--create={}", previous_ref(id)),
+        checksum,
+    ])
+}
+
+/// Delete `refs` from the repo.
+pub fn delete_refs(paths: &Paths, refs: &[String]) -> Vec<String> {
+    let mut argv = v(&[
+        "ostree",
+        "refs",
+        &format!("--repo={}", s(&paths.repo)),
+        "--delete",
+    ]);
+    argv.extend(refs.iter().cloned());
+    argv
+}
+
+/// Drop every object no ref reaches, history included (`--depth=0`): the repo keeps the head of
+/// each app's [`BRANCH`] and [`PREVIOUS_BRANCH`] and nothing older (RUY-1245).
+pub fn prune(paths: &Paths) -> Vec<String> {
+    v(&[
+        "ostree",
+        "prune",
+        &format!("--repo={}", s(&paths.repo)),
+        "--refs-only",
+        "--depth=0",
+    ])
+}
+
+/// Check the kept build's `/app` (the commit's `files/`) out into `dest`, as copies
+/// (`--force-copy`: never hard links into the repo, which the re-commit's writes would change) and
+/// without ownership (`--user-mode`; the publish makes root the owner).
+pub fn check_out_previous(paths: &Paths, id: &str, dest: &Path) -> Vec<String> {
+    v(&[
+        "ostree",
+        "checkout",
+        &format!("--repo={}", s(&paths.repo)),
+        "--user-mode",
+        "--force-copy",
+        "--subpath=/files",
+        &previous_ref(id),
+        &s(dest),
+    ])
+}
+
+/// Print the file `name` of the kept build's `/app`.
+pub fn cat_previous(paths: &Paths, id: &str, name: &str) -> Vec<String> {
+    v(&[
+        "ostree",
+        "cat",
+        &format!("--repo={}", s(&paths.repo)),
+        &previous_ref(id),
+        &format!("/files/{name}"),
     ])
 }
 
@@ -872,6 +965,60 @@ impl Commit for FlatpakCommit {
         if let Err(e) = self.runner.run(&reset_override(id)) {
             eprintln!("ruya-play: resetting the override of play.{id} failed: {e}");
         }
+        // Its builds in the repo go too (RUY-1245); left behind they only cost space, and the next
+        // install of the id replaces both refs.
+        self.forget_refs(id, &[app_ref(id), previous_ref(id)]);
         Ok(())
+    }
+
+    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+        let out = self.run(deployed_commit(id))?;
+        let checksum = parse_checksum(&out).ok_or_else(|| {
+            CommitError::Failed(format!(
+                "flatpak info named no commit for play.{id}: {:?}",
+                out.trim()
+            ))
+        })?;
+        self.run(keep_ref(&self.paths, id, &checksum))?;
+        self.prune_repo();
+        Ok(())
+    }
+
+    fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError> {
+        self.run(cat_previous(&self.paths, id, name))
+            .map(String::into_bytes)
+    }
+
+    fn check_out_previous(&self, id: &str, dest: &Path) -> Result<(), CommitError> {
+        self.run(check_out_previous(&self.paths, id, dest))
+            .map(|_| ())
+    }
+
+    fn drop_previous(&self, id: &str) -> Result<(), CommitError> {
+        self.run(delete_refs(&self.paths, &[previous_ref(id)]))?;
+        self.prune_repo();
+        Ok(())
+    }
+}
+
+impl FlatpakCommit {
+    /// Prune the repo to its refs; a failure is logged (it only costs space until the next prune).
+    fn prune_repo(&self) {
+        if let Err(e) = self.runner.run(&prune(&self.paths)) {
+            eprintln!(
+                "ruya-play: pruning {} failed: {e}",
+                self.paths.repo.display()
+            );
+        }
+    }
+
+    /// Delete `refs` and prune, logging a failure.
+    fn forget_refs(&self, id: &str, refs: &[String]) {
+        match self.runner.run(&delete_refs(&self.paths, refs)) {
+            Ok(_) => self.prune_repo(),
+            Err(e) => {
+                eprintln!("ruya-play: dropping the builds of play.{id} from the repo failed: {e}")
+            }
+        }
     }
 }

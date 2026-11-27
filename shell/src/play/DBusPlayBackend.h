@@ -23,6 +23,8 @@ public:
     void verify(const QString &appId) override;
     void cancel(const QString &key) override;
     void remove(const QString &appId, bool adminApproved) override;
+    void readPrevious(const QString &appId) override;
+    void rollback(const QString &appId, bool adminApproved) override;
     void readDeveloperMode() override;
     void requestDeveloperMode(bool on, bool adminApproved) override;
     void listJobs() override;
@@ -33,7 +35,7 @@ private slots:
     void onDeveloperModeChanged(bool on);
 
 private:
-    // Install, Verify and Remove all answer (status, job).
+    // Install, Verify, Remove and Rollback all answer (status, job).
     void startJob(const QString &op, const QString &method, const QString &key, const QVariantList &args);
 
     QDBusConnection m_bus;
