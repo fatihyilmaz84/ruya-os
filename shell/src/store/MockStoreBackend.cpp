@@ -215,6 +215,8 @@ void MockStoreBackend::reset()
     m_permissionsAdmin = true;
     m_permissionsDelayMs = 0;
     m_permissionReads = 0;
+    m_withdrawnCountsDelayMs = 0;
+    m_withdrawnCountReads = 0;
     initState();
     emit installedChanged();
 }
@@ -289,11 +291,9 @@ void MockStoreBackend::getPermissions(const QString &id)
     if (i < 0 || !m_apps.at(i).installed) {
         status = QStringLiteral("unknown-app");
     } else {
-        const QStringList taken = m_withdrawn.value(id);
+        withdrawn = withdrawnKeys(m_apps.at(i));
         for (const QString &key : m_apps.at(i).permissions) {
-            if (taken.contains(key))
-                withdrawn.append(key);
-            else
+            if (!withdrawn.contains(key))
                 effective.append(key);
             if (::withdrawable(key))
                 withdrawable.append(key);
@@ -308,6 +308,37 @@ void MockStoreBackend::getPermissions(const QString &id)
     QTimer::singleShot(delay, this, [=] {
         --m_pendingPermissions;
         deliverPermissions(id, request, status, effective, withdrawn, withdrawable);
+    });
+}
+
+QStringList MockStoreBackend::withdrawnKeys(const AppInfo &app) const
+{
+    const QStringList taken = m_withdrawn.value(app.id);
+    QStringList out;
+    for (const QString &key : app.permissions) {
+        if (taken.contains(key))
+            out.append(key);
+    }
+    return out;
+}
+
+void MockStoreBackend::getWithdrawnCounts()
+{
+    // Read now, delivered later, through the same guard as the D-Bus client's reply.
+    ++m_withdrawnCountReads;
+    const quint64 request = beginWithdrawnCountsRequest();
+    QVariantMap counts;
+    for (const AppInfo &a : std::as_const(m_apps)) {
+        const int withdrawn = a.installed ? int(withdrawnKeys(a).size()) : 0;
+        if (withdrawn > 0)
+            counts.insert(a.id, withdrawn);
+    }
+    const int delay = m_withdrawnCountsDelayMs;
+    m_withdrawnCountsDelayMs = 0;
+    ++m_pendingWithdrawnCounts;
+    QTimer::singleShot(delay, this, [=] {
+        --m_pendingWithdrawnCounts;
+        deliverWithdrawnCounts(request, counts);
     });
 }
 

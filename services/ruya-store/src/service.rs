@@ -2,9 +2,9 @@
 //! checks in front of every job, and the running of one job with its progress and result. All
 //! side effects go through the `Flatpak` trait; the D-Bus adapter only converts and emits.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::app::{valid_commit, valid_remote_name, App, JobStatus, Status};
 use crate::appstream::{self, Component};
@@ -97,10 +97,12 @@ pub struct Store<F: Flatpak> {
     api_level: u32,
     /// Whether this console's Flatpak has `--device=input` (read once, `flatpak --version`).
     device_input: OnceLock<bool>,
-    /// Held across every read-modify-write of an override (withdraw, restore, reset, the drop
-    /// after an uninstall), from the installed check to the last write: the calls run on separate
-    /// threads, and a restore resets the override before it writes the rest back.
-    overrides_lock: Mutex<()>,
+    /// Written (held exclusively) across every read-modify-write of an override (withdraw,
+    /// restore, reset, the drop after an uninstall), from the installed check to the last write:
+    /// the calls run on separate threads, and a restore resets the override before it writes the
+    /// rest back. Read (shared) by the calls that only read overrides, so they never wait for each
+    /// other and see an override before a change or after it, never between a restore's two steps.
+    overrides_lock: RwLock<()>,
 }
 
 /// An installed app's permissions as the permission calls read them: its metadata, the same with
@@ -128,7 +130,7 @@ impl<F: Flatpak> Store<F> {
             jobs_file: None,
             api_level: crate::level::api_level(),
             device_input: OnceLock::new(),
-            overrides_lock: Mutex::new(()),
+            overrides_lock: RwLock::new(()),
         }
     }
 
@@ -159,7 +161,7 @@ impl<F: Flatpak> Store<F> {
             jobs_file: Some(path),
             api_level: crate::level::api_level(),
             device_input: OnceLock::new(),
-            overrides_lock: Mutex::new(()),
+            overrides_lock: RwLock::new(()),
         }
     }
 
@@ -168,10 +170,19 @@ impl<F: Flatpak> Store<F> {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// The override lock (`overrides_lock`). Taken before `state`, never while holding it.
-    fn overrides_held(&self) -> MutexGuard<'_, ()> {
+    /// The override lock (`overrides_lock`) for a change. Taken before `state`, never while
+    /// holding it.
+    fn overrides_held(&self) -> RwLockWriteGuard<'_, ()> {
         self.overrides_lock
-            .lock()
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The override lock (`overrides_lock`) for a read: shared with every other read, waiting only
+    /// for a change under way. Taken before `state`, never while holding it.
+    fn overrides_read(&self) -> RwLockReadGuard<'_, ()> {
+        self.overrides_lock
+            .read()
             .unwrap_or_else(|e| e.into_inner())
     }
 
@@ -609,27 +620,77 @@ impl<F: Flatpak> Store<F> {
             eprintln!("ruya-store: the override of {id} cannot be read: {err}");
             Status::Failed
         })?;
-        let app = Context::parse(&metadata);
+        Ok(self.sandbox_of(&metadata, over))
+    }
+
+    /// An app's sandbox from its metadata and its override text: the one rule of what is withdrawn
+    /// (`overrides::permissions`), for `GetPermissions` and `GetWithdrawnCounts` alike.
+    fn sandbox_of(&self, metadata: &str, over: String) -> Sandbox {
+        let app = Context::parse(metadata);
         let parsed = Context::parse(&over);
-        Ok(Sandbox {
+        Sandbox {
             permissions: overrides::permissions(&app, &parsed, self.device_input()),
             now: app.merged(&parsed),
             app,
             over_text: over,
-        })
+        }
     }
 
     /// `GetPermissions`: open to every caller (a Standard profile sees them read-only). The
-    /// override is read under the lock, so a restore is never seen half done.
+    /// override is read under the shared lock: reads do not wait for each other, only for a change
+    /// under way. A restore is two writes (the reset, then what stays withdrawn), so a read
+    /// between them would see every key given back.
     pub fn get_permissions(&self, id: &str, emit: &mut dyn FnMut(Event)) -> (Status, Permissions) {
         let result = self.installed_app(id, emit).and_then(|()| {
-            let _held = self.overrides_held();
+            let _reading = self.overrides_read();
             self.sandbox(id)
         });
         match result {
             Ok(sandbox) => (Status::Ok, sandbox.permissions),
             Err(status) => (status, Permissions::default()),
         }
+    }
+
+    /// `GetWithdrawnCounts`: for every installed app with at least one withdrawn key, how many
+    /// (the length of its `withdrawn` in `get_permissions`, from the same rule). One read of
+    /// Flatpak's installed set and one pass over the overrides; only an app that has an override
+    /// is read further (its metadata), the others cannot have a key withdrawn. An app whose
+    /// metadata cannot be read is left out, logged.
+    pub fn withdrawn_counts(&self, emit: &mut dyn FnMut(Event)) -> (Status, BTreeMap<String, u32>) {
+        self.sync_and_announce(emit);
+        let installed: Vec<String> = self
+            .state()
+            .catalogue
+            .iter()
+            .filter(|a| a.installed)
+            .map(|a| a.id.clone())
+            .collect();
+        let _reading = self.overrides_read();
+        let overrides = match self.flatpak.overrides() {
+            Ok(overrides) => overrides,
+            Err(err) => {
+                eprintln!("ruya-store: the overrides cannot be read: {err}");
+                return (Status::Failed, BTreeMap::new());
+            }
+        };
+        let mut counts = BTreeMap::new();
+        for id in installed {
+            let Some(over) = overrides.get(&id).filter(|o| !o.trim().is_empty()) else {
+                continue;
+            };
+            let Some(metadata) = self.flatpak.installed_metadata(&id) else {
+                eprintln!("ruya-store: the metadata of {id} cannot be read");
+                continue;
+            };
+            let withdrawn = self
+                .sandbox_of(&metadata, over.clone())
+                .permissions
+                .withdrawn;
+            if !withdrawn.is_empty() {
+                counts.insert(id, withdrawn.len() as u32);
+            }
+        }
+        (Status::Ok, counts)
     }
 
     /// A change of one key the app asks for and the console withdraws (an admin's): `change` runs
@@ -913,13 +974,43 @@ impl<F: Flatpak> Store<F> {
 /// renamed over it. Synced before the rename: after a power cut the name must never point at a
 /// file whose data did not reach the disk (the rename can be persisted before the data). The job
 /// table and an override written back (`flatpak_cli`) go through it.
-pub(crate) fn replace_file(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn replace_file(path: &Path, text: &str) -> std::io::Result<()> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let tmp = path.with_file_name(format!(".{name}.tmp"));
     write_synced(&tmp, text).and_then(|()| std::fs::rename(&tmp, path))
 }
 
-fn write_synced(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+/// Every app's override keyfile in Flatpak's overrides directory, by app id (`Flatpak::overrides`):
+/// the files `replace_file` and `flatpak override` write, read whole. No directory is no override.
+/// A name that is not an app id (the `.<id>.tmp` a write is still making) is not an override. A file
+/// that cannot be read is left out and logged: one broken file does not hide the others. Only
+/// the Linux `flatpak_cli` calls it; it lives here beside `replace_file` so the Windows tests run it.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) fn read_overrides(dir: &Path) -> Result<BTreeMap<String, String>, String> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(e) => return Err(format!("{}: {e}", dir.display())),
+    };
+    let mut found = BTreeMap::new();
+    for entry in entries.flatten() {
+        let Some(id) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if !valid_app_id(&id) {
+            continue;
+        }
+        match std::fs::read_to_string(entry.path()) {
+            Ok(keyfile) => {
+                found.insert(id, keyfile);
+            }
+            Err(e) => eprintln!("ruya-store: the override of {id} cannot be read: {e}"),
+        }
+    }
+    Ok(found)
+}
+
+fn write_synced(path: &Path, text: &str) -> std::io::Result<()> {
     use std::io::Write;
     let mut file = std::fs::File::create(path)?;
     file.write_all(text.as_bytes())?;
@@ -2492,29 +2583,211 @@ directory=launcher
         thread
     }
 
-    #[test]
-    fn a_change_that_comes_during_a_restore_waits_for_it() {
+    /// A restore of the network of `STREAM`, whose override withdraws the network and the home
+    /// files, with `call` run on a thread of its own at the moment `at` hooks into the fake
+    /// (`after_next_show_override`: the restore has read the override; `after_next_reset_override`:
+    /// it has reset it and not written the rest back yet). The restore finishes; returns the
+    /// store and what `call` answered.
+    fn restore_with_a_call_meanwhile<T: Send + 'static>(
+        at: impl FnOnce(&FakeFlatpak, Box<dyn FnOnce() + Send>),
+        call: impl FnOnce(std::sync::Arc<Store<FakeFlatpak>>) -> T + Send + 'static,
+    ) -> (std::sync::Arc<Store<FakeFlatpak>>, T) {
         let s = std::sync::Arc::new(perm_store(fake()));
         s.withdraw_permission(STREAM, "network", true, &mut none);
         s.withdraw_permission(STREAM, "home-files", true, &mut none);
-        // Between the restore's read of the override and its reset, the devices are withdrawn
-        // from another thread (a second page, or root).
         let (other, (send, receive)) = (s.clone(), std::sync::mpsc::channel());
-        s.flatpak.after_next_show_override(move || {
-            let _ = send.send(meanwhile(move || {
-                other.withdraw_permission(STREAM, "all-devices", true, &mut none)
-            }));
-        });
+        at(
+            &s.flatpak,
+            Box::new(move || {
+                let _ = send.send(meanwhile(move || call(other)));
+            }),
+        );
         assert_eq!(
             s.restore_permission(STREAM, "network", true, &mut none),
             Status::Ok
         );
-        let withdrawal = receive.recv().unwrap();
-        assert_eq!(withdrawal.join().unwrap(), Status::Ok);
+        let answer = receive.recv().unwrap().join().unwrap();
+        (s, answer)
+    }
+
+    #[test]
+    fn a_change_that_comes_during_a_restore_waits_for_it() {
+        // Between the restore's read of the override and its reset, the devices are withdrawn
+        // from another thread (a second page, or root).
+        let (s, withdrawal) = restore_with_a_call_meanwhile(
+            |flatpak, hook| flatpak.after_next_show_override(hook),
+            |other| other.withdraw_permission(STREAM, "all-devices", true, &mut none),
+        );
+        assert_eq!(withdrawal, Status::Ok);
         // Both answered ok, so both hold: the reset did not take the devices' withdrawal away.
         let (_, p) = s.get_permissions(STREAM, &mut none);
         assert_eq!(p.withdrawn, strings(&["home-files", "all-devices"]));
         assert!(p.effective.contains(&"network".to_owned()));
+    }
+
+    #[test]
+    fn two_reads_do_not_wait_for_each_other() {
+        // Each read of the override waits inside the fake until the other is inside too: a read
+        // that queued behind the other (a lock held across the reads) never meets it.
+        let s = std::sync::Arc::new(perm_store(fake()));
+        let meeting = s.flatpak.readers_meet(2, std::time::Duration::from_secs(5));
+        let reads: Vec<_> = (0..2)
+            .map(|_| {
+                let s = s.clone();
+                std::thread::spawn(move || s.get_permissions(STREAM, &mut none).0)
+            })
+            .collect();
+        for read in reads {
+            assert_eq!(read.join().unwrap(), Status::Ok);
+        }
+        assert!(
+            meeting.met(),
+            "both reads were reading the override at once"
+        );
+    }
+
+    /// Runs `read` after a restore of the network has reset the override of `STREAM` and has not
+    /// written home-files' withdrawal back yet, and returns its answer once the restore is done.
+    /// Before the restore the override withdraws the network and the home files; after it only the
+    /// home files; in between it is gone.
+    fn read_between_a_restores_steps<T: Send + 'static>(
+        read: impl FnOnce(std::sync::Arc<Store<FakeFlatpak>>) -> T + Send + 'static,
+    ) -> T {
+        restore_with_a_call_meanwhile(
+            |flatpak, hook| flatpak.after_next_reset_override(hook),
+            read,
+        )
+        .1
+    }
+
+    #[test]
+    fn a_read_that_comes_during_a_restore_never_sees_it_half_done() {
+        let (status, p) = read_between_a_restores_steps(|s| s.get_permissions(STREAM, &mut none));
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            p.withdrawn,
+            strings(&["home-files"]),
+            "the override after the restore, not the one between its steps (nothing withdrawn)"
+        );
+    }
+
+    #[test]
+    fn a_batch_that_comes_during_a_restore_never_sees_it_half_done() {
+        let (status, counts) = read_between_a_restores_steps(|s| s.withdrawn_counts(&mut none));
+        assert_eq!(status, Status::Ok);
+        assert_eq!(counts, BTreeMap::from([(STREAM.to_owned(), 1)]));
+    }
+
+    // ---- GetWithdrawnCounts (RUY-1190) ----
+
+    const ROCKET: &str = "org.ruya.Rocket";
+    const BROKEN: &str = "org.ruya.Broken";
+
+    /// Five apps installed: `STREAM` with the network and the devices withdrawn, `Racer` (network)
+    /// and `ROCKET` (network, with an override that withdraws nothing), no override on the first;
+    /// `BROKEN` has an override and no readable metadata; `Puzzle` is not installed.
+    fn counted_store() -> Store<FakeFlatpak> {
+        let s = store(
+            fake()
+                .with_app("ruyaos", STREAM, 1)
+                .with_installed("ruyaos", STREAM, 1)
+                .with_metadata(STREAM, STREAM_META)
+                .with_installed("ruyaos", "org.ruya.Racer", 1)
+                .with_installed("ruyaos", ROCKET, 1)
+                .with_installed_metadata(ROCKET, "[Context]\nshared=network;\n")
+                .with_override(ROCKET, "[Environment]\nFOO=bar\n")
+                .with_installed("ruyaos", BROKEN, 1)
+                .with_override(BROKEN, "[Context]\nshared=!network;\n"),
+        );
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        s.withdraw_permission(STREAM, "all-devices", true, &mut none);
+        s
+    }
+
+    #[test]
+    fn the_batch_counts_the_withdrawn_keys_of_each_app_by_the_rule_of_get_permissions() {
+        let s = counted_store();
+        let (shows, lists, metadata) = (
+            s.flatpak.override_runs().len(),
+            s.flatpak.installed_reads(),
+            s.flatpak.installed_metadata_reads().len(),
+        );
+        let (status, counts) = s.withdrawn_counts(&mut none);
+        assert_eq!(status, Status::Ok);
+        // Only the app with withdrawn keys; the one whose override withdraws nothing and the one
+        // whose metadata cannot be read are left out.
+        assert_eq!(counts, BTreeMap::from([(STREAM.to_owned(), 2)]));
+        // The cost of the batch: one `flatpak list`, no `flatpak override --show` for any app,
+        // the metadata of the apps that have an override only (not Racer's).
+        assert_eq!(s.flatpak.installed_reads() - lists, 1);
+        assert_eq!(s.flatpak.override_runs().len(), shows);
+        let mut asked = s.flatpak.installed_metadata_reads()[metadata..].to_vec();
+        asked.sort();
+        assert_eq!(asked, [BROKEN, ROCKET, STREAM]);
+        // One rule: each count is the length of what GetPermissions calls withdrawn.
+        for id in [STREAM, "org.ruya.Racer", ROCKET] {
+            let (_, p) = s.get_permissions(id, &mut none);
+            assert_eq!(
+                counts.get(id).copied().unwrap_or(0) as usize,
+                p.withdrawn.len(),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_batch_reads_the_installed_set_first_and_announces_a_correction() {
+        let s = counted_store();
+        s.flatpak.remove_installed(STREAM);
+        let mut events = Vec::new();
+        let (status, counts) = s.withdrawn_counts(&mut |e| events.push(e));
+        assert_eq!(status, Status::Ok);
+        assert!(
+            counts.is_empty(),
+            "an app that is gone has no count: {counts:?}"
+        );
+        assert_eq!(events, [Event::InstalledChanged]);
+    }
+
+    #[test]
+    fn a_batch_that_cannot_read_the_overrides_fails() {
+        let s = counted_store();
+        s.flatpak.set_override_fails(true);
+        assert_eq!(
+            s.withdrawn_counts(&mut none),
+            (Status::Failed, BTreeMap::new())
+        );
+    }
+
+    #[test]
+    fn the_overrides_are_read_from_their_directory_in_one_pass() {
+        let dir = tempfile::tempdir().unwrap();
+        // Written by Flatpak or `replace_file`; the half-written copy, a stray file and a folder
+        // are no app's override.
+        std::fs::write(
+            dir.path().join("org.ruya.Stream"),
+            "[Context]\nshared=!network;\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("org.ruya.Racer"), "").unwrap();
+        std::fs::write(dir.path().join(".org.ruya.Puzzle.tmp"), "[Context]\n").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), "x").unwrap();
+        std::fs::create_dir(dir.path().join("org.ruya.Folder")).unwrap();
+        assert_eq!(
+            read_overrides(dir.path()).unwrap(),
+            BTreeMap::from([
+                (
+                    "org.ruya.Stream".to_owned(),
+                    "[Context]\nshared=!network;\n".to_owned()
+                ),
+                ("org.ruya.Racer".to_owned(), String::new()),
+            ])
+        );
+        // No override was ever written: no directory yet.
+        assert_eq!(
+            read_overrides(&dir.path().join("none")).unwrap(),
+            BTreeMap::new()
+        );
     }
 
     #[test]

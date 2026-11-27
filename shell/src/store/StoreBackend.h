@@ -112,6 +112,9 @@ public:
     // The permissions of an installed app (GetPermissions, RUY-744). Answers with permissionsLoaded; a
     // reply older than one already reported for the same app is dropped.
     virtual void getPermissions(const QString &id) = 0;
+    // How many permissions the console withdraws, for every installed app at once (GetWithdrawnCounts,
+    // RUY-1190). Answers with withdrawnCountsLoaded; a reply older than one already reported is dropped.
+    virtual void getWithdrawnCounts() = 0;
     // Admin only (the service checks the caller). Each answers with permissionChanged(id, key, status);
     // resetPermissions with key "".
     virtual void withdrawPermission(const QString &id, const QString &key) = 0;
@@ -146,6 +149,9 @@ signals:
     void permissionsLoaded(const QString &id, const QString &status, const QStringList &effective,
                            const QStringList &withdrawn, const QStringList &withdrawable);
     void permissionChanged(const QString &id, const QString &key, const QString &status);
+    // app id -> how many of its permissions are withdrawn (an int), only the apps that have any. Empty when the
+    // call failed: nothing is known to be withdrawn, and an older answer is not shown in its place.
+    void withdrawnCountsLoaded(const QVariantMap &counts);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
@@ -181,6 +187,13 @@ protected:
         if (m_permissionsSeq[id].accept(request))
             emit permissionsLoaded(id, status, effective, withdrawn, withdrawable);
     }
+    // The batch is one sequence: any newer reply, a failure included, makes an older one stale.
+    quint64 beginWithdrawnCountsRequest() { return m_withdrawnCountsSeq.begin(); }
+    void deliverWithdrawnCounts(quint64 request, const QVariantMap &counts)
+    {
+        if (m_withdrawnCountsSeq.accept(request))
+            emit withdrawnCountsLoaded(counts);
+    }
 
 private:
     static QString searchKey(const QString &query, bool gamepadOnly)
@@ -191,5 +204,6 @@ private:
     RequestSequence m_installedSeq;
     QHash<QString, RequestSequence> m_searchSeq;
     QHash<QString, RequestSequence> m_permissionsSeq;
+    RequestSequence m_withdrawnCountsSeq;
     JobBook m_jobs;
 };

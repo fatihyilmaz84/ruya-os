@@ -927,6 +927,34 @@ grep -q 'usb=yes' "$tmp/perms-probe.sh" && pass "vm-store-check.sh perms: the pr
 eval "$(grep '^perms_devices_of()' "$here/vm-store-check.sh")"
 expect_contains "vm-store-check.sh perms: Flatpak's order of the devices entries does not matter" \
     "[$(printf '[Context]\nshared=!network;\ndevices=dri;!all;input;\n' | perms_devices_of)]" '[!all dri input]'
+# RUY-1190: GetWithdrawnCounts. The check reads the test app's count out of busctl's `sa{su}` line (the app among
+# others, alone, absent, or the call failed), and times reads with the wall clock.
+papp=org.ruyaos.TestPerms
+eval "$(grep '^perms_count_of()' "$here/vm-store-check.sh")"
+eval "$(grep '^perms_ms()' "$here/vm-store-check.sh")"
+expect_contains "vm-store-check.sh perms: the test app's count among others" \
+    "[$(echo 'sa{su} "ok" 3 "org.a.B" 1 "org.ruyaos.TestPerms" 2 "org.c.D" 7' | perms_count_of)]" '[2]'
+expect_contains "vm-store-check.sh perms: the test app's count alone" \
+    "[$(echo 'sa{su} "ok" 1 "org.ruyaos.TestPerms" 1' | perms_count_of)]" '[1]'
+expect_contains "vm-store-check.sh perms: an app that is not listed has no count" \
+    "[$(echo 'sa{su} "ok" 1 "org.a.B" 4' | perms_count_of)]" '[]'
+expect_contains "vm-store-check.sh perms: a failed call has no count" \
+    "[$(echo 'sa{su} "failed" 0' | perms_count_of)]" '[]'
+# (the real sleep: the section's shim `sleep` does not wait)
+ms="$(perms_ms /usr/bin/sleep 0.3)"
+{ [ "$ms" -ge 250 ] && [ "$ms" -lt 1500 ]; } && pass "vm-store-check.sh perms: perms_ms measures the wall clock of a command ($ms ms for 0.3 s)" || fail "vm-store-check.sh perms: perms_ms says $ms ms for a 0.3 s command"
+storexml1190="$here/../api/dbus/org.ruyaos.Store1.xml"
+grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="status" type="s" direction="out"' \
+    && grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="counts" type="a{su}" direction="out"' \
+    && grep -q 'perms_call GetWithdrawnCounts)' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh perms calls GetWithdrawnCounts as Store1.xml declares it (no argument, status and a{su})" \
+    || fail "vm-store-check.sh perms: GetWithdrawnCounts is not the contract's"
+grep -q 'for _ in \$(seq 36); do perms_call GetPermissions s "\$papp" >/dev/null & done' "$here/vm-store-check.sh" \
+    && grep -q 'perms_ms perms_call GetWithdrawnCounts' "$here/vm-store-check.sh" \
+    && grep -q 'perms_ms perms_call GetPermissions s "\$papp"' "$here/vm-store-check.sh" \
+    && grep -q '\[ "\$t_all" -lt "\$limit_all" \]' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh perms times a GetPermissions and the batch among 36 parallel reads, and all of them (RUY-1190)" \
+    || fail "vm-store-check.sh perms: the timing assertion of the reads is gone"
 
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.

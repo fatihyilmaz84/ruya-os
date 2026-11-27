@@ -1,6 +1,7 @@
 //! The real `flatpak` command (Linux). Everything here is system-wide (`--system`, as root) and
 //! non-interactive. The text it prints is parsed in `flatpak.rs`; this file starts the processes.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::os::fd::AsFd;
@@ -231,6 +232,10 @@ impl Flatpak for FlatpakCli {
             return Err("refused argument".to_owned());
         }
         output_of(&ruya_flatpak::show_command(id))
+    }
+
+    fn overrides(&self) -> Result<BTreeMap<String, String>, String> {
+        crate::service::read_overrides(&self.overrides_dir)
     }
 
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {

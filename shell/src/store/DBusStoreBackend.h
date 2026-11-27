@@ -25,6 +25,7 @@ public:
     void getApp(const QString &id) override;
     void listJobs() override;
     void getPermissions(const QString &id) override;
+    void getWithdrawnCounts() override;
     void withdrawPermission(const QString &id, const QString &key) override;
     void restorePermission(const QString &id, const QString &key) override;
     void resetPermissions(const QString &id) override;

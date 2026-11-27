@@ -61,6 +61,9 @@ impl Flatpak for DynFlatpak {
     fn show_override(&self, id: &str) -> Result<String, String> {
         (**self).show_override(id)
     }
+    fn overrides(&self) -> Result<BTreeMap<String, String>, String> {
+        (**self).overrides()
+    }
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
         (**self).add_override(id, args)
     }
@@ -471,6 +474,13 @@ impl StoreIface {
         )
     }
 
+    async fn get_withdrawn_counts(&self) -> (String, BTreeMap<String, u32>) {
+        let (status, counts) = self
+            .off_executor(|store, emit| store.withdrawn_counts(emit))
+            .await;
+        (status.as_str().to_owned(), counts)
+    }
+
     async fn withdraw_permission(
         &self,
         app_id: &str,
@@ -612,6 +622,9 @@ mod tests {
         }
         fn show_override(&self, id: &str) -> Result<String, String> {
             self.0.show_override(id)
+        }
+        fn overrides(&self) -> Result<BTreeMap<String, String>, String> {
+            self.0.overrides()
         }
         fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
             self.0.add_override(id, args)

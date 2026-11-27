@@ -394,26 +394,71 @@ Item {
             compare(appRow(tc.hopper).value, "1 withdrawn")
         }
 
-        // A pane that is not shown reads no permissions, whatever the Library or the Store do meanwhile.
+        // A pane that is not shown reads nothing, whatever the Library or the Store do meanwhile; a shown one reads
+        // the counts of every app with one call, not one read per app (RUY-1190).
         function test_a_hidden_pane_asks_for_no_permissions() {
             signInAdmin()
             openPane()
-            tryVerify(() => Store.mockPermissionReads() >= 3, 2000, "shown: one read per app")
+            tryVerify(() => Store.mockWithdrawnCountReads() >= 1, 2000, "shown: the batch")
+            wait(200)
+            compare(Store.mockWithdrawnCountReads(), 1, "one batch for the visit")
+            compare(Store.mockPermissionReads(), 0, "no read per app")
             keyClick(Qt.Key_Left)
             tryVerify(() => find("categoryList").activeFocus, 2000)
             keyClick(Qt.Key_Up)                            // Notifications: Privacy is hidden now
             tryCompare(find("page_settings").current, "key", "notifications")
             tryVerify(() => !find("panePrivacy").visible)
             wait(100)
-            const before = Store.mockPermissionReads()
+            const before = Store.mockWithdrawnCountReads()
             installHopper()                                // a new app and a new Library item
             Store.refreshInstalled()
             tryVerify(() => Store.installed.some(a => a.id === tc.hopper))
             wait(300)
-            compare(Store.mockPermissionReads(), before, "no GetPermissions while hidden")
+            compare(Store.mockWithdrawnCountReads(), before, "no call while hidden")
             keyClick(Qt.Key_Down)                          // Privacy again: every app, the new one too
             tryVerify(() => find("panePrivacy").visible)
-            tryVerify(() => Store.mockPermissionReads() >= before + 4, 2000, "shown again: one read per app")
+            tryVerify(() => Store.mockWithdrawnCountReads() === before + 1, 2000, "shown again: one batch")
+            wait(200)
+            compare(Store.mockWithdrawnCountReads(), before + 1, "and no second one when the list grew")
+            compare(Store.mockPermissionReads(), 0, "still no read per app")
+        }
+
+        // The page of an app opened right after the pane: the pane's one batch and the page's one read of its app.
+        function test_an_app_page_opened_from_the_pane_costs_one_batch_and_one_read() {
+            signInAdmin()
+            openApp(puzzle)
+            wait(300)
+            compare(Store.mockWithdrawnCountReads(), 1, "one batch call in all")
+            compare(Store.mockPermissionReads(), 1, "one GetPermissions, the page's own")
+        }
+
+        function test_the_row_counts_the_withdrawn_keys_of_each_app() {
+            signInAdmin()
+            installStream()
+            Store.withdrawPermission(tc.stream, "network")
+            tryVerify(() => (Store.permissions(tc.stream).withdrawn ?? []).indexOf("network") >= 0, 2000)
+            Store.withdrawPermission(tc.stream, "all-devices")
+            tryVerify(() => (Store.permissions(tc.stream).withdrawn ?? []).indexOf("all-devices") >= 0, 2000)
+            openPane()
+            tryCompare(appRow(stream), "value", "2 withdrawn")
+            compare(appRow(editor).value, "1 withdrawn")
+            compare(appRow(puzzle).value, "", "none withdrawn: no value")
+        }
+
+        // The batch asked first answers last: it must not undo what a newer one (and an app's own answer) said.
+        function test_a_late_batch_reply_does_not_undo_a_newer_one() {
+            signInAdmin()
+            openPane()
+            tryCompare(appRow(editor), "value", "1 withdrawn")
+            Store.mockWithdrawnCountsDelayed(300)
+            Store.loadWithdrawnCounts()                    // reads the editor's one withdrawn key, lands late
+            compare(Store.mockPendingWithdrawnCountReplies(), 1)
+            Store.resetPermissions(tc.editor)
+            tryCompare(appRow(editor), "value", "")        // the app's own answer after the reset
+            Store.loadWithdrawnCounts()                    // reads none, lands at once
+            tryVerify(() => Store.mockPendingWithdrawnCountReplies() === 0, 3000, "the slow reply has landed")
+            compare(Store.withdrawnCount(tc.editor), 0, "the old answer was dropped")
+            compare(appRow(editor).value, "")
         }
 
         function test_the_play_game_page_has_the_permissions_row() {

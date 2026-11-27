@@ -5,8 +5,8 @@ import RuyaShell
 // Settings -> Privacy (RUY-744, 02 §1.2): the console-wide privacy settings. Today one group, App permissions:
 // the installed apps (the Store's installed list: every Flatpak app on the console, a .play game too, RUY-854), by name, each a page row
 // that opens its permissions (AppPermissionsPage, through appRequested). A row's value says how many of the
-// app's permissions are withdrawn, once the service has answered (each app's permissions are read when the
-// pane is shown). RUY-80 adds the privacy statement, network visibility and Your activity as further groups.
+// app's permissions are withdrawn, once the service has answered (one call for all the apps when the pane is
+// shown, RUY-1190). RUY-80 adds the privacy statement, network visibility and Your activity as further groups.
 SettingsPane {
     id: pane
 
@@ -21,33 +21,30 @@ SettingsPane {
         return AppName.of(appId) || appId
     }
 
-    // Bumped when an answer about any app arrives: the values follow it.
+    // Bumped when the Store's counts change: the values follow it.
     property int tick: 0
     Connections {
         target: Store
-        function onPermissionsLoaded() { pane.tick++ }
+        function onWithdrawnCountsChanged() { pane.tick++ }
     }
     function withdrawnCount(appId) {
-        const p = tick >= 0 ? Store.permissions(appId) : ({})
-        return p.status === "ok" ? p.withdrawn.length : 0
+        return tick >= 0 ? Store.withdrawnCount(appId) : 0
     }
-    // Read every app's permissions while the pane is shown (a page closed over it may have changed some). A hidden
-    // pane reads nothing, whatever changes in the Library or the Store meanwhile.
-    function loadAll() {
-        if (!visible)
-            return
-        for (const id of appIds)
-            Store.loadPermissions(id)
+    // One call reads the counts of every installed app (a page closed over the pane may have changed some), however
+    // many apps there are and whatever the list does meanwhile: the service reads its own installed set. A hidden
+    // pane reads nothing, whatever changes in the Library or the Store meanwhile. Shown and completed can both
+    // fire for one visit; callLater makes them one call.
+    function loadCounts() {
+        if (visible)
+            Store.loadWithdrawnCounts()
     }
     // The list is read again when the pane is shown: an app installed since (a .play game) is in the service's
-    // answer, not in what the shell held; its permissions are read when the list arrives.
+    // answer, not in what the shell held.
     onVisibleChanged: if (visible) {
         Store.refreshInstalled()
-        Qt.callLater(loadAll)
+        Qt.callLater(loadCounts)
     }
-    // The list changed: the new apps' permissions are read.
-    onAppIdsChanged: Qt.callLater(loadAll)
-    Component.onCompleted: Qt.callLater(loadAll)
+    Component.onCompleted: Qt.callLater(loadCounts)
 
     GroupLabel {
         u: pane.u

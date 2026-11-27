@@ -89,6 +89,8 @@ public:
     // controllers (gamepad); audio, session-bus and gamepad cannot. Text Editor starts with home-files
     // withdrawn. An uninstall drops the app's withdrawals.
     void getPermissions(const QString &id) override;
+    // The count per installed app that has a withdrawn key, from the same list getPermissions reports.
+    void getWithdrawnCounts() override;
     void withdrawPermission(const QString &id, const QString &key) override;
     void restorePermission(const QString &id, const QString &key) override;
     void resetPermissions(const QString &id) override;
@@ -100,6 +102,10 @@ public:
     void permissionsDelayed(int ms) { m_permissionsDelayMs = ms; }
     int pendingPermissionReplies() const { return m_pendingPermissions; }
     int permissionReads() const { return m_permissionReads; }
+    // Tests only, the same for getWithdrawnCounts.
+    void withdrawnCountsDelayed(int ms) { m_withdrawnCountsDelayMs = ms; }
+    int pendingWithdrawnCountReplies() const { return m_pendingWithdrawnCounts; }
+    int withdrawnCountReads() const { return m_withdrawnCountReads; }
 
 private:
     struct Job
@@ -120,6 +126,8 @@ private:
     void searchAfter(const QString &query, bool gamepadOnly, uint limit, int ms);
     void reject(const QString &id, const QString &status);
     void changePermission(const QString &id, const QString &key, bool withdraw);
+    // The keys of the app's permissions the console's override takes away.
+    QStringList withdrawnKeys(const AppInfo &app) const;
     QList<AppInfo> installedApps() const;
     QList<StoreJob> jobTable() const;
     static QString kindName(Job::Kind kind);
@@ -143,4 +151,7 @@ private:
     int m_permissionsDelayMs = 0;
     int m_pendingPermissions = 0;
     int m_permissionReads = 0; // GetPermissions asked since the last reset
+    int m_withdrawnCountsDelayMs = 0;
+    int m_pendingWithdrawnCounts = 0;
+    int m_withdrawnCountReads = 0; // GetWithdrawnCounts asked since the last reset
 };

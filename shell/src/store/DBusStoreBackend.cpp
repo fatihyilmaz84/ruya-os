@@ -34,6 +34,34 @@ QVariantMap parseDict(const QDBusArgument &arg)
     return out;
 }
 
+// Sends `msg` and hands the reply (an error reply too) to `answered`, on `owner`'s thread.
+template<typename Answered>
+void callThen(QDBusConnection &bus, QObject *owner, const QDBusMessage &msg, Answered answered)
+{
+    auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(msg), owner);
+    QObject::connect(watcher, &QDBusPendingCallWatcher::finished, owner, [answered](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        answered(w->reply());
+    });
+}
+
+// a{su}: app id -> count, as ints
+QVariantMap parseCounts(const QDBusArgument &arg)
+{
+    QVariantMap out;
+    arg.beginMap();
+    while (!arg.atEnd()) {
+        QString key;
+        uint count = 0;
+        arg.beginMapEntry();
+        arg >> key >> count;
+        arg.endMapEntry();
+        out.insert(key, int(count));
+    }
+    arg.endMap();
+    return out;
+}
+
 // aa{sv} of { image, thumb, caption }
 QVariantList parseScreenshots(const QDBusArgument &arg)
 {
@@ -293,6 +321,23 @@ void DBusStoreBackend::getPermissions(const QString &id)
         }
         deliverPermissions(id, request, reply.argumentAt<0>(), reply.argumentAt<1>(), reply.argumentAt<2>(),
                            reply.argumentAt<3>());
+    });
+}
+
+void DBusStoreBackend::getWithdrawnCounts()
+{
+    const quint64 request = beginWithdrawnCountsRequest();
+    callThen(m_bus, this, QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetWithdrawnCounts")),
+             [this, request](const QDBusMessage &reply) {
+        // (status s, counts a{su})
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2
+            || reply.arguments().at(0).toString() != QLatin1String("ok")) {
+            qWarning("ruya-shell: Store1 GetWithdrawnCounts failed: %s", qPrintable(reply.errorMessage()));
+            // A failure is an outcome too: an older reply after it is stale.
+            deliverWithdrawnCounts(request, {});
+            return;
+        }
+        deliverWithdrawnCounts(request, parseCounts(reply.arguments().at(1).value<QDBusArgument>()));
     });
 }
 

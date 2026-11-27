@@ -168,6 +168,11 @@ perms_probe() { flatpak run --system "$papp" 2>/dev/null | tr '\n' ' '; }
 perms_devices_of() { sed -n 's/^devices=//p' | tr ';' '\n' | sed '/^$/d' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'; }
 perms_devices() { flatpak override --system --show "$papp" | perms_devices_of; }
 perms_call() { busctl --system call "$svc" "$path" "$ifc" "$@" 2>&1; }
+# The count GetWithdrawnCounts (busctl: `sa{su} "ok" 2 "<id>" 2 "<id>" 1`) gives the test app, on stdin; nothing when
+# the app is not listed.
+perms_count_of() { sed -n "s/^sa{su} \"ok\" [0-9][0-9]* .*\"$papp\" \([0-9][0-9]*\).*/\1/p"; }
+# Whole milliseconds a command takes, wall clock (RUY-1190: the cost of a read under load).
+perms_ms() { local t0 t1; t0="$(date +%s%N)"; "$@" >/dev/null 2>&1; t1="$(date +%s%N)"; echo $(( (t1 - t0) / 1000000 )); }
 perms_clean() {
     flatpak uninstall --system -y --noninteractive "$papp" "$prt" >/dev/null 2>&1
     flatpak override --system --reset "$papp" >/dev/null 2>&1
@@ -247,6 +252,29 @@ perms)
         echo "UNVERIFIED: (b) this VM has no /dev/bus/usb"
     fi
 
+    echo "--- GetWithdrawnCounts (RUY-1190): the count of GetPermissions' withdrawn list, in one call"
+    # a{su}: only apps with a withdrawn key are listed. The app has network and all-devices withdrawn now.
+    got="$(perms_call GetWithdrawnCounts)"
+    echo "GetWithdrawnCounts: $got"
+    [ "$(echo "$got" | perms_count_of)" = 2 ] && ok "GetWithdrawnCounts counts 2 withdrawn for the test app" || bad "GetWithdrawnCounts after two withdrawals: $got"
+
+    echo "--- cost (RUY-1190): reads do not queue behind each other"
+    # 36 GetPermissions at once (the Privacy pane used to ask for every app twice), and in the middle of them
+    # one more GetPermissions and the batch, each timed. Before the fix a read held the override lock across
+    # three flatpak starts: 37 in parallel took 1.15 s on the Dell, the last one waited for all the others.
+    # The limits are generous (a loaded VM starts processes slowly); they catch a queue, not a slow disk.
+    limit_one=1500; limit_all=6000
+    t0="$(date +%s%N)"
+    for _ in $(seq 36); do perms_call GetPermissions s "$papp" >/dev/null & done
+    t_get="$(perms_ms perms_call GetPermissions s "$papp")"
+    t_batch="$(perms_ms perms_call GetWithdrawnCounts)"
+    wait
+    t_all=$(( ($(date +%s%N) - t0) / 1000000 ))
+    echo "GetPermissions $t_get ms, GetWithdrawnCounts $t_batch ms among 36 more reads, all $t_all ms"
+    [ "$t_get" -lt "$limit_one" ] && ok "a GetPermissions among 36 others answers in $t_get ms (limit $limit_one)" || bad "a GetPermissions among 36 others took $t_get ms (limit $limit_one)"
+    [ "$t_batch" -lt "$limit_one" ] && ok "GetWithdrawnCounts among 36 reads answers in $t_batch ms (limit $limit_one)" || bad "GetWithdrawnCounts among 36 reads took $t_batch ms (limit $limit_one)"
+    [ "$t_all" -lt "$limit_all" ] && ok "38 reads at once are all answered in $t_all ms (limit $limit_all)" || bad "38 reads at once took $t_all ms (limit $limit_all)"
+
     echo "--- refused keys"
     case "$(perms_call WithdrawPermission ss "$papp" audio)" in 's "not-withdrawable"') ok "audio is not-withdrawable";; *) bad "WithdrawPermission audio";; esac
     case "$(perms_call WithdrawPermission ss "$papp" host-files)" in 's "invalid"') ok "a key the app does not ask for is invalid (an override never grants)";; *) bad "WithdrawPermission host-files";; esac
@@ -264,6 +292,8 @@ perms)
     echo "--- (c) reset"
     case "$(perms_call ResetPermissions s "$papp")" in 's "ok"') ok "ResetPermissions";; *) bad "ResetPermissions";; esac
     [ -z "$(flatpak override --system --show "$papp")" ] && ok "no override left" || bad "an override is left: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    got="$(perms_call GetWithdrawnCounts)"
+    case "$got" in 'sa{su} "ok" '*) [ -z "$(echo "$got" | perms_count_of)" ] && ok "GetWithdrawnCounts no longer lists the test app after the reset" || bad "GetWithdrawnCounts still lists the test app after the reset: $got";; *) bad "GetWithdrawnCounts after the reset: $got";; esac
     now="$(perms_probe)"; echo "sandbox: $now"
     case "$now" in *"net=0 "*) bad "(c) the network did not come back: '$now'";; *) ok "(c) the network is back";; esac
     if [ "$host_usb" = yes ]; then

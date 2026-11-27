@@ -2,8 +2,9 @@
 //! the fake), the parsers for the command's output, and the mapping of its failures to the
 //! contract's job statuses. Running the real command is Linux-only (`flatpak_cli.rs`).
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 use crate::app::JobStatus;
 
@@ -147,6 +148,10 @@ pub trait Flatpak: Send + Sync {
     fn version(&self) -> Option<String>;
     /// The app's system-wide override as a keyfile (`flatpak override --show`); "" without one.
     fn show_override(&self, id: &str) -> Result<String, String>;
+    /// Every app's system-wide override keyfile by app id, read in one pass (the files of Flatpak's
+    /// overrides directory, no process); an app without one is absent. What `show_override` prints
+    /// for each of them. A file that cannot be read is left out and logged.
+    fn overrides(&self) -> Result<BTreeMap<String, String>, String>;
     /// Adds `args` (`overrides::withdraw_args`) to the app's override.
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String>;
     /// Removes the app's override, whoever wrote it (`flatpak override --reset`).
@@ -454,6 +459,8 @@ struct FakeState {
     installed_metadata: HashMap<String, String>,
     fail_next: Option<FlatpakError>,
     installed_fails: bool,
+    /// How many times `installed()` (`flatpak list`) was read.
+    installed_reads: usize,
     /// Runs once, right after the next `installed()` read, with the state unlocked.
     after_installed: Option<Box<dyn FnOnce() + Send>>,
     progress: Vec<u32>,
@@ -470,6 +477,45 @@ struct FakeState {
     add_override_fails_once: bool,
     /// Runs once, right after the next `show_override` read, with the state unlocked.
     after_show_override: Option<Box<dyn FnOnce() + Send>>,
+    /// Runs once, right after the next `reset_override`, with the state unlocked: the moment a
+    /// restore has reset the override and not written the rest yet.
+    after_reset_override: Option<Box<dyn FnOnce() + Send>>,
+    /// Every `show_override` waits here for the other readers.
+    show_meeting: Option<Arc<Meeting>>,
+    /// The apps `installed_metadata` was asked for, in order.
+    installed_metadata_reads: Vec<String>,
+}
+
+/// A rendezvous for reads that must be inside the fake at the same time: `arrive` returns once
+/// `readers` calls are in it (or `patience` ran out, which `met` then says). A reader that waits
+/// for another one under a lock never meets it.
+pub struct Meeting {
+    readers: usize,
+    patience: Duration,
+    arrived: Mutex<usize>,
+    all: Condvar,
+    timed_out: Mutex<bool>,
+}
+
+impl Meeting {
+    fn arrive(&self) {
+        let mut arrived = self.arrived.lock().unwrap_or_else(|e| e.into_inner());
+        *arrived += 1;
+        self.all.notify_all();
+        let (arrived, wait) = self
+            .all
+            .wait_timeout_while(arrived, self.patience, |n| *n < self.readers)
+            .unwrap_or_else(|e| e.into_inner());
+        drop(arrived);
+        if wait.timed_out() {
+            *self.timed_out.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        }
+    }
+
+    /// Whether every reader was inside at once (nobody waited in vain).
+    pub fn met(&self) -> bool {
+        !*self.timed_out.lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 impl Default for FakeFlatpak {
@@ -690,6 +736,37 @@ impl FakeFlatpak {
     pub fn after_next_show_override(&self, hook: impl FnOnce() + Send + 'static) {
         self.state().after_show_override = Some(Box::new(hook));
     }
+
+    /// Runs `hook` once after the next `reset_override`: a restore has reset the override and has
+    /// not written the rest back yet.
+    pub fn after_next_reset_override(&self, hook: impl FnOnce() + Send + 'static) {
+        self.state().after_reset_override = Some(Box::new(hook));
+    }
+
+    /// Makes every `show_override` wait until `readers` of them are inside, for up to `patience`.
+    /// The returned meeting says whether they all were (a read that queues behind another never
+    /// meets it).
+    pub fn readers_meet(&self, readers: usize, patience: Duration) -> Arc<Meeting> {
+        let meeting = Arc::new(Meeting {
+            readers,
+            patience,
+            arrived: Mutex::new(0),
+            all: Condvar::new(),
+            timed_out: Mutex::new(false),
+        });
+        self.state().show_meeting = Some(meeting.clone());
+        meeting
+    }
+
+    /// How many times the installed list was read (one `flatpak list` each).
+    pub fn installed_reads(&self) -> usize {
+        self.state().installed_reads
+    }
+
+    /// The apps `installed_metadata` was asked for, in order (one `flatpak info` each).
+    pub fn installed_metadata_reads(&self) -> Vec<String> {
+        self.state().installed_metadata_reads.clone()
+    }
 }
 
 /// What `flatpak override <args>` makes of an override keyfile: each option replaces the entry
@@ -761,6 +838,7 @@ impl Flatpak for FakeFlatpak {
 
     fn installed(&self) -> Result<Vec<InstalledApp>, String> {
         let mut state = self.state();
+        state.installed_reads += 1;
         if state.installed_fails {
             return Err("flatpak list failed".to_owned());
         }
@@ -790,7 +868,8 @@ impl Flatpak for FakeFlatpak {
     }
 
     fn installed_metadata(&self, id: &str) -> Option<String> {
-        let state = self.state();
+        let mut state = self.state();
+        state.installed_metadata_reads.push(id.to_owned());
         state
             .installed_metadata
             .get(id)
@@ -857,19 +936,38 @@ impl Flatpak for FakeFlatpak {
     }
 
     fn show_override(&self, id: &str) -> Result<String, String> {
-        let (shown, hook) = {
+        let (shown, hook, meeting) = {
             let mut state = self.state();
             state.override_runs.push(ruya_flatpak::show_command(id));
             if state.override_fails {
                 return Err("flatpak override failed".to_owned());
             }
             let shown = state.overrides.get(id).cloned().unwrap_or_default();
-            (shown, state.after_show_override.take())
+            (
+                shown,
+                state.after_show_override.take(),
+                state.show_meeting.clone(),
+            )
         };
+        if let Some(meeting) = meeting {
+            meeting.arrive();
+        }
         if let Some(hook) = hook {
             hook();
         }
         Ok(shown)
+    }
+
+    fn overrides(&self) -> Result<BTreeMap<String, String>, String> {
+        let state = self.state();
+        if state.override_fails {
+            return Err("the overrides cannot be read".to_owned());
+        }
+        Ok(state
+            .overrides
+            .iter()
+            .map(|(id, keyfile)| (id.clone(), keyfile.clone()))
+            .collect())
     }
 
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
@@ -886,12 +984,18 @@ impl Flatpak for FakeFlatpak {
     }
 
     fn reset_override(&self, id: &str) -> Result<(), String> {
-        let mut state = self.state();
-        state.override_runs.push(ruya_flatpak::reset_command(id));
-        if state.override_fails {
-            return Err("flatpak override failed".to_owned());
+        let hook = {
+            let mut state = self.state();
+            state.override_runs.push(ruya_flatpak::reset_command(id));
+            if state.override_fails {
+                return Err("flatpak override failed".to_owned());
+            }
+            state.overrides.remove(id);
+            state.after_reset_override.take()
+        };
+        if let Some(hook) = hook {
+            hook();
         }
-        state.overrides.remove(id);
         Ok(())
     }
 

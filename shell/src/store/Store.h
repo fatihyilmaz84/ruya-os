@@ -94,6 +94,12 @@ public:
     // { status, effective, withdrawn, withdrawable } as last read ({} before the first answer): the keys of
     // the App record's permissions; status "ok" or the service's refusal ("unknown-app", "failed", ...).
     Q_INVOKABLE QVariantMap permissions(const QString &appId) const;
+    // How many permissions the console withdraws from each installed app (GetWithdrawnCounts, one call for all,
+    // RUY-1190: the Privacy pane's rows). Answers with withdrawnCountsChanged when the counts differ.
+    Q_INVOKABLE void loadWithdrawnCounts();
+    // The count of the last answer about the app, from the batch or from its own loadPermissions (an app's
+    // answer corrects its entry); 0 for an app with none withdrawn, one not asked about yet, and after a failure.
+    Q_INVOKABLE int withdrawnCount(const QString &appId) const;
     // Admin only (the service refuses anyone else with "forbidden"). Each ends with permissionChanged(appId,
     // key, status) (key "" for the reset) and reads the permissions again, so permissionsLoaded follows.
     Q_INVOKABLE void withdrawPermission(const QString &appId, const QString &key);
@@ -157,6 +163,11 @@ public:
     Q_INVOKABLE int mockPendingPermissionReplies() const;
     // How many GetPermissions the shell asked since mockReset (RUY-854: a hidden pane asks none).
     Q_INVOKABLE int mockPermissionReads() const;
+    // The same for the batch read (loadWithdrawnCounts): the next one answers after ms with what it read when
+    // asked; how many are still due; how many the shell asked since mockReset (RUY-1190: one per visit).
+    Q_INVOKABLE void mockWithdrawnCountsDelayed(int ms);
+    Q_INVOKABLE int mockPendingWithdrawnCountReplies() const;
+    Q_INVOKABLE int mockWithdrawnCountReads() const;
 
 signals:
     void catalogueChanged();
@@ -173,6 +184,8 @@ signals:
     // The service's job table was applied (after a start or a restart of the service).
     void jobsReconciled();
     void permissionsLoaded(const QString &appId);
+    // withdrawnCount() of some app changed.
+    void withdrawnCountsChanged();
     // status: see api/dbus/org.ruyaos.Store1.xml ("ok", "forbidden", "not-withdrawable", ...).
     void permissionChanged(const QString &appId, const QString &key, const QString &status);
 
@@ -199,6 +212,7 @@ private:
     QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
     QHash<QString, QVariantMap> m_getOnly; // app id -> screenshots and releaseNotes, from loadApp (lists carry none)
     QHash<QString, QVariantMap> m_permissions; // app id -> the last GetPermissions answer (permissions())
+    QHash<QString, int> m_withdrawnCounts; // app id -> withdrawn keys, only the apps that have any (withdrawnCount())
     QString m_lastQuery;
     bool m_gamepadOnly = false;
     bool m_available = false;
