@@ -83,6 +83,9 @@ public:
     // Tests only: the API level one app asks for (so an installed app with an update can be incompatible),
     // until reset(); then InstalledChanged and CatalogChanged (RUY-1181).
     void setMinApiLevel(const QString &id, int level);
+    // Tests only: an update the Store's record reports for an installed app (RUY-1244: a .play app is never offered
+    // it), until reset(); then InstalledChanged and CatalogChanged.
+    void setUpdateAvailable(const QString &id, bool available);
 
     // The console's override, as the service keeps it (RUY-744): network, home-files, host-files and
     // all-devices can be withdrawn from an installed app that asks for them, all-devices keeping the

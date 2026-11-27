@@ -149,6 +149,8 @@ public:
     Q_INVOKABLE void mockSetApiLevel(int level);
     // The level one app asks for, until mockReset (RUY-1181: an installed app whose update is incompatible).
     Q_INVOKABLE void mockSetMinApiLevel(const QString &appId, int level);
+    // An update the Store's record reports for an installed app, until mockReset (RUY-1244).
+    Q_INVOKABLE void mockSetUpdateAvailable(const QString &appId, bool available);
     // Every later search answers after ms, until mockReset (T-377: the Store page before the
     // service's answer to its filter).
     Q_INVOKABLE void mockSearchReplyDelay(int ms);

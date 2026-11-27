@@ -143,6 +143,16 @@ void MockStoreBackend::setMinApiLevel(const QString &id, int level)
     emit catalogChanged();
 }
 
+void MockStoreBackend::setUpdateAvailable(const QString &id, bool available)
+{
+    const int at = indexOf(id);
+    if (at < 0)
+        return;
+    m_apps[at].updateAvailable = available;
+    emit installedChanged();
+    emit catalogChanged();
+}
+
 void MockStoreBackend::setArtDir(const QString &dir)
 {
     for (int i = 0; i < m_apps.size(); ++i)

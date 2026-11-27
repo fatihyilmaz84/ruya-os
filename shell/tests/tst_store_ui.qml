@@ -110,9 +110,13 @@ Item {
             verify(card.Accessible.name === "Star Hopper, Installed", "accessible name: " + card.Accessible.name)
             compare(card.app.source, "developer", "the badge says Developer")
             compare(find("appCard_org.example.Puzzle").title, "Block Puzzle")
-            // The page has no Update, whatever the Store's record says.
+            // The page has no Update, whatever the Store's record says: Play1 updates it.
+            Store.mockSetUpdateAvailable(id, true)
+            tryVerify(() => Store.app(id).updateAvailable === true)
             openApp(id)
+            compare(find("page_appDetail").app.updateAvailable, true, "the Store's record has an update")
             compare(find("page_appDetail").hasUpdate, false)
+            compare(find("page_appDetail").secondaryKeys.indexOf("update"), -1)
             compare(find("page_appDetail").title, "Star Hopper")
         }
 
