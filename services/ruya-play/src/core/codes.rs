@@ -49,6 +49,20 @@ pub const SOURCE_UNSAFE_MOUNT: &str = "source.unsafe_mount";
 /// (RUY-829).
 pub const INSTALLED_UNRECONCILED: &str = "installed.unreconciled";
 
+/// A `Rollback` found the build it keeps not older than the installed one (RUY-1245): the records
+/// and the repository disagree after a failure; nothing is changed.
+pub const ROLLBACK_NOT_OLDER: &str = "rollback.not_older";
+/// A `Rollback` to a build whose `run.prefix.epoch` differs from the installed build's: the players'
+/// Wine prefixes were (or would be) rebuilt for the other epoch, and the launcher rebuilds only on
+/// a raise.
+pub const ROLLBACK_PREFIX_EPOCH: &str = "rollback.prefix_epoch";
+/// A `Rollback` to a build of another `run.runner`: the players' prefixes are laid out for the
+/// installed build's runner.
+pub const ROLLBACK_RUNNER_CHANGED: &str = "rollback.runner_changed";
+/// A `Rollback` to a build signed by another key than the one the id is recorded under now (a
+/// rotation since): the key record stays the newest, so the older key is not taken back.
+pub const ROLLBACK_KEY_CHANGED: &str = "rollback.key_changed";
+
 /// Every code, for the tests that keep the list, the tests and the spec in step.
 pub const ALL: &[&str] = &[
     BUILD_NOT_NEWER,
@@ -68,4 +82,8 @@ pub const ALL: &[&str] = &[
     SOURCE_CHANGED,
     SOURCE_UNSAFE_MOUNT,
     INSTALLED_UNRECONCILED,
+    ROLLBACK_NOT_OLDER,
+    ROLLBACK_PREFIX_EPOCH,
+    ROLLBACK_RUNNER_CHANGED,
+    ROLLBACK_KEY_CHANGED,
 ];

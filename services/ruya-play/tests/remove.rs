@@ -88,10 +88,17 @@ fn an_uninstall_resets_the_apps_override_after_it() {
     let flatpak = FlatpakCommit::new(state.path(), Box::new(runner.clone()));
     flatpak.uninstall(ID).unwrap();
     assert_eq!(commit::reset_override(ID), reset_argv());
+    // RUY-1245: then the app's builds leave the local repo (both refs, then a prune).
+    let paths = commit::Paths::under(state.path());
     assert_eq!(
         runner.calls.lock().unwrap().as_slice(),
-        [commit::uninstall(ID), reset_argv()],
-        "the uninstall, then the reset, nothing else"
+        [
+            commit::uninstall(ID),
+            reset_argv(),
+            commit::delete_refs(&paths, &[commit::app_ref(ID), commit::previous_ref(ID)]),
+            commit::prune(&paths),
+        ],
+        "the uninstall, then the reset, then the repo, nothing else"
     );
 }
 
@@ -121,7 +128,10 @@ fn a_failed_reset_is_logged_and_does_not_fail_the_removal() {
     });
     let flatpak = FlatpakCommit::new(state.path(), Box::new(runner.clone()));
     flatpak.uninstall(ID).unwrap();
-    assert_eq!(runner.calls.lock().unwrap().len(), 2, "the reset was tried");
+    let calls = runner.calls.lock().unwrap().clone();
+    assert_eq!(calls[1], reset_argv(), "the reset was tried");
+    // RUY-1245: the repo's refs of the app still go after it (uninstall, reset, refs, prune).
+    assert_eq!(calls.len(), 4, "{calls:?}");
 }
 
 #[test]

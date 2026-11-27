@@ -210,6 +210,7 @@ void MockPlayBackend::reset()
     m_jobs.clear();
     m_finishedJobs.clear();
     m_installed = {{QStringLiteral("com.example.pixelforest"), 2u}};
+    m_previous.clear();
     m_corrupt.clear();
     m_mounted = true;
     m_developerMode = false;
@@ -473,6 +474,67 @@ void MockPlayBackend::remove(const QString &appId, bool adminApproved)
     startJob(op, appId, QStringLiteral("remove"), appId, QString(), 101, QString());
 }
 
+void MockPlayBackend::readPrevious(const QString &appId)
+{
+    const QString op = QStringLiteral("previous");
+    if (failing(op, appId))
+        return;
+    if (appId.isEmpty()) {
+        answerLater(op, appId, QStringLiteral("invalid"));
+        return;
+    }
+    const QString id = manifestIdOf(appId);
+    if (!appId.startsWith(QLatin1String("play.")) || !m_installed.contains(id)) {
+        answerLater(op, appId, QStringLiteral("unknown-app"));
+        return;
+    }
+    const uint installed = m_installed.value(id);
+    const uint kept = m_previous.value(id, 0u);
+    if (kept == 0 || kept >= installed) {
+        answerLater(op, appId, QStringLiteral("no-previous"));
+        return;
+    }
+    PlayPrevious p;
+    p.version = QStringLiteral("1.%1.0").arg(kept); // the fixtures' version rule
+    p.build = kept;
+    // A fixture's update diff, reversed, when the installed build is the fixture's (pixelforest 3 over 2).
+    if (const Fixture *f = fixtureOf(id); f && f->info.build == installed) {
+        p.added = f->info.permissionsRemoved;
+        p.removed = f->info.permissionsAdded;
+    }
+    QTimer::singleShot(0, this, [this, op, appId, p] {
+        emit answered(op, appId, QStringLiteral("ok"));
+        emit previousRead(appId, p);
+    });
+}
+
+void MockPlayBackend::rollback(const QString &appId, bool adminApproved)
+{
+    const QString op = QStringLiteral("rollback");
+    if (failing(op, appId))
+        return;
+    // The service's order: the admin gate first, then the id, then what is kept, then busy.
+    if (!adminApproved) {
+        answerLater(op, appId, QStringLiteral("forbidden"));
+        return;
+    }
+    if (appId.isEmpty()) {
+        answerLater(op, appId, QStringLiteral("invalid"));
+        return;
+    }
+    const QString id = manifestIdOf(appId);
+    if (!appId.startsWith(QLatin1String("play.")) || !m_installed.contains(id)) {
+        answerLater(op, appId, QStringLiteral("unknown-app"));
+        return;
+    }
+    const uint kept = m_previous.value(id, 0u);
+    if (kept == 0 || kept >= m_installed.value(id)) {
+        answerLater(op, appId, QStringLiteral("no-previous"));
+        return;
+    }
+    startJob(op, appId, QStringLiteral("rollback"), appId, QString(), 101, QString());
+}
+
 void MockPlayBackend::cancel(const QString &key)
 {
     const QString op = QStringLiteral("cancel");
@@ -482,8 +544,8 @@ void MockPlayBackend::cancel(const QString &key)
         const Job &j = m_jobs.at(i);
         if (j.jobId != key && j.key != key)
             continue;
-        // An install passes the point of no return when it commits, a remove when Flatpak starts.
-        if ((j.kind == QLatin1String("install") && j.percent >= 55)
+        // An install passes the point of no return when it commits, a rollback too, a remove when Flatpak starts.
+        if (((j.kind == QLatin1String("install") || j.kind == QLatin1String("rollback")) && j.percent >= 55)
             || (j.kind == QLatin1String("remove") && j.percent > 0)) {
             answerLater(op, key, QStringLiteral("too-late"));
             return;
@@ -509,6 +571,9 @@ QString MockPlayBackend::phaseOf(const Job &job)
         return QStringLiteral("verifying");
     if (job.kind == QLatin1String("remove"))
         return QStringLiteral("removing");
+    // A rollback checks out (staging), checks (verifying) and commits again: no art to vet.
+    if (job.kind == QLatin1String("rollback") && phaseAt(job.percent) == QLatin1String("vetting-art"))
+        return QStringLiteral("verifying");
     return phaseAt(job.percent);
 }
 
@@ -548,10 +613,18 @@ void MockPlayBackend::step()
         const Job done = m_jobs.takeFirst();
         if (done.kind == QLatin1String("install")) {
             const Fixture *f = fixtureAt(done.path);
-            if (f)
+            if (f) {
+                // An update keeps the build it replaces (RUY-1245).
+                if (m_installed.contains(f->info.id))
+                    m_previous.insert(f->info.id, m_installed.value(f->info.id));
                 m_installed.insert(f->info.id, f->info.build);
+            }
         } else if (done.kind == QLatin1String("remove")) {
             m_installed.remove(manifestIdOf(done.app));
+            m_previous.remove(manifestIdOf(done.app));
+        } else if (done.kind == QLatin1String("rollback")) {
+            const QString id = manifestIdOf(done.app);
+            m_installed.insert(id, m_previous.take(id));
         }
         finish(done, QStringLiteral("ok"));
     }

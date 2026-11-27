@@ -63,6 +63,12 @@ public:
     // adminApproved as for install(). answered("remove", appId, status); the job's end is jobFinished with
     // kind "remove". The player's data stays (05 §10).
     Q_INVOKABLE void remove(const QString &appId, bool adminApproved);
+    // The build an update of `appId` replaced (RUY-1245): answered("previous", appId, status) ("no-previous" when
+    // nothing is kept), then previousRead(appId, { version, build, permissionsAdded, permissionsRemoved }) on "ok".
+    Q_INVOKABLE void readPrevious(const QString &appId);
+    // Roll `appId` back to that build (RUY-1245): adminApproved as for install(). answered("rollback", appId, status);
+    // the job's end is jobFinished with kind "rollback". Saves, prefixes and withdrawn permissions stay.
+    Q_INVOKABLE void rollback(const QString &appId, bool adminApproved);
     // Is `appId` ("play.<id>") a .play app, so that Remove (not the Store) uninstalls it? The one place that
     // decides which service removes an app; the service itself answers unknown-app for a Flatpak that is
     // only named play.<x>.
@@ -79,6 +85,8 @@ public:
     Q_INVOKABLE void mockCorruptInstalled(const QString &appId);
     // The app is installed at this build (a game put on the block list after it was installed: oldbad, 7).
     Q_INVOKABLE void mockSetInstalled(const QString &appId, uint build);
+    // The installed app keeps this older build for a rollback (as after an update from it).
+    Q_INVOKABLE void mockSetPrevious(const QString &appId, uint build);
     Q_INVOKABLE void mockPauseJobs(bool paused);
     // The running job stands still after it reported this percent, until mockPauseJobs(false).
     Q_INVOKABLE void mockPauseAtPercent(int percent);
@@ -98,9 +106,12 @@ signals:
     void availableChanged();
     void developerModeChanged();
     void inspected(const QString &path, const QVariantMap &info);
-    // op "inspect" | "install" | "verify" | "remove" | "cancel" | "developer-mode"; status: a method status of the XML.
+    void previousRead(const QString &appId, const QVariantMap &previous);
+    // op "inspect" | "install" | "verify" | "remove" | "previous" | "rollback" | "cancel" | "developer-mode";
+    // status: a method status of the XML.
     void answered(const QString &op, const QString &key, const QString &status);
-    // status: a JobFinished status of the XML. kind: "install" | "verify" | "remove" ("" when the shell cannot tell);
+    // status: a JobFinished status of the XML. kind: "install" | "verify" | "remove" | "rollback" ("" when the shell
+    // cannot tell);
     // name: the app's display name when the shell knows it (from the service's job table after a restart), else "".
     void jobFinished(const QString &key, const QString &status, const QString &kind, const QString &name);
     void jobsReconciled();

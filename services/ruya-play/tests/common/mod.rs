@@ -220,6 +220,11 @@ pub struct Setup {
     pub stores: Option<(SharedTrust, SharedInstalled)>,
     /// Wraps the in-process helper (a test that plays a hostile helper).
     pub wrap_helper: Option<HelperWrap>,
+    /// RUY-1245: the fake commit keeps builds (`<root>/fake-repo`), copied from the deployments in
+    /// the harness's Flatpak installation, and a re-commit replaces the deployed `/app`.
+    pub rollbacks: bool,
+    /// Replaces the recording commit the importer gets (the harness's `commit` is then unused).
+    pub commit: Option<Box<dyn ruya_play::Commit>>,
 }
 
 /// Turns the harness's in-process helper into the helper the importer gets.
@@ -242,6 +247,8 @@ impl Default for Setup {
             now: NOW,
             stores: None,
             wrap_helper: None,
+            rollbacks: false,
+            commit: None,
         }
     }
 }
@@ -294,6 +301,11 @@ impl Harness {
         std::fs::create_dir_all(&outside).unwrap();
         let mut commit = RecordingCommit::new(Some(target.clone()));
         commit.hook = setup.commit_hook;
+        if setup.rollbacks {
+            commit.installation = Some(cfg.flatpak.clone());
+            commit.repo = Some(root.path().join("fake-repo"));
+            commit.deploy_recommits = true;
+        }
         let commit = Arc::new(commit);
         let free = Arc::new(FixedFreeSpace::new(setup.free));
         let clock = Arc::new(FixedClock::at(setup.now));
@@ -330,7 +342,10 @@ impl Harness {
         let deps = Deps {
             helper,
             free_space,
-            commit: Box::new(Arc::clone(&commit)),
+            commit: match setup.commit {
+                Some(c) => c,
+                None => Box::new(Arc::clone(&commit)),
+            },
             clock: Box::new(Arc::clone(&clock)),
             blocklists: Box::new(setup.blocklist),
             store_keys: setup.store_keys,
@@ -553,6 +568,12 @@ impl ruya_play::InstalledBuilds for SharedInstalled {
         }
         self.inner.lock().unwrap().stamp(id, generation)
     }
+    fn set_previous(&mut self, id: &str, previous: Option<u64>) -> Result<(), Problem> {
+        if on(&self.faults.record) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().set_previous(id, previous)
+    }
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
         if on(&self.faults.forget) {
             return Err(installed_io());
@@ -582,6 +603,27 @@ pub struct FakeRunner {
     pub fail_with_arg: std::sync::Mutex<Option<String>>,
     /// What that failing command says (default: libcurl's answer when the name does not resolve).
     pub fail_text: std::sync::Mutex<Option<String>>,
+    /// RUY-1245: the `/app` of the kept build, which `ostree checkout` copies out and `ostree cat`
+    /// reads from.
+    pub kept: std::sync::Mutex<Option<PathBuf>>,
+}
+
+/// The commit `flatpak info --show-commit` answers with.
+pub const DEPLOYED_COMMIT: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+/// Copy the folder `from` to `to` (which must not exist), files and folders.
+pub fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        let target = to.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir(&e.path(), &target);
+        } else {
+            std::fs::copy(e.path(), target).unwrap();
+        }
+    }
 }
 
 impl Runner for FakeRunner {
@@ -599,6 +641,20 @@ impl Runner for FakeRunner {
         }
         if argv[0] == "flatpak" && argv.get(1).map(String::as_str) == Some("list") {
             return Ok(self.runtimes.lock().unwrap().clone());
+        }
+        if argv[0] == "flatpak" && has("--show-commit") {
+            return Ok(format!("{DEPLOYED_COMMIT}\n"));
+        }
+        if argv[0] == "ostree" && matches!(argv[1].as_str(), "checkout" | "cat") {
+            let kept = self.kept.lock().unwrap().clone();
+            let kept = kept.ok_or_else(|| "error: Refspec 'previous' not found".to_string())?;
+            let last = argv.last().unwrap();
+            if argv[1] == "checkout" {
+                copy_dir(&kept, Path::new(last));
+                return Ok(String::new());
+            }
+            let rel = last.strip_prefix("/files/").unwrap();
+            return std::fs::read_to_string(kept.join(rel)).map_err(|e| e.to_string());
         }
         if argv[0] == "gpg" && has("--list-secret-keys") {
             if self.generated.load(Ordering::SeqCst) {

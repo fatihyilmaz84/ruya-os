@@ -113,9 +113,28 @@ pub trait Commit: Send + Sync {
     fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError>;
 
     /// Uninstall the installed app `play.<id>` (RUY-816, `Play1.Remove`) with the same Flatpak
-    /// runner, then reset its permission override (a failed reset is logged, not an error). The
+    /// runner, then reset its permission override and drop its builds from the repository (the
+    /// installed one and a kept one, RUY-1245; failures of these are logged, not errors). The
     /// player's data stays. The caller checked that the app is ours.
     fn uninstall(&self, id: &str) -> Result<(), CommitError>;
+
+    /// Keep the build of `play.<id>` deployed now as the one a rollback brings back (RUY-1245):
+    /// it replaces a build kept before, and the repository keeps nothing else of the app (a
+    /// failed clean-up of the rest is logged, not an error). Called by an update before its
+    /// commit; a re-commit never calls it. `Ok(false)`: the repo no longer holds the deployed
+    /// commit (no ref named it, and a prune took it), so nothing is kept and the update goes on
+    /// without a rollback to offer, rather than being blocked.
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError>;
+
+    /// The bytes of the file `name` (a root file such as `play.json`) of the kept build's `/app`.
+    fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError>;
+
+    /// Check the kept build's `/app` out into `dest`, a folder that does not exist yet: plain
+    /// copies, never links into the repository (the re-commit writes into them).
+    fn check_out_previous(&self, id: &str, dest: &Path) -> Result<(), CommitError>;
+
+    /// Forget the kept build (after a rollback).
+    fn drop_previous(&self, id: &str) -> Result<(), CommitError>;
 }
 
 /// What a re-commit gets: a staged copy of an installed app's deployed `/app` folder (made
@@ -162,6 +181,8 @@ pub enum Step<'a> {
     },
     /// The commit step is about to start (the point of no return is passed).
     Committing,
+    /// A rollback's commit is done; the kept build is not forgotten yet (RUY-1245).
+    Committed,
 }
 
 /// Observes [`Step`]s. The default does nothing; tests use [`crate::core::fakes::FnHooks`].
@@ -346,6 +367,18 @@ impl<T: Commit + ?Sized> Commit for std::sync::Arc<T> {
     }
     fn uninstall(&self, id: &str) -> Result<(), CommitError> {
         (**self).uninstall(id)
+    }
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError> {
+        (**self).keep_previous(id)
+    }
+    fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError> {
+        (**self).previous_file(id, name)
+    }
+    fn check_out_previous(&self, id: &str, dest: &Path) -> Result<(), CommitError> {
+        (**self).check_out_previous(id, dest)
+    }
+    fn drop_previous(&self, id: &str) -> Result<(), CommitError> {
+        (**self).drop_previous(id)
     }
 }
 

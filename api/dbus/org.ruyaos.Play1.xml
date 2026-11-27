@@ -3,8 +3,8 @@
 <!--
   org.ruyaos.Play1 — install .play packages (docs/specs/05-play-packages.md) from a drive: list the
   candidate packages on mounted drives, look inside one, install it as ONE job, re-verify an
-  installed one, remove an installed one (RUY-816). Updates and feeds arrive later (T-241) and extend
-  this file.
+  installed one, remove an installed one (RUY-816), roll an updated one back to the build it
+  replaced (RUY-1245). Updates and feeds arrive later (T-241) and extend this file.
   Served by ruya-play on the system bus at /org/ruyaos/Play1 (RUY-829; services/ruya-play,
   tests/contract.rs holds it to this file). The shell's mock backend, shell/src/play, follows the
   same contract off Linux. Verify (RUY-834) re-hashes the deployed
@@ -19,14 +19,17 @@
                         JobFinished)
     "unknown-source"    the path is not one of the candidates ListSources lists (Inspect, Install):
                         a drive that was unplugged, or a path that was never offered
-    "unknown-app"       Verify or Remove of an app that is not installed from a .play: not a
-                        "play.<id>" id, not installed, or not made by this service (a Flathub app
-                        named play.<x> is never touched)
+    "unknown-app"       Verify, Remove, Rollback or GetPrevious of an app that is not installed from
+                        a .play: not a "play.<id>" id, not installed, or not made by this service (a
+                        Flathub app named play.<x> is never touched)
+    "no-previous"       Rollback or GetPrevious of an installed app that keeps no older build: it
+                        was never updated, it was rolled back already, or the build it keeps is not
+                        older than the installed one
     "unknown-job"       Cancel of a job the service does not know
     "too-late"          Cancel of a job that passed the point of no return (phase "committing")
     "busy"              a job for that package or app is already queued or running (Remove: any
                         queued or running job of the same app, an install or a verify of it)
-    "forbidden"         Install, Remove or SetDeveloperMode without options "admin_approved" = true. Sideloading needs an admin
+    "forbidden"         Install, Remove, Rollback or SetDeveloperMode without options "admin_approved" = true. Sideloading needs an admin
                         or an admin's PIN (05 §18 item 4); the shell checks the PIN through
                         Profiles1, as for the Store (PINs never leave the shell's path to
                         Profiles1). Trust boundary, enforced by ruya-play: the option counts only
@@ -40,16 +43,22 @@
 
   JobFinished statuses (one job covers a package from the first byte read to "installed"):
     "ok"                done (for Verify: every file matches play.files; for Remove: the app is
-                        uninstalled and its build record forgotten)
+                        uninstalled and its build record forgotten; for Rollback: the kept build is
+                        the installed app and no build is kept any more)
     "invalid-package"   a rule of §4 was broken or a hash did not match (Inspect shows the problems;
                         for Verify: the installed payload no longer matches play.files)
     "bad-signature"     the package was changed after it was signed (05 §9.2: never downgraded to
                         unverified)
     "different-developer" the id is installed (or its saves are kept) under another key (05 §9.2, key
-                        continuity)
+                        continuity); for Rollback: the kept build was signed by another key than the
+                        one the id is recorded under now (a rotated key, problem
+                        rollback.key_changed)
     "needs-developer-mode" the package is unverified and developer mode is off (05 §7.2)
     "revoked"           the package, its key or its content is on the block list (05 §9.2)
-    "unsupported"       format.too_new, or an architecture other than x86_64
+    "unsupported"       format.too_new, or an architecture other than x86_64; for Rollback: the kept
+                        build has another run.prefix.epoch (rollback.prefix_epoch) or another
+                        run.runner (rollback.runner_changed) than the installed one, so the players'
+                        Wine prefixes could not go back with it
     "disk-full"         not enough space
     "offline"           the package needs the internet once, to install its platform from Flathub
                         (problem platform.offline); connect and try again. Everything else about the
@@ -66,7 +75,9 @@
   "vetting-art" (decode and re-encode art and video), "committing" (the root part builds the OSTree
   commit), "installing" (the Store's Flatpak transaction). A Verify job only reports "verifying"; a Remove job only
   "removing" (0, then 100 when Flatpak is done; it cannot be cancelled once Flatpak started, Cancel
-  answers "too-late").
+  answers "too-late"). A Rollback job reports "staging" (the kept build is checked out),
+  "verifying" (its checks), "committing" and "installing"; Cancel answers "too-late" from
+  "committing" on.
   percent is 0-100 for the whole job and never decreases.
 
   Every list is a plain array and every record an a{sv} dictionary, so fields can be added later
@@ -195,11 +206,68 @@
       (~/.var/app/play.<id> of every profile) and the key record of the id (key continuity: a package
       for the same id under another key is still refused afterwards, so it cannot inherit the saves;
       the admin's "forget this game's data and key", 05 §18 item 17, is the way out and is not built
-      yet). A failed uninstall leaves every record as it was. job is "" unless status is "ok".
+      yet). A failed uninstall leaves every record as it was. The app's builds in the service's own
+      repository (the installed one and the one GetPrevious names) go with it. job is "" unless
+      status is "ok".
       options (a{sv}, unknown keys are ignored):
         admin_approved  b   as for Install. Required (without it: "forbidden").
     -->
     <method name="Remove">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!--
+      The build an update replaced, which Rollback would bring back (RUY-1245, 05 §11). An Install
+      that replaces a build keeps the replaced one in the service's own repository until the next
+      update, a Rollback or a Remove: one build per app. Read only, no admin needed.
+      status: "ok", "invalid", "unknown-app", "no-previous" (nothing kept, or what is kept is not
+      older than the installed build), "failed". Every other out argument is empty or 0 unless status
+      is "ok":
+        version  s       the kept build's version text (its play.json)
+        build    u       its build
+        added    a(sss)  the requests the kept build makes and the installed one does not, as
+                         Inspect's permissions (key, words, risk): what a rollback would ask for again
+        removed  a(sss)  the requests the installed build makes and the kept one does not
+      The grants a rollback leaves are the kept build's own requests under today's tier ceiling; a
+      permission an admin withdrew (the app's override) stays withdrawn.
+    -->
+    <method name="GetPrevious">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="version" type="s" direction="out"/>
+      <arg name="build" type="u" direction="out"/>
+      <arg name="added" type="a(sss)" direction="out"/>
+      <arg name="removed" type="a(sss)" direction="out"/>
+    </method>
+
+    <!--
+      Roll an updated .play app back to the build GetPrevious names (RUY-1245): a job (kind
+      "rollback") in the same queue as the installs. The kept build is checked out of the service's
+      repository and committed again as a new commit, exactly as a start-up re-commit is (its
+      metadata generated now, the device key's signature, flatpak install from the local remote),
+      after these checks, each a problem of the job: its build must be older than the installed one
+      (rollback.not_older, "failed"), its run.prefix.epoch and run.runner those of the installed
+      build (rollback.prefix_epoch, rollback.runner_changed: "unsupported"), its developer key the
+      one the id is recorded under now (rollback.key_changed: "different-developer"), and it must not
+      be on today's block list (revoked.*: "revoked"; a list that cannot be read is
+      blocklist.unavailable: "failed"); its tier is decided again from its verified signatures as an
+      install decides it (unsigned with developer mode off: trust.needs_developer_mode,
+      "needs-developer-mode"), and that tier's trust record and ceiling are what the commit
+      generates from. A failed commit is commit.failed ("failed") and leaves the
+      installed app and its records as they were. What a rollback never touches: the id's key record,
+      the app's permission override (what an admin withdrew stays withdrawn), the players' data, Wine
+      prefixes and game trees (the launcher rebuilds a game tree for the build it finds). Afterwards
+      no build is kept (GetPrevious answers "no-previous"), and an Install of a build above the one
+      rolled back to, the build rolled back from too, is an update again.
+      options (a{sv}, unknown keys are ignored):
+        admin_approved  b   as for Install. Required (without it: "forbidden").
+      status: "ok", "invalid", "unknown-app", "forbidden", "busy" (any queued or running job of the
+      same app), "no-previous", "failed". job is "" unless status is "ok".
+    -->
+    <method name="Rollback">
       <arg name="app_id" type="s" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -234,14 +302,14 @@
       the answer (same rules as Store1.ListJobs).
 
       Job record (a{sv}), keys:
-        id       s   the job name returned by Install/Verify/Remove
-        kind     s   "install" | "verify" | "remove"
-        path     s   install: the package path; verify, remove: ""
-        app      s   the Flatpak id play.<id>, the key Verify and Remove take (install: once the
-                     manifest is read, else "")
+        id       s   the job name returned by Install/Verify/Remove/Rollback
+        kind     s   "install" | "verify" | "remove" | "rollback"
+        path     s   install: the package path; verify, remove, rollback: ""
+        app      s   the Flatpak id play.<id>, the key Verify, Remove and Rollback take (install:
+                     once the manifest is read, else "")
         name     s   the app's display name in English (else its first language), so a toast after
                      a shell restart can say what it is about; "" until known (install: once the
-                     manifest is read; verify, remove: from the installed app)
+                     manifest is read; verify, remove, rollback: from the installed app)
         state    s   "queued" | "running" | "finished"
         status   s   "" unless state is "finished", then the JobFinished status
         reason   s   "" or "interrupted" (the service died while the job ran; status "failed")

@@ -87,6 +87,8 @@ pub enum MethodStatus {
     TooLate,
     /// A job for that package is already queued or running.
     Busy,
+    /// `Rollback` or `GetPrevious` of an app that keeps no older build (RUY-1245).
+    NoPrevious,
     /// Install without `admin_approved`.
     Forbidden,
     /// A malformed argument (a relative path).
@@ -105,6 +107,7 @@ impl MethodStatus {
             MethodStatus::UnknownApp => "unknown-app",
             MethodStatus::TooLate => "too-late",
             MethodStatus::Busy => "busy",
+            MethodStatus::NoPrevious => "no-previous",
             MethodStatus::Forbidden => "forbidden",
             MethodStatus::Invalid => "invalid",
             MethodStatus::Failed => "failed",
@@ -169,9 +172,11 @@ fn status_of_code(code: &str) -> JobStatus {
         | ruya_play_format::codes::REQUIREMENTS_ARCH
         | trust::SIG_FORMAT_TOO_NEW => JobStatus::Unsupported,
         trust::TRUST_NEEDS_DEVELOPER_MODE => JobStatus::NeedsDeveloperMode,
+        codes::ROLLBACK_PREFIX_EPOCH | codes::ROLLBACK_RUNNER_CHANGED => JobStatus::Unsupported,
         trust::TRUST_DIFFERENT_DEVELOPER
         | trust::ROTATION_REPLAYED
-        | trust::ROTATION_TO_RETIRED_KEY => JobStatus::DifferentDeveloper,
+        | trust::ROTATION_TO_RETIRED_KEY
+        | codes::ROLLBACK_KEY_CHANGED => JobStatus::DifferentDeveloper,
         trust::ROTATION_NOT_BY_OLD_KEY | trust::ROTATION_WRONG_ID => JobStatus::BadSignature,
         codes::SPACE_NOT_ENOUGH => JobStatus::DiskFull,
         codes::PLATFORM_OFFLINE => JobStatus::Offline,
@@ -184,6 +189,7 @@ fn status_of_code(code: &str) -> JobStatus {
         | codes::COMMIT_FAILED
         | codes::UNINSTALL_FAILED
         | codes::ROLLBACK_FAILED
+        | codes::ROLLBACK_NOT_OLDER
         | codes::JOB_INTERRUPTED
         | codes::HELPER_FAILED
         | codes::SOURCE_CHANGED
@@ -261,6 +267,10 @@ mod tests {
             ("staging.changed", JobStatus::Failed),
             ("commit.failed", JobStatus::Failed),
             ("rollback.failed", JobStatus::Failed),
+            ("rollback.not_older", JobStatus::Failed),
+            ("rollback.prefix_epoch", JobStatus::Unsupported),
+            ("rollback.runner_changed", JobStatus::Unsupported),
+            ("rollback.key_changed", JobStatus::DifferentDeveloper),
         ];
         for (code, status) in cases {
             assert_eq!(status_of(&[p(code)]), status, "{code}");

@@ -69,6 +69,17 @@ QList<QStringList> parseTriples(const QDBusArgument &arg)
     return out;
 }
 
+// a(sss) of (key, words, risk), as Inspect's permissions and GetPrevious's lists carry them
+QList<PlayPermission> permissionsOf(const QVariant &v)
+{
+    QList<PlayPermission> out;
+    if (v.canConvert<QDBusArgument>()) {
+        for (const QStringList &t : parseTriples(v.value<QDBusArgument>()))
+            out.append({t.at(0), t.at(1), t.at(2)});
+    }
+    return out;
+}
+
 QStringList stringList(const QVariant &v)
 {
     return v.canConvert<QDBusArgument>() ? qdbus_cast<QStringList>(v.value<QDBusArgument>()) : v.toStringList();
@@ -95,24 +106,11 @@ PlayInfo toInfo(const QString &path, const QVariantMap &d)
     i.signerKeyId = d.value(QStringLiteral("signer_key_id")).toString();
     i.signerName = d.value(QStringLiteral("signer_name")).toString();
     i.keyState = d.value(QStringLiteral("key_state")).toString();
-    const QVariant perms = d.value(QStringLiteral("permissions"));
-    if (perms.canConvert<QDBusArgument>()) {
-        for (const QStringList &t : parseTriples(perms.value<QDBusArgument>()))
-            i.permissions.append({t.at(0), t.at(1), t.at(2)});
-    }
+    i.permissions = permissionsOf(d.value(QStringLiteral("permissions")));
     i.gate = d.value(QStringLiteral("gate")).toString();
-    const auto triples = [&d](const char *key) {
-        QList<PlayPermission> out;
-        const QVariant v = d.value(QString::fromLatin1(key));
-        if (v.canConvert<QDBusArgument>()) {
-            for (const QStringList &t : parseTriples(v.value<QDBusArgument>()))
-                out.append({t.at(0), t.at(1), t.at(2)});
-        }
-        return out;
-    };
     i.updateKnown = d.contains(QStringLiteral("permissions_added"));
-    i.permissionsAdded = triples("permissions_added");
-    i.permissionsRemoved = triples("permissions_removed");
+    i.permissionsAdded = permissionsOf(d.value(QStringLiteral("permissions_added")));
+    i.permissionsRemoved = permissionsOf(d.value(QStringLiteral("permissions_removed")));
     i.addsHighRisk = d.value(QStringLiteral("adds_high_risk")).toBool();
     const QVariant art = d.value(QStringLiteral("art"));
     if (art.canConvert<QDBusArgument>())
@@ -273,6 +271,40 @@ void DBusPlayBackend::remove(const QString &appId, bool adminApproved)
 {
     const QVariantMap options{{QStringLiteral("admin_approved"), adminApproved}}; // a{sv}
     startJob(QStringLiteral("remove"), QStringLiteral("Remove"), appId, {appId, options});
+}
+
+void DBusPlayBackend::readPrevious(const QString &appId)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetPrevious"));
+    msg << appId;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, appId](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        // (status s, version s, build u, added a(sss), removed a(sss))
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 5) {
+            qWarning("ruya-shell: Play1 GetPrevious %s failed: %s", qPrintable(appId), qPrintable(reply.errorMessage()));
+            emit answered(QStringLiteral("previous"), appId, QStringLiteral("failed"));
+            return;
+        }
+        const QVariantList args = reply.arguments();
+        const QString status = args.at(0).toString();
+        emit answered(QStringLiteral("previous"), appId, status);
+        if (status != QLatin1String("ok"))
+            return;
+        PlayPrevious p;
+        p.version = args.at(1).toString();
+        p.build = args.at(2).toUInt();
+        p.added = permissionsOf(args.at(3));
+        p.removed = permissionsOf(args.at(4));
+        emit previousRead(appId, p);
+    });
+}
+
+void DBusPlayBackend::rollback(const QString &appId, bool adminApproved)
+{
+    const QVariantMap options{{QStringLiteral("admin_approved"), adminApproved}}; // a{sv}
+    startJob(QStringLiteral("rollback"), QStringLiteral("Rollback"), appId, {appId, options});
 }
 
 void DBusPlayBackend::cancel(const QString &key)

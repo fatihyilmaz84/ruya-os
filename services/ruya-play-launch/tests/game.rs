@@ -187,6 +187,29 @@ fn an_update_replaces_what_the_game_left_alone_and_keeps_what_it_wrote() {
     assert_eq!(file(&os, &g("System/UT.ini")), "[Engine] mine");
 }
 
+/// RUY-1245: after a `Play1.Rollback` the package is an older build than the tree was made from
+/// (`game_build` N, package N-1): the tree is made again for the package's build, as for an update.
+#[test]
+fn a_rollback_to_an_older_build_rebuilds_the_tree_for_it() {
+    let mut game = ut();
+    let mut os = game.install();
+    launch(&mut os, &[]).expect("build 1");
+    game.put("payload/System/Core.u", b"core v2");
+    update(&mut os, &mut game, 2);
+    launch(&mut os, &[]).expect("build 2");
+    assert_eq!(state(&os).game_build, Some(2));
+    os.file(&g("Save/Save1.usa"), "slot 1");
+    // The rollback: build 1's files are the package again.
+    game.put("payload/System/Core.u", b"core v1");
+    update(&mut os, &mut game, 1);
+    launch(&mut os, &[]).expect("build 1 again");
+    assert_eq!(state(&os).game_build, Some(1));
+    assert_eq!(base(&os).build, 1);
+    assert_eq!(file(&os, &g("System/Core.u")), "core v1");
+    // What the game wrote stays.
+    assert_eq!(file(&os, &g("Save/Save1.usa")), "slot 1");
+}
+
 #[test]
 fn a_dropped_writable_folder_goes_to_game_kept_and_only_the_newest_set_stays() {
     let mut game = ut();

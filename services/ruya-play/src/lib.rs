@@ -22,7 +22,7 @@ pub use crate::core::deps::{
 };
 pub use crate::core::helper::{HelperDeps, InProcessHelper, Request};
 pub use crate::core::importer::{
-    Canceller, Config, Event, Importer, InspectReport, JobResult, Recommitted,
+    Canceller, Config, Event, Importer, InspectReport, JobResult, Previous, Recommitted,
 };
 pub use crate::core::jobs::{JobKind, JobRecord, JobState};
 pub use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
