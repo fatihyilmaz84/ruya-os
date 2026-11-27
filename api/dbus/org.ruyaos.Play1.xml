@@ -253,7 +253,10 @@
       build (rollback.prefix_epoch, rollback.runner_changed: "unsupported"), its developer key the
       one the id is recorded under now (rollback.key_changed: "different-developer"), and it must not
       be on today's block list (revoked.*: "revoked"; a list that cannot be read is
-      blocklist.unavailable: "failed"). A failed commit is commit.failed ("failed") and leaves the
+      blocklist.unavailable: "failed"); its tier is decided again from its verified signatures as an
+      install decides it (unsigned with developer mode off: trust.needs_developer_mode,
+      "needs-developer-mode"), and that tier's trust record and ceiling are what the commit
+      generates from. A failed commit is commit.failed ("failed") and leaves the
       installed app and its records as they were. What a rollback never touches: the id's key record,
       the app's permission override (what an admin withdrew stays withdrawn), the players' data, Wine
       prefixes and game trees (the launcher rebuilds a game tree for the build it finds). Afterwards

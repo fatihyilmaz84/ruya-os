@@ -106,13 +106,15 @@ pub fn app_ref(id: &str) -> String {
     format!("app/{}/{ARCH}/{BRANCH}", app_id(id))
 }
 
-/// The branch of the build an update replaced, in the local repo only (RUY-1245): nothing installs
-/// it; a rollback checks it out and commits it again on [`BRANCH`].
-pub const PREVIOUS_BRANCH: &str = "previous";
+/// Where the build an update replaced is kept in the local repo (RUY-1245): outside `app/`, so
+/// Flatpak never reads it as a branch of the app (it installs only `app/` and `runtime/` refs, so
+/// the remote never offers an installable `play.<id>//previous`); `ostree prune --refs-only` keeps
+/// it like any ref. A rollback checks it out and commits it again on [`BRANCH`].
+pub const PREVIOUS_REFS: &str = "ruyaos/previous";
 
-/// The ref of the kept build.
+/// The ref of the kept build: `ruyaos/previous/play.<id>`.
 pub fn previous_ref(id: &str) -> String {
-    format!("app/{}/{ARCH}/{PREVIOUS_BRANCH}", app_id(id))
+    format!("{PREVIOUS_REFS}/{}", app_id(id))
 }
 
 /// A value for a key file line: no control characters (a newline would start a new key), `\`
@@ -493,6 +495,16 @@ pub fn parse_checksum(out: &str) -> Option<String> {
     ok.then(|| c.to_string())
 }
 
+/// Is the commit `checksum` in the repo? (`ostree show` fails when it is not.)
+pub fn show_commit(paths: &Paths, checksum: &str) -> Vec<String> {
+    v(&[
+        "ostree",
+        "show",
+        &format!("--repo={}", s(&paths.repo)),
+        checksum,
+    ])
+}
+
 /// Point the [`previous_ref`] of `play.<id>` at `checksum`, replacing what it named
 /// (`ostree refs --create --force`).
 pub fn keep_ref(paths: &Paths, id: &str, checksum: &str) -> Vec<String> {
@@ -519,7 +531,7 @@ pub fn delete_refs(paths: &Paths, refs: &[String]) -> Vec<String> {
 }
 
 /// Drop every object no ref reaches, history included (`--depth=0`): the repo keeps the head of
-/// each app's [`BRANCH`] and [`PREVIOUS_BRANCH`] and nothing older (RUY-1245).
+/// each app's [`BRANCH`] and its [`previous_ref`] and nothing older (RUY-1245).
 pub fn prune(paths: &Paths) -> Vec<String> {
     v(&[
         "ostree",
@@ -971,7 +983,7 @@ impl Commit for FlatpakCommit {
         Ok(())
     }
 
-    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError> {
         let out = self.run(deployed_commit(id))?;
         let checksum = parse_checksum(&out).ok_or_else(|| {
             CommitError::Failed(format!(
@@ -979,9 +991,20 @@ impl Commit for FlatpakCommit {
                 out.trim()
             ))
         })?;
+        // A deployed commit no ref named (an install that failed after its export moved
+        // `stable`) can have been pruned by another app's update: keep nothing then, so the
+        // update is not blocked for ever; the build kept before goes too (it is no older build
+        // of what runs).
+        if let Err(e) = self.runner.run(&show_commit(&self.paths, &checksum)) {
+            eprintln!(
+                "ruya-play: the deployed commit of play.{id} is not in the repo any more ({e}); the update keeps no build"
+            );
+            self.forget_refs(id, &[previous_ref(id)]);
+            return Ok(false);
+        }
         self.run(keep_ref(&self.paths, id, &checksum))?;
         self.prune_repo();
-        Ok(())
+        Ok(true)
     }
 
     fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError> {

@@ -160,9 +160,10 @@ impl Commit for LoggedCommit {
         Ok(())
     }
 
-    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+    // Nothing is committed in this mode, so nothing is kept: GetPrevious answers no-previous.
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError> {
         eprintln!("ruya-play --session: would keep the deployed build of play.{id}");
-        Ok(())
+        Ok(false)
     }
 
     // Nothing is committed, so nothing is kept: a rollback in this mode fails `commit.failed`.

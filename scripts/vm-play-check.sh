@@ -45,17 +45,18 @@
 #   rollback RUY-1245: install the sample asking for the network (developer mode, from incoming/), then
 #          its next build (bumpbuild: payload/hello-game changed) over it. Before the update GetPrevious
 #          is no-previous; after it GetPrevious names the first build, the local repo
-#          (/var/lib/ruya-play/repo) holds exactly the app's refs previous and stable, previous is the
-#          commit Flatpak had deployed before the update and stable the one it deploys now. An admin
-#          withdraws the network (Store1). Rollback
-#          without admin_approved is forbidden; with it a job ends ok (kind rollback in state/jobs):
-#          the deployment's play.json names the first build again and hello-game has its first SHA-256,
-#          Flatpak's commit is a new one (stable in the repo, never the old commit: no flatpak
-#          update --commit), installed.json records the first build without previous, the previous
-#          ref is gone and both commits of before are pruned (ostree prune --refs-only --depth=0:
-#          the dropped previous and the new head's parent), the override still says
-#          shared=!network, and GetPrevious and a second Rollback are no-previous. The next build
-#          installs again (an update), and the removal leaves no ref of the app in the repo
+#          (/var/lib/ruya-play/repo) holds exactly the app's stable ref and ruyaos/previous/play.<id>
+#          (the commit Flatpak had deployed before the update; stable the one it deploys now), and
+#          the local remote offers no app/.../previous branch. An admin withdraws the network
+#          (Store1). Rollback without admin_approved is forbidden; with it a job ends ok (kind
+#          rollback in state/jobs): the deployment's play.json names the first build again and
+#          hello-game has its first SHA-256, Flatpak's commit is a new one (stable in the repo, never
+#          the old commit: no flatpak update --commit), installed.json records the first build
+#          without previous, the kept ref is gone and both commits of before are pruned (ostree prune
+#          --refs-only --depth=0: the dropped kept build and the new head's parent), the override
+#          still says shared=!network, GetPrevious and a second Rollback are no-previous and change
+#          nothing, the first build again is refused build.not_newer, the next build installs again
+#          (an update), and the removal leaves no ref of the app in the repo
 #   launch RUY-902 (ADR-037/038): the native sample installed (developer mode, from incoming/) and started as a
 #          profile through Session1.Launch (the check makes one when the VM has none, as vm-sample-check.sh
 #          does, and removes it again): AppStarted, the save in the app's data folder (plays=1), Stop ends
@@ -935,8 +936,9 @@ PY
 
 # --- rollback (RUY-1245) ----------------------------------------------------------------------------------
 repo="$state/repo"
-# The refs of play.<id> in the service's repo, sorted, on one line.
-refs_of() { ostree refs --repo="$repo" 2>/dev/null | grep "^app/play\.$1/" | sort | tr '\n' ' ' | sed 's/ $//'; }
+# The refs of play.<id> in the service's repo (its app/ branches and the kept build's
+# ruyaos/previous/play.<id>), sorted, on one line.
+refs_of() { ostree refs --repo="$repo" 2>/dev/null | grep -E "^(app/play\.$1/|ruyaos/previous/play\.$1\$)" | sort | tr '\n' ' ' | sed 's/ $//'; }
 # The commit Flatpak has deployed for play.<id>.
 deployed_commit() { flatpak info --system --show-commit "play.$1" 2>/dev/null | tr -d '[:space:]'; }
 # Rollback <app id> as an admin and wait for the job.
@@ -956,8 +958,10 @@ rollback_checks() {
     b2="$(build_in "$app/play.json")"
     c2="$(deployed_commit "$appid")"
     [ "$b2" -gt "$b1" ] && ok "the update is build $b2 (was $b1)" || bad "the deployed build after the update: $b2"
-    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/previous app/play.$appid/x86_64/stable" ] && ok "the repo holds the app's previous and stable refs" || bad "the repo's refs: '$(refs_of "$appid")'"
-    [ -n "$c1" ] && [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/previous" 2>&1)" = "$c1" ] && ok "previous is the commit deployed before the update" || bad "previous is not $c1"
+    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/stable ruyaos/previous/play.$appid" ] && ok "the repo holds the app's stable ref and its kept build (ruyaos/previous)" || bad "the repo's refs: '$(refs_of "$appid")'"
+    [ -n "$c1" ] && [ "$(ostree rev-parse --repo="$repo" "ruyaos/previous/play.$appid" 2>&1)" = "$c1" ] && ok "the kept build is the commit deployed before the update" || bad "ruyaos/previous/play.$appid is not $c1"
+    # Outside app/: Flatpak offers no previous branch of the app on the local remote.
+    flatpak remote-info --system ruyaos-play-local "app/play.$appid/x86_64/previous" >/dev/null 2>&1 && bad "the local remote offers a previous branch of play.$appid" || ok "the local remote offers no previous branch"
     [ -n "$c2" ] && [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/stable" 2>&1)" = "$c2" ] && ok "stable is the update's deployed commit" || bad "stable is not $c2"
     out="$(call GetPrevious s "play.$appid")"
     [ "$(echo "$out" | parse status) $(echo "$out" | parse nth 2)" = "ok $b1" ] && ok "GetPrevious names build $b1" || bad "GetPrevious after the update: $out"
@@ -972,7 +976,7 @@ rollback_checks() {
     c3="$(deployed_commit "$appid")"
     [ -n "$c3" ] && [ "$c3" != "$c1" ] && [ "$c3" != "$c2" ] && ok "the rollback deployed a new commit" || bad "the deployed commit after the rollback: $c3 (before: $c1, $c2)"
     [ "$(ostree rev-parse --repo="$repo" "app/play.$appid/x86_64/stable" 2>&1)" = "$c3" ] && ok "the repo's stable head is the deployed commit" || bad "stable is not $c3"
-    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/stable" ] && ok "the previous ref is gone" || bad "the repo's refs after the rollback: '$(refs_of "$appid")'"
+    [ "$(refs_of "$appid")" = "app/play.$appid/x86_64/stable" ] && ok "the kept build's ref is gone" || bad "the repo's refs after the rollback: '$(refs_of "$appid")'"
     # ostree prune --refs-only --depth=0 (Fedora's ostree): the dropped previous and stable's parent go.
     for c in "$c1" "$c2"; do
         ostree show --repo="$repo" "$c" >/dev/null 2>&1 && bad "commit $c is still in the repo" || ok "commit $c was pruned"
@@ -997,6 +1001,10 @@ PY
     [ "$1" = no-previous ] && ok "GetPrevious after the rollback is no-previous" || bad "GetPrevious after the rollback: $*"
     set -- $(rollback_wait "play.$appid")
     [ "$1" = no-previous ] && ok "a second Rollback is no-previous" || bad "the second Rollback: $*"
+    [ "$(build_in "$app/play.json") $(deployed_commit "$appid")" = "$b1 $c3" ] && ok "the refused Rollback changed nothing" || bad "the deployment after the refused Rollback"
+    # A hand-made package of a build not above the one rolled back to is no install (build.not_newer).
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = invalid-package ] && grep -q 'build.not_newer' "$state/state/jobs" && ok "build $b1 again is refused build.not_newer" || bad "build $b1 over itself: $got"
     got="$(install_wait "$state/incoming/vm-play-check-next.play.zip")"
     [ "$got" = ok ] && ok "build $b2 installs again (an update)" || bad "build $b2 after the rollback: $got"
     set -- $(remove_wait "play.$appid")

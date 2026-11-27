@@ -39,17 +39,17 @@ use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
 use crate::core::unpack::{self, staging_problem};
 use crate::core::verify;
-use crate::service::commit::METADATA_GENERATION;
+use crate::service::commit::{METADATA_GENERATION, TRUST_RECORD_IN_APP};
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::manifest::english;
 use ruya_play_format::Problem;
 use ruya_play_format::Source;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    added_to, assess, bind_to_manifest, diff, grants, inspect, is_revoked, record_install,
-    record_uninstall, select_blocklist, verify_signatures, Context, Continuity, IdRecord,
-    Inspection, ListCheck, PackageBytes, PackageFacts, PermissionDiff, StoreKeys, Tier, TrustError,
-    TrustStore,
+    added_to, assess, bind_to_manifest, decide_tier, diff, grants, inspect, is_revoked,
+    record_install, record_uninstall, select_blocklist, verify_signatures, Context, Continuity,
+    IdRecord, Inspection, ListCheck, PackageBytes, PackageFacts, PermissionDiff, StoreKeys, Tier,
+    TrustError, TrustRecord, TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -295,9 +295,9 @@ struct Prior {
     trust_before: Option<IdRecord>,
     build_written: bool,
     build_before: Option<u64>,
-    /// The kept build was written (an update, RUY-1245); `previous_before` is what it was.
+    /// An update kept the deployed build (RUY-1245): the repo's ref moved and the build kept
+    /// before is gone.
     previous_written: bool,
-    previous_before: Option<u64>,
 }
 
 impl Prior {
@@ -310,7 +310,6 @@ impl Prior {
             build_written: false,
             build_before: None,
             previous_written: false,
-            previous_before: None,
         }
     }
 }
@@ -406,6 +405,28 @@ fn commit_problem(e: CommitError) -> Problem {
         CommitError::NoNetwork(m) => Problem::new(codes::PLATFORM_OFFLINE, "", m),
         CommitError::Failed(m) => Problem::new(codes::COMMIT_FAILED, "", m),
     }
+}
+
+/// Write `record` as the trust record of the `/app` folder `files` (a rollback's checkout: the
+/// commit then carries today's decision), through folder handles.
+fn write_trust_record(files: &Dir, record: &TrustRecord) -> Result<(), Problem> {
+    let (folders, name) = TRUST_RECORD_IN_APP
+        .rsplit_once('/')
+        .unwrap_or(("", TRUST_RECORD_IN_APP));
+    let mut dir = files.try_clone().map_err(|e| staging_problem("", &e))?;
+    for folder in folders.split('/').filter(|f| !f.is_empty()) {
+        dir = dir
+            .open_dir(folder)
+            .map_err(|e| staging_problem(TRUST_RECORD_IN_APP, &e))?;
+    }
+    let fault = |e: std::io::Error| staging_problem(TRUST_RECORD_IN_APP, &e);
+    match dir.remove_entry(name) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(fault(e)),
+        _ => {}
+    }
+    dir.create_file(name, unpack::FILE_MODE)
+        .and_then(|mut f| f.write_all(record.to_json().as_bytes()))
+        .map_err(fault)
 }
 
 /// `rollback.not_older`: what the records or the repo keep for `id` is no build older than the
@@ -1628,13 +1649,15 @@ impl Importer {
             let installed = reconcile::installed_app(&deployed)?;
             Ok((kept, installed))
         });
-        let ((manifest, assessment), (installed, _)) = match kept {
+        let ((kept, _), (installed, _)) = match kept {
             Ok(k) => k,
             Err(p) => return fail(vec![p]),
         };
-        if let Err(p) = self.rollback_checks(&files, &manifest, &installed, record.build) {
-            return fail(vec![p]);
-        }
+        let (manifest, assessment) =
+            match self.rollback_checks(&files, &kept, &installed, record.build) {
+                Ok(today) => today,
+                Err(p) => return fail(vec![p]),
+            };
         reporter.at(Phase::Verifying, VERIFIED);
         // Past this point Cancel answers too-late.
         {
@@ -1702,14 +1725,22 @@ impl Importer {
     /// the launcher rebuilds a prefix only for a raised epoch); signed by the key the id is
     /// recorded under now (its signatures verified again, so a rotation since refuses); and not on
     /// today's block list (key, id and build, content, bundled runners re-hashed from the
-    /// checkout), failing closed when the list cannot be read.
+    /// checkout), failing closed when the list cannot be read; and of a tier today (an unsigned
+    /// build only with developer mode on). Returns the build read back under today's tier, with its
+    /// assessment under today's ceiling: what the commit generates from.
     fn rollback_checks(
         &self,
         files: &Dir,
         manifest: &ruya_play_format::manifest::Manifest,
         installed: &ruya_play_format::manifest::Manifest,
         installed_build: u64,
-    ) -> Result<(), Problem> {
+    ) -> Result<
+        (
+            ruya_play_format::manifest::Manifest,
+            ruya_play_trust::Assessment,
+        ),
+        Problem,
+    > {
         let id = &manifest.id;
         if manifest.build >= installed_build {
             return Err(not_older(id, Some(manifest.build), installed_build));
@@ -1772,10 +1803,17 @@ impl Importer {
             key_ids,
             play_files_sha256: ruya_play_format::sha256_hex(bytes.play_files),
         };
-        match is_revoked(&selected.list, &facts, &runners) {
-            Some(revoked) => Err(revoked.to_problem()),
-            None => Ok(()),
+        if let Some(revoked) = is_revoked(&selected.list, &facts, &runners) {
+            return Err(revoked.to_problem());
         }
+        // Today's tier, by the rule an install's inspect uses (an unsigned build needs developer
+        // mode now: `trust.needs_developer_mode`), written as the build's trust record, and the
+        // build read back under it: its official rules and today's ceiling (05 §8), never the tier
+        // its old trust record names.
+        let developer_mode = self.trust().developer_mode().map_err(|e| e.to_problem())?;
+        let tier = decide_tier(&sigs, developer_mode).map_err(|e| e.to_problem())?;
+        write_trust_record(files, &TrustRecord::of(tier.tier, &sigs, manifest))?;
+        reconcile::installed_app(files)
     }
 
     /// The pipeline of one verify job: the deployed files against their stored `play.files`.
@@ -2184,7 +2222,6 @@ impl Importer {
         let before = self.installed().get(&prior.id);
         let written = before.and_then(|b| {
             prior.build_before = b.map(|r| r.build);
-            prior.previous_before = b.and_then(|r| r.previous);
             self.installed().record(&prior.id, manifest.build)
         });
         if let Err(p) = written {
@@ -2199,13 +2236,16 @@ impl Importer {
     /// An update (RUY-1245): the build deployed now, `replaced`, is kept for a rollback before the
     /// commit, then recorded as the kept build. A failure is the update's (`commit.failed`), and
     /// the caller rolls the records back; a kept ref the records do not name is harmless (what
-    /// `GetPrevious` and `Rollback` read is checked against the installed build).
+    /// `GetPrevious` and `Rollback` read is checked against the installed build). When the repo
+    /// no longer holds the deployed commit, nothing is kept and the record keeps nothing.
     fn keep_replaced(&self, prior: &mut Prior, replaced: u64) -> Result<(), Problem> {
-        self.commit
+        let kept = self
+            .commit
             .keep_previous(&prior.id)
             .map_err(commit_problem)?;
         prior.previous_written = true;
-        self.installed().set_previous(&prior.id, Some(replaced))
+        self.installed()
+            .set_previous(&prior.id, kept.then_some(replaced))
     }
 
     /// Undo [`Self::record`] after a failed commit: a record this install created is dropped, one
@@ -2232,13 +2272,11 @@ impl Importer {
                 faults.push(format!("the installed build: {}", p.message));
             }
         }
-        // The build an update kept goes back to the one kept before (the repo's ref may already
-        // name the build deployed now: `GetPrevious` then finds it not older, so it keeps none).
+        // Once an update kept the deployed build, the repo's ref names that build (the one this
+        // undo records again) and the build kept before is pruned: the record keeps nothing, as
+        // the repo does (no older build is there to roll back to).
         if prior.previous_written {
-            if let Err(p) = self
-                .installed()
-                .set_previous(&prior.id, prior.previous_before)
-            {
+            if let Err(p) = self.installed().set_previous(&prior.id, None) {
                 faults.push(format!("the kept build: {}", p.message));
             }
         }

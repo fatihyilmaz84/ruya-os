@@ -151,11 +151,12 @@ fn a_rollback_brings_the_kept_build_back() {
             calls[0].files
         );
     }
-    // What is deployed now is the kept build: its play.json, its trust record, its files.
+    // What is deployed now is the kept build: its play.json, its files, and the trust record of
+    // today's decision (unsigned, developer mode on: unverified, whatever its old record said).
     assert_eq!(deployed_json(&u.h, ID), prev.manifest_bytes());
     let trust_json =
         std::fs::read_to_string(files_dir(&u.h, ID).join(TRUST_RECORD_IN_APP)).unwrap();
-    assert!(trust_json.contains("\"developer\""), "{trust_json}");
+    assert!(trust_json.contains("\"unverified\""), "{trust_json}");
     assert_eq!(
         std::fs::read_to_string(files_dir(&u.h, ID).join("payload/build.txt")).unwrap(),
         "build 1"
@@ -402,6 +403,103 @@ fn a_revoked_kept_build_is_refused_and_an_unreadable_list_fails_closed() {
     );
 }
 
+/// Review round 1: the tier is today's decision, as an install's inspect makes it.
+#[test]
+fn an_unsigned_kept_build_needs_developer_mode_now() {
+    let u = updated(&build(1), &build(2));
+    u.trust
+        .inner
+        .lock()
+        .unwrap()
+        .set_developer_mode(false)
+        .unwrap();
+    refused(
+        u,
+        ID,
+        JobStatus::NeedsDeveloperMode,
+        "trust.needs_developer_mode",
+    );
+    // A signed one does not.
+    let dev = dev_key();
+    let mut u = updated_with(&build(1), &build(2), Some(&dev), Setup::default());
+    u.trust
+        .inner
+        .lock()
+        .unwrap()
+        .set_developer_mode(false)
+        .unwrap();
+    assert_eq!(roll_back(&mut u.h, ID).status, JobStatus::Ok);
+}
+
+#[test]
+fn the_rolled_back_build_carries_todays_trust_record() {
+    let dev = dev_key();
+    let mut u = updated_with(&build(1), &build(2), Some(&dev), Setup::default());
+    // The kept build's own record says something else than today's decision.
+    let kept = u.h.commit.kept(ID).unwrap().join(TRUST_RECORD_IN_APP);
+    std::fs::write(
+        &kept,
+        br#"{"format":1,"tier":"unverified","signer_id":null,"signer_name":null,"store_signed":false}"#,
+    )
+    .unwrap();
+    assert_eq!(roll_back(&mut u.h, ID).status, JobStatus::Ok);
+    let deployed: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(files_dir(&u.h, ID).join(TRUST_RECORD_IN_APP)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(deployed["tier"], "developer");
+    assert_eq!(deployed["signer_id"], dev.public().key_id());
+}
+
+#[test]
+fn a_failed_update_keeps_no_build_the_repo_no_longer_holds() {
+    // Build 2 keeps build 1; the update to 3 keeps 2 (1 is pruned), then its commit fails.
+    let mut u = updated_with(
+        &build(1),
+        &build(2),
+        None,
+        Setup {
+            packages: packages(&[3]),
+            ..Setup::default()
+        },
+    );
+    *u.h.commit.fail.lock().unwrap() = Some(CommitError::Failed("export failed".into()));
+    let r = u.h.install_at(&pkg_path("b3.play"));
+    assert_eq!(r.status, JobStatus::Failed, "{:?}", r.problems);
+    let rec = record(&u, ID).unwrap();
+    assert_eq!(
+        (rec.build, rec.previous),
+        (2, None),
+        "build 1 is gone from the repo"
+    );
+    assert_eq!(u.h.importer.previous(ID), Err(MethodStatus::NoPrevious));
+}
+
+/// Review round 1: a deployed commit the repo lost (pruned by another app's update while no ref
+/// named it) keeps nothing, and the update still installs.
+#[test]
+fn an_update_whose_deployed_commit_is_gone_installs_and_keeps_nothing() {
+    let u = updated_with(
+        &build(1),
+        &build(2),
+        None,
+        Setup {
+            packages: packages(&[3]),
+            ..Setup::default()
+        },
+    );
+    let mut u = u;
+    u.h.commit
+        .deployed_pruned
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let r = u.h.install_at(&pkg_path("b3.play"));
+    assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
+    let rec = record(&u, ID).unwrap();
+    assert_eq!((rec.build, rec.previous), (3, None));
+    assert!(u.h.commit.kept(ID).is_none());
+    assert_eq!(u.h.importer.queue_rollback(ID).0, MethodStatus::NoPrevious);
+}
+
 #[test]
 fn a_failed_commit_puts_the_build_record_back() {
     let mut u = updated(&build(1), &build(2));
@@ -453,6 +551,8 @@ fn crash_at(at: Step<'static>) -> (Updated, u64) {
         Setup {
             stores: Some((trust.clone(), installed.clone())),
             rollbacks: true,
+            // The unsigned fixture still needs developer mode after the restart.
+            developer_mode: true,
             ..Setup::default()
         },
     );
@@ -740,7 +840,7 @@ fn the_flatpak_rollback_checks_out_commits_again_and_drops_the_ref() {
         "--user-mode",
         "--force-copy",
         "--subpath=/files",
-        "app/play.com.example.mini/x86_64/previous",
+        "ruyaos/previous/play.com.example.mini",
     ] {
         assert!(checkout.contains(&want.to_string()), "{want}: {checkout:?}");
     }
@@ -793,7 +893,7 @@ fn the_flatpak_rollback_checks_out_commits_again_and_drops_the_ref() {
         .unwrap();
     assert_eq!(
         calls[delete].last().unwrap(),
-        "app/play.com.example.mini/x86_64/previous"
+        "ruyaos/previous/play.com.example.mini"
     );
     let installed_at = calls
         .iter()
@@ -829,26 +929,44 @@ fn the_flatpak_commit_keeps_the_deployed_commit_and_prunes() {
     let lib = tempfile::tempdir().unwrap();
     let fc = FlatpakCommit::new(lib.path(), Box::new(runner.clone())).keeping_owner();
     let paths = commit::Paths::under(lib.path());
-    ruya_play::Commit::keep_previous(&fc, ID).unwrap();
-    // The deployed commit (not the repo's stable head), the ref moved onto it, then the prune.
+    assert!(ruya_play::Commit::keep_previous(&fc, ID).unwrap());
+    // The deployed commit (not the repo's stable head), that the repo holds it, the ref moved
+    // onto it, then the prune.
     assert_eq!(
         runner.calls.lock().unwrap().clone(),
         vec![
             commit::deployed_commit(ID),
+            commit::show_commit(&paths, DEPLOYED_COMMIT),
             commit::keep_ref(&paths, ID, DEPLOYED_COMMIT),
+            commit::prune(&paths),
+        ]
+    );
+    // A deployed commit the repo no longer holds (no ref named it, another update pruned it):
+    // nothing is kept, the old kept ref goes, and the update is not blocked.
+    let pruned = Arc::new(FakeRunner::default());
+    *pruned.fail_with_arg.lock().unwrap() = Some("show".into());
+    *pruned.fail_text.lock().unwrap() = Some("error: No such metadata object".into());
+    let fc2 = FlatpakCommit::new(lib.path(), Box::new(pruned.clone())).keeping_owner();
+    assert!(!ruya_play::Commit::keep_previous(&fc2, ID).unwrap());
+    assert_eq!(
+        pruned.calls.lock().unwrap().clone(),
+        vec![
+            commit::deployed_commit(ID),
+            commit::show_commit(&paths, DEPLOYED_COMMIT),
+            commit::delete_refs(&paths, &[commit::previous_ref(ID)]),
             commit::prune(&paths),
         ]
     );
     let keep = commit::keep_ref(&paths, ID, DEPLOYED_COMMIT);
     assert!(keep.contains(&"--force".to_string()));
-    assert!(keep.contains(&"--create=app/play.com.example.mini/x86_64/previous".to_string()));
+    assert!(keep.contains(&"--create=ruyaos/previous/play.com.example.mini".to_string()));
     let prune = commit::prune(&paths);
     assert!(prune.contains(&"--refs-only".to_string()) && prune.contains(&"--depth=0".to_string()));
     // GetPrevious reads one file of the kept ref.
     assert_eq!(
         commit::cat_previous(&paths, ID, "play.json")[3..],
         [
-            "app/play.com.example.mini/x86_64/previous".to_string(),
+            "ruyaos/previous/play.com.example.mini".to_string(),
             "/files/play.json".to_string()
         ]
     );
@@ -858,7 +976,7 @@ fn the_flatpak_commit_keeps_the_deployed_commit_and_prunes() {
         [
             "--delete".to_string(),
             "app/play.com.example.mini/x86_64/stable".to_string(),
-            "app/play.com.example.mini/x86_64/previous".to_string()
+            "ruyaos/previous/play.com.example.mini".to_string()
         ]
     );
     // A commit that is not a checksum keeps nothing.

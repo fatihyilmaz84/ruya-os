@@ -194,6 +194,9 @@ pub struct RecordingCommit {
     pub repo_calls: Mutex<Vec<String>>,
     /// The error the next [`Commit::keep_previous`] returns.
     pub fail_keep: Mutex<Option<CommitError>>,
+    /// The repo no longer holds the deployed commit: [`Commit::keep_previous`] keeps nothing
+    /// (`Ok(false)`) and drops what was kept.
+    pub deployed_pruned: std::sync::atomic::AtomicBool,
 }
 
 impl RecordingCommit {
@@ -211,6 +214,7 @@ impl RecordingCommit {
             repo: None,
             repo_calls: Mutex::new(Vec::new()),
             fail_keep: Mutex::new(None),
+            deployed_pruned: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -417,8 +421,9 @@ impl Commit for RecordingCommit {
     }
 
     /// Records the call; with an installation and a repo, the deployed `/app` is copied to
-    /// `<repo>/<id>`. The error of [`Self::fail_keep`] is returned first.
-    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+    /// `<repo>/<id>`. The error of [`Self::fail_keep`] is returned first; with
+    /// [`Self::deployed_pruned`] nothing is kept and the kept build goes.
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError> {
         self.repo_call("keep", id);
         if let Some(err) = self
             .fail_keep
@@ -428,8 +433,17 @@ impl Commit for RecordingCommit {
         {
             return Err(err);
         }
+        if self
+            .deployed_pruned
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            if let Some(kept) = self.kept(id) {
+                let _ = std::fs::remove_dir_all(kept);
+            }
+            return Ok(false);
+        }
         let Some(repo) = &self.repo else {
-            return Ok(());
+            return Ok(true);
         };
         let files = self
             .deployed(id)
@@ -440,7 +454,7 @@ impl Commit for RecordingCommit {
             .map_err(|e| CommitError::Failed(e.to_string()))?;
         // Flatpak writes `.ref` when it deploys; the commit in the repo has none.
         let _ = std::fs::remove_file(kept.join(".ref"));
-        Ok(())
+        Ok(true)
     }
 
     fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError> {

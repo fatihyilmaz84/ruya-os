@@ -2011,7 +2011,12 @@ grep -q 'call GetPrevious s ' "$here/vm-play-check.sh" && grep -A6 'name="GetPre
 got="$(echo '{"type":"ssua(sss)a(sss)","data":["ok","1.0.0",3,[],[]]}' | pc nth 2)"
 [ "$got" = 3 ] && pass "play: parse nth reads a reply's argument by position" || fail "play: nth 2 read as '$got'"
 commit_rs="$here/../services/ruya-play/src/service/commit.rs"
-grep -q 'pub const PREVIOUS_BRANCH: &str = "previous";' "$commit_rs" && grep -q 'x86_64/previous app/play.\$appid/x86_64/stable"' "$here/vm-play-check.sh" && pass "play: the rollback check looks for the previous ref commit.rs makes" || fail "play: vm-play-check.sh and commit.rs disagree on the previous ref"
+grep -q 'pub const PREVIOUS_REFS: &str = "ruyaos/previous";' "$commit_rs" && grep -q 'format!("{PREVIOUS_REFS}/{}", app_id(id))' "$commit_rs" && grep -q 'x86_64/stable ruyaos/previous/play.\$appid"' "$here/vm-play-check.sh" && grep -q 'rev-parse --repo="\$repo" "ruyaos/previous/play.\$appid"' "$here/vm-play-check.sh" && pass "play: the rollback check looks for the kept-build ref commit.rs makes (ruyaos/previous/play.<id>)" || fail "play: vm-play-check.sh and commit.rs disagree on the kept-build ref"
+# The refs_of filter keeps the app's own app/ refs and its kept build only (another app's never).
+rrun() { printf '%s\n' app/play.a.b/x86_64/stable ruyaos/previous/play.a.b ruyaos/previous/play.a.bc app/play.a.bc/x86_64/stable appstream/x86_64 > "$tmp/refs.txt"; PATH="$tmp/refshim:$PATH" bash -c "$(sed -n '/^refs_of() {/p' "$here/vm-play-check.sh"); repo=x; refs_of a.b"; }
+mkdir -p "$tmp/refshim"; printf '#!/bin/sh\ncat "%s"\n' "$tmp/refs.txt" > "$tmp/refshim/ostree"; chmod +x "$tmp/refshim/ostree"
+got="$(rrun)"
+[ "$got" = "app/play.a.b/x86_64/stable ruyaos/previous/play.a.b" ] && pass "play: refs_of lists one app's stable and kept refs" || fail "play: refs_of read '$got'"
 grep -q '("rollback", "ok")' "$here/vm-play-check.sh" && grep -q 'JobKind::Rollback => "rollback"' "$here/../services/ruya-play/src/core/jobs.rs" && pass "vm-play-check.sh expects kind rollback in the job table, the word jobs.rs writes" || fail "vm-play-check.sh: the rollback job is not checked in state/jobs"
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"

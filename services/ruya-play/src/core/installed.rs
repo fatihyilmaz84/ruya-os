@@ -35,7 +35,8 @@ pub struct Installed {
     /// The generation of the metadata its commit generated; 0 when it is not known (a record
     /// from before generations, or one the reconcile made for an app it found).
     pub generation: u32,
-    /// The build an update replaced, which the commit keeps as the repository's `previous` ref
+    /// The build an update replaced, which the commit keeps as the repo's `ruyaos/previous/play.<id>`
+    /// ref
     /// for a rollback (RUY-1245); `None` when nothing is kept (never updated, rolled back, or a
     /// record from before rollbacks).
     pub previous: Option<u64>,

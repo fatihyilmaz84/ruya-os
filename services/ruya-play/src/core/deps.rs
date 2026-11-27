@@ -121,8 +121,10 @@ pub trait Commit: Send + Sync {
     /// Keep the build of `play.<id>` deployed now as the one a rollback brings back (RUY-1245):
     /// it replaces a build kept before, and the repository keeps nothing else of the app (a
     /// failed clean-up of the rest is logged, not an error). Called by an update before its
-    /// commit; a re-commit never calls it.
-    fn keep_previous(&self, id: &str) -> Result<(), CommitError>;
+    /// commit; a re-commit never calls it. `Ok(false)`: the repo no longer holds the deployed
+    /// commit (no ref named it, and a prune took it), so nothing is kept and the update goes on
+    /// without a rollback to offer, rather than being blocked.
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError>;
 
     /// The bytes of the file `name` (a root file such as `play.json`) of the kept build's `/app`.
     fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError>;
@@ -366,7 +368,7 @@ impl<T: Commit + ?Sized> Commit for std::sync::Arc<T> {
     fn uninstall(&self, id: &str) -> Result<(), CommitError> {
         (**self).uninstall(id)
     }
-    fn keep_previous(&self, id: &str) -> Result<(), CommitError> {
+    fn keep_previous(&self, id: &str) -> Result<bool, CommitError> {
         (**self).keep_previous(id)
     }
     fn previous_file(&self, id: &str, name: &str) -> Result<Vec<u8>, CommitError> {
