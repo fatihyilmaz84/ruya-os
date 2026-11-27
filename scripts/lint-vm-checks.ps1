@@ -93,7 +93,7 @@ try {
     New-Item -ItemType Directory -Force $qs | Out-Null
     [IO.File]::WriteAllText((Join-Path $qs "vm-a-check.sh"), "#!/usr/bin/env bash`n# modes: check other`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
-    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms remove launch launch-windows parse`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms remove launch launch-windows bundled parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
     # The `# needs:` reader (RUY-1163): a listed mode, a mode not listed, `all`, no line, the default mode of
     # a bare call, and the lines that cannot be read (each must carry an error; the 1c loop fails on it).
@@ -201,7 +201,7 @@ try {
         @{ check = "vm-play-check.sh parse"; skip = $false },
         @{ check = "vm-library-check.sh check"; skip = $false }
     )
-    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-play-check.sh remove", "vm-play-check.sh launch", "vm-play-check.sh launch-windows", "vm-library-check.sh play")) {
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-play-check.sh remove", "vm-play-check.sh launch", "vm-play-check.sh launch-windows", "vm-play-check.sh bundled", "vm-library-check.sh play")) {
         $rules += @{ check = $c; skip = $true; why = "scripts/play-vm-files.sh" }
     }
     foreach ($r in $rules) {
@@ -220,12 +220,16 @@ try {
         if ($got) { $problems.Add("vm-queue rules: '$c' should run with both files, got: $got") }
     }
     if ((Get-PlayVmFiles $qt).files.Count -ne 2) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list both files") }
-    # launch-windows also needs the Windows sample (RUY-902), and only it: the other checks run without it
-    $got = Get-CheckSkip "vm-play-check.sh launch-windows" $qs $qt
-    if (-not $got -or $got -notlike "*hello-play-wine.play.zip*") { $problems.Add("vm-queue rules: 'vm-play-check.sh launch-windows' should be SKIPPED without the Windows sample, got: $got") }
+    # launch-windows (RUY-902) and bundled (RUY-1248) also need the Windows sample, and only they: the other checks run without it
+    foreach ($m in @("launch-windows", "bundled")) {
+        $got = Get-CheckSkip "vm-play-check.sh $m" $qs $qt
+        if (-not $got -or $got -notlike "*hello-play-wine.play.zip*") { $problems.Add("vm-queue rules: 'vm-play-check.sh $m' should be SKIPPED without the Windows sample, got: $got") }
+    }
     [IO.File]::WriteAllText((Join-Path $pd "hello-play-wine.play.zip"), "x")
-    $got = Get-CheckSkip "vm-play-check.sh launch-windows" $qs $qt
-    if ($got) { $problems.Add("vm-queue rules: 'vm-play-check.sh launch-windows' should run with the Windows sample, got: $got") }
+    foreach ($m in @("launch-windows", "bundled")) {
+        $got = Get-CheckSkip "vm-play-check.sh $m" $qs $qt
+        if ($got) { $problems.Add("vm-queue rules: 'vm-play-check.sh $m' should run with the Windows sample, got: $got") }
+    }
     if ((Get-PlayVmFiles $qt).files.Count -ne 3) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list the Windows sample") }
 } finally { Remove-Item -Recurse -Force $qt -ErrorAction SilentlyContinue }
 

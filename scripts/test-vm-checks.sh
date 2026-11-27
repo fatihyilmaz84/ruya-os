@@ -2396,6 +2396,101 @@ mkdir -p "$lp/alone"; cp "$here/vm-play-check.sh" "$lp/alone/"
 out="$(bash "$lp/alone/vm-play-check.sh" sysrunner "$lp/runners" 2>&1)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "vm-play-check.sh sysrunner without vm-runner-check.sh next to it says so" "$out" "copy vm-runner-check.sh next to this script" || fail "sysrunner alone: exit $rc, $out"
 
+# bundled (RUY-1248): the version of the bundled copy, the package it is in, the script it runs and the modes.
+got="$(bash "$here/vm-play-check.sh" bundledver "$lp/runners" | tr -d '\r')"
+[ "$got" = "GE-Proton11-14" ] && pass "vm-play-check.sh bundledver: the newest proton-ge's version with its last number raised (GE-Proton11-13 is GE-Proton11-14, above the image's)" || fail "bundledver: '$got'"
+bash "$here/vm-play-check.sh" bundledver "$lp/none" >/dev/null 2>&1 && fail "bundledver: a tree without proton-ge passed" || pass "vm-play-check.sh bundledver: no proton-ge runner is a failure"
+# A package as the Windows sample's build leaves it: one folder around it, play.files sorted and without play.json.
+python3 - "$lp/bw-in.zip" <<'PY'
+import hashlib, json, sys, zipfile
+m = {"id": "org.example.helloplaywine", "name": {"en": "Hello"}, "build": 3,
+     "components": [{"id": "proton", "type": "proton", "source": "system", "min": "GE-Proton11-1", "tested": "GE-Proton11-13"}],
+     "run": {"runner": "proton", "component": "proton", "command": ["${game}/Program/hello.exe"], "cwd": "${game}/Program", "writable": ["Program"]},
+     "permissions": {"network": False}}
+files = {"art/icon.png": b"png", "payload/Program/check.exe": b"MZ"}
+table = "".join(json.dumps({"h": hashlib.sha256(d).hexdigest(), "p": p, "s": len(d), "t": "f"}, separators=(",", ":")) + "\n" for p, d in sorted(files.items()))
+with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("hello/play.json", json.dumps(m))
+    z.writestr("hello/play.files", table)
+    for p, d in files.items():
+        z.writestr("hello/" + p, d)
+PY
+bash "$here/vm-play-check.sh" bundledpkg "$lp/bw-in.zip" "$lp/bw-out.zip" org.example.helloplaywine_bundled newest 0 "$lp/runners"; rc=$?
+got="$(python3 -c '
+import hashlib, json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+m = json.loads(b.read("hello/play.json"))
+c = m["components"][0]
+print(m["id"], m["build"], c["source"], c["min"], c["bundled"]["path"], c["bundled"]["version"], c["bundled"]["licence"], m["run"]["command"], m["permissions"].get("multiarch"))
+' "$lp/bw-in.zip" "$lp/bw-out.zip")"
+[ "$rc" = 0 ] && [ "$got" = "org.example.helloplaywine_bundled 3 newest GE-Proton11-1 components/proton GE-Proton11-14 CC0-1.0 ['\${game}/Program/check.exe'] True" ] \
+    && pass "vm-play-check.sh bundledpkg: source newest with a bundled copy of GE-Proton11-14 under components/proton, the id, the command and multiarch of winpkg, the same build" || fail "bundledpkg manifest: rc $rc, '$got'"
+got="$(python3 -c '
+import hashlib, json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+lines = [json.loads(l) for l in b.read("hello/play.files").decode("utf-8").splitlines()]
+paths = [e["p"] for e in lines]
+by = {e["p"]: e for e in lines}
+r = json.loads(b.read("hello/components/proton/runner.json"))
+new = ["components/proton/proton", "components/proton/runner.json", "licences/proton-CC0-1.0.txt"]
+ok = all(by[p]["s"] == len(b.read("hello/" + p)) and by[p]["h"] == hashlib.sha256(b.read("hello/" + p)).hexdigest() and by[p]["t"] == "f" for p in new)
+same = all(a.read(n) == b.read(n) for n in a.namelist() if not n.endswith(("play.json", "play.files")))
+print(paths == sorted(paths, key=lambda p: p.encode()), len(paths), ok, by[new[0]].get("x"), by[new[1]].get("x"), same, sorted(set(b.namelist()) - set(a.namelist())) == sorted("hello/" + p for p in new),
+      r["format"], r["family"], r["kind"], r["version"], r["arch"], r["entry"], by["components/proton/proton"]["p"] in paths)
+' "$lp/bw-in.zip" "$lp/bw-out.zip")"
+[ "$got" = "True 5 True 1 None True True 1 proton-ge proton GE-Proton11-14 x86_64 {'proton': 'proton'} True" ] \
+    && pass "vm-play-check.sh bundledpkg: runner.json (the OS's family and kind, version above it), the proton script and the licence text (ruya-pack validate wants one) are in play.files (sorted, size and SHA-256 right, the script executable), the other files untouched" || fail "bundledpkg files: '$got'"
+[ ! -e "$lp/bw-out.zip.win" ] && pass "vm-play-check.sh bundledpkg leaves no temporary copy" || fail "bundledpkg left $lp/bw-out.zip.win"
+bash "$here/vm-play-check.sh" bundledpkg "$lp/bw-in.zip" "$lp/bw-only.zip" org.example.x bundled 1 "$lp/runners" >/dev/null; rc=$?
+got="$(python3 -c '
+import json, sys, zipfile
+m = json.loads(zipfile.ZipFile(sys.argv[1]).read("hello/play.json"))
+print(m["build"], m["components"][0]["source"], m["components"][0]["bundled"]["version"])
+' "$lp/bw-only.zip")"
+[ "$rc" = 0 ] && [ "$got" = "4 bundled GE-Proton11-14" ] && pass "vm-play-check.sh bundledpkg: bump 1 and source bundled make the next build that ignores the System choice" || fail "bundledpkg bundled: rc $rc, '$got'"
+bash "$here/vm-play-check.sh" bundledpkg "$lp/bw-in.zip" "$lp/bw-none.zip" org.example.x newest 0 "$lp/none" >/dev/null 2>&1 && fail "bundledpkg: a tree without proton-ge passed" || pass "vm-play-check.sh bundledpkg: no proton-ge runner is a failure"
+[ ! -e "$lp/bw-none.zip" ] && pass "vm-play-check.sh bundledpkg: no package when the image has no GE-Proton" || fail "bundledpkg wrote a package without a runner"
+# The script of the bundled copy, run: it records its version and first argument in the data folder, then
+# runs the image's GE-Proton (here absent: exit 127 at the exec) with its arguments; without a data folder it stops before.
+python3 -c '
+import sys, zipfile
+open(sys.argv[2], "wb").write(zipfile.ZipFile(sys.argv[1]).read("hello/components/proton/proton"))
+' "$lp/bw-out.zip" "$lp/bw-proton.sh"
+mkdir -p "$lp/xdg"
+XDG_DATA_HOME="$lp/xdg" sh "$lp/bw-proton.sh" waitforexitandrun /x.exe >/dev/null 2>&1; rc=$?
+[ "$rc" = 127 ] && [ "$(cat "$lp/xdg/bundled-runner-ran")" = "GE-Proton11-14 waitforexitandrun" ] && pass "the bundled proton script writes '<version> <verb>' to \$XDG_DATA_HOME/bundled-runner-ran, then execs the image's runner (127: none here)" || fail "bundled proton script: rc $rc, marker '$(cat "$lp/xdg/bundled-runner-ran" 2>&1)'"
+grep -qx 'exec /app/runners/ProtonGE11/proton "\$@"' "$lp/bw-proton.sh" && pass "the bundled proton script runs /app/runners/<the image's newest proton-ge folder>/proton with all its arguments" || fail "bundled proton script: $(grep exec "$lp/bw-proton.sh")"
+( unset XDG_DATA_HOME; sh "$lp/bw-proton.sh" run >/dev/null 2>&1 ); rc=$?
+[ "$rc" != 0 ] && [ "$rc" != 127 ] && pass "the bundled proton script stops (not at the exec) without a data folder" || fail "bundled proton script without XDG_DATA_HOME: rc $rc"
+# The marker the checks count, and what the launcher passes to a proton runner's entry (plan.rs: [proton, "waitforexitandrun", ...]).
+grep -q '"waitforexitandrun"' "$here/../services/ruya-play-launch/src/plan.rs" && grep -q "' waitforexitandrun\$'" "$here/vm-play-check.sh" && grep -q 'marker="\$data/bundled-runner-ran"' "$here/vm-play-check.sh" && grep -q '>> "\${XDG_DATA_HOME:?}/bundled-runner-ran"' "$here/vm-play-check.sh" \
+    && pass "the checks count the launcher's waitforexitandrun calls in the marker file the script writes" || fail "bundled: the marker or the verb differs between plan.rs, the script and the check"
+
+# parse resolution: Library1 ResolveRunner as the check reads it.
+pr() { printf '%s' "$1" | bash "$here/vm-play-check.sh" parse resolution | tr -d '\r'; }
+rec='"play_runner":{"type":"s","data":"proton-ge GE-Proton11-14"},"play_runner_source":{"type":"s","data":"bundled"}'
+[ "$(pr '{"type":"sa{sv}","data":["ok",{'"$rec"'}]}')" = "bundled/proton-ge/GE-Proton11-14" ] && pass "parse resolution: <source>/<family>/<version>, as the launcher's status file names a runner" || fail "parse resolution (bundled): '$(pr '{"type":"sa{sv}","data":["ok",{'"$rec"'}]}')'"
+[ "$(pr '{"type":"sa{sv}","data":["ok",{'"$rec"',"play_fallback":{"type":"b","data":true}}]}')" = "bundled/proton-ge/GE-Proton11-14 fallback" ] && pass "parse resolution: a choice that could not be honoured ends in ' fallback'" || fail "parse resolution (fallback)"
+[ "$(pr '{"type":"sa{sv}","data":["ok",{"play_runner":{"type":"s","data":"proton-ge GE-Proton11-13"},"play_runner_source":{"type":"s","data":"system"},"play_fallback":{"type":"b","data":false}}]}')" = "system/proton-ge/GE-Proton11-13" ] && pass "parse resolution: play_fallback false is no fallback" || fail "parse resolution (system)"
+[ "$(pr '{"type":"sa{sv}","data":["ok",{"play_resolve_error":{"type":"s","data":"x"},"play_resolve_code":{"type":"s","data":"resolve.no_system_runner"}}]}')" = "refused resolve.no_system_runner" ] && pass "parse resolution: a refusal is 'refused <code>'" || fail "parse resolution (refused)"
+[ "$(pr '{"type":"sa{sv}","data":["unknown",{}]}')" = "unknown" ] && [ "$(pr '{"type":"sa{sv}","data":["ok",{}]}')" = "no runner" ] && pass "parse resolution: a status that is not ok is the answer; ok with no runner (a native game) is 'no runner'" || fail "parse resolution (unknown, native)"
+unset -f pr
+
+# The mode: its own id, the contract it calls, what the cleanup puts back.
+grep -q '^    launch_run bundled bundled_newest_pkg bundled_checks$' "$here/vm-play-check.sh" && pass "vm-play-check.sh bundled is its own mode, installed under the id part 'bundled'" || fail "vm-play-check.sh: no bundled mode"
+lib="$here/../api/dbus/org.ruyaos.Library1.xml"
+ins() { sed -n "/<method name=\"$1\">/,/<\/method>/p" "$lib" | grep -c 'direction="in"'; }
+[ "$(ins SetRunnerChoice)" = 3 ] && [ "$(ins ResolveRunner)" = 2 ] && [ "$(ins GetRunnerChoice)" = 2 ] \
+    && grep -q 'SetRunnerChoice sss "\$lprof" "flatpak:\$1" "\$2"' "$here/vm-play-check.sh" && grep -q 'ResolveRunner ss "flatpak:\$1" "\$2"' "$here/vm-play-check.sh" && grep -q 'GetRunnerChoice ss "\$lprof" "flatpak:\$app"' "$here/vm-play-check.sh" \
+    && pass "vm-play-check.sh bundled calls SetRunnerChoice (sss), ResolveRunner (ss) and GetRunnerChoice (ss) as Library1.xml has them" || fail "vm-play-check.sh bundled: its Library1 calls differ from Library1.xml"
+grep -q '^lsvc=org.ruyaos.Library1$' "$here/vm-play-check.sh" && grep -q '^lpath=/org/ruyaos/Library1$' "$here/vm-play-check.sh" && grep -q '^svc=org.ruyaos.Library1$' "$here/vm-library-check.sh" && grep -q '^path=/org/ruyaos/Library1$' "$here/vm-library-check.sh" && pass "vm-play-check.sh bundled talks to the service and object path vm-library-check.sh does" || fail "vm-play-check.sh: Library1's name or path differs from vm-library-check.sh's"
+lc="$(sed -n '/^launch_cleanup() {/,/^}/p' "$here/vm-play-check.sh")"
+echo "$lc" | grep -q 'SetRunnerChoice sss "\$lprof" "flatpak:\$lchoice" package' && pass "vm-play-check.sh: the cleanup puts the profile's runner choice back to package (a real profile's file otherwise keeps System)" || fail "vm-play-check.sh: the cleanup leaves the runner choice"
+[ "$(grep -c 'lchoice="\$app"$' "$here/vm-play-check.sh")" = 1 ] && [ "$(sed -n '/^set_choice() {/,/^}/p' "$here/vm-play-check.sh" | grep -c lchoice)" = 0 ] && pass "vm-play-check.sh bundled sets lchoice in the shell it runs in, not in the command substitution of set_choice (a subshell would lose it)" || fail "vm-play-check.sh: lchoice is set in a subshell"
+bc="$(sed -n '/^bundled_checks() {/,/^}/p' "$here/vm-play-check.sh")"
+[ "$(echo "$bc" | grep -c '^    expect_runner ')" = 3 ] && echo "$bc" | grep -q 'expect_runner "system/\$sys"' && [ "$(echo "$bc" | grep -c '^    expect_runner "\$bundled"')" = 2 ] && pass "vm-play-check.sh bundled names the runner of each of the three launches: bundled, system, bundled" || fail "vm-play-check.sh bundled: the launches do not each name their runner"
+[ "$(echo "$bc" | grep -c '^    sigsys_checks$')" = 1 ] && [ "$(echo "$bc" | grep -c '^    avc_checks$')" = 1 ] && pass "vm-play-check.sh bundled ends with the init_t AVC and the SIGSYS journal checks" || fail "vm-play-check.sh bundled skips the journal checks"
+
 # offline: a fake `ip` with a route table per family. on takes every default route away and keeps it; off puts
 # the same routes back. The fake fails on request: FAKE_DEL_FAIL="<families>" refuses `route del` for them,
 # FAKE_REPLACE_FAIL=<text> refuses a `route replace` whose route contains the text. replace is idempotent.
@@ -2448,7 +2543,7 @@ rm -f "$lp/off"/routes-*
 # The modes in the script: own ids through pkg_id (they differ from every other mode's), the cleanup, the calls
 # against Session1.xml and the profile code the other checks use.
 ids="$(grep -o 'launch_run [a-z]* [a-z_]* [a-z_]*' "$here/vm-play-check.sh" | sort | tr '\n' ',')"
-[ "$ids" = "launch_run launch with_id launch_checks,launch_run launchwindows windows_pkg launch_windows_checks," ] && pass "vm-play-check.sh: launch and launch-windows install under their own ids (launch, launchwindows)" || fail "vm-play-check.sh launch ids: '$ids'"
+[ "$ids" = "launch_run bundled bundled_newest_pkg bundled_checks,launch_run launch with_id launch_checks,launch_run launchwindows windows_pkg launch_windows_checks," ] && pass "vm-play-check.sh: launch, launch-windows and bundled install under their own ids (launch, launchwindows, bundled)" || fail "vm-play-check.sh launch ids: '$ids'"
 grep -q 'appid="\$(pkg_id "\$appid" "\$part")"' "$here/vm-play-check.sh" && pass "vm-play-check.sh: launch_run takes its id through pkg_id (RUY-887)" || fail "vm-play-check.sh: launch_run builds its id without pkg_id"
 [ "$(grep -c '^    launch_cleanup$' "$here/vm-play-check.sh")" = 1 ] && [ "$(sed -n '/^cleanup() {/{n;p}' "$here/vm-play-check.sh")" = "    launch_cleanup" ] && pass "vm-play-check.sh: the cleanup stops the launch and gives the routes back before it uninstalls" || fail "vm-play-check.sh: cleanup does not start with launch_cleanup"
 grep -A4 'name="Launch"' "$here/../api/dbus/org.ruyaos.Session1.xml" | grep -c 'type="s" direction="in"' | grep -qx 2 && grep -q 'Launch ss "\$1" "\$lprof"' "$here/vm-play-check.sh" && grep -q 'Stop s "\$linst"' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Session1.Launch as (ss) and Stop as (s), the signatures of Session1.xml" || fail "vm-play-check.sh: its Launch/Stop calls do not match Session1.xml"

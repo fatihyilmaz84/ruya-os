@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet bumpbuild check compat32 generation helper launch launch-windows libprobe lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
+# modes: asknet bumpbuild bundled bundledpkg bundledver check compat32 generation helper launch launch-windows libprobe lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. [RUYA_PIN=<digits>] is the PIN of the profile the launch modes sign in (tried after no PIN,
 # before 1234), as for dell-hub-check.sh; it is never printed. Modes:
@@ -70,6 +70,25 @@
 #          libgnutls and libpulse each load (a child process per library: an abort is a FAIL line); and
 #          with a held uinput pad (vm-input-probe.py pad, next to this script) routed by the shell, the
 #          winebus winedevice holds the virtual pad's /dev/input/event* during the first launch
+#   bundled RUY-1248 (05 section 6.2, the epic's definition of done): which runner a launch uses. The Windows
+#          sample (zip: /root/hello-play-wine.play.zip) installed as a copy whose component is `source: newest`
+#          with a bundled copy of the OS's family (proton-ge) one version above the image's GE-Proton. The
+#          bundled copy is not GE-Proton's 1.5 GiB but a folder of two files: its runner.json and a `proton`
+#          script that records its own run (<data>/bundled-runner-ran, one "<version> <verb>" line per call)
+#          and then execs the image's GE-Proton, so the launcher really starts the bundled entry and the
+#          game really runs. Signed in as the profile, Library1 ResolveRunner and the launcher's status
+#          file (runner=<source>/<family>/<version>) say which runner: (1) with no choice the bundled copy
+#          (ResolveRunner package and the launch), its script ran for the game; (2) with the profile's choice
+#          `System` (Library1 SetRunnerChoice, which ruya-session passes as --runner=system, RUY-904) the
+#          image's GE-Proton and the script did not run; (3) the next build of the package with `source:
+#          bundled` ignores that choice: ResolveRunner answers the bundled copy as a fallback, the launch
+#          uses it and the script ran again. check.txt counts the three launches (launches=3). The profile's
+#          choice is put back to package at exit. Needs vm-runner-check.sh next to this script, as launch-windows
+#   bundledver host fixtures only: `bundledver <runners dir>` prints the version of the bundled copy:
+#          the newest proton-ge below the directory with its last number raised by one (GE-Proton11-13 is GE-Proton11-14)
+#   bundledpkg host fixtures only: `bundledpkg <in.zip> <out.zip> <id> <source> <bump> <runners dir>` copies the
+#          Windows sample as launch-windows installs it (winpkg) with the component's source set to <source> and
+#          the bundled copy above (runner.json, the `proton` script, both in play.files), its build raised by <bump>
 #   libprobe host fixtures only: `libprobe <runner root> "<soname>..."` runs the sandbox probe of the library
 #          loads in this shell (the fixture puts a python3 shim in PATH)
 #   signals host fixtures only: `signals <monitor.log> <member> <app id>` prints one line per such
@@ -141,8 +160,8 @@ set -u
 mode="${1:-check}"
 zip="${2:-/root/hello-play-native.play.zip}"
 pack="${3:-/root/ruya-pack}"
-# launch-windows runs the Windows sample (RUY-902); every other mode the native one.
-if [ "$mode" = launch-windows ] && [ -z "${2:-}" ]; then
+# launch-windows and bundled run the Windows sample (RUY-902, RUY-1248); every other mode the native one.
+if { [ "$mode" = launch-windows ] || [ "$mode" = bundled ]; } && [ -z "${2:-}" ]; then
     zip=/root/hello-play-wine.play.zip
 fi
 svc=org.ruyaos.Play1
@@ -223,6 +242,20 @@ elif what == "codes":
     rec = data[1] if len(data) > 1 else {}
     for p in (val(rec.get("problems")) or []):
         print(p[0])
+elif what == "resolution":
+    # A Library1 ResolveRunner answer (sa{sv}): "<source>/<family>/<version>" as the launcher status file
+    # names a runner, then " fallback" when the choice asked for could not be honoured (RUY-905);
+    # "refused <code>" when the launch would refuse; "<status>" alone when the status is not ok
+    rec = data[1] if len(data) > 1 else {}
+    if data and data[0] != "ok":
+        print(data[0])
+    elif "play_runner" in rec:
+        family, _, version = val(rec["play_runner"]).partition(" ")
+        print("%s/%s/%s%s" % (val(rec.get("play_runner_source")), family, version, " fallback" if val(rec.get("play_fallback")) else ""))
+    elif "play_resolve_code" in rec:
+        print("refused " + val(rec["play_resolve_code"]))
+    else:
+        print("no runner")
 ' "$@"
 }
 
@@ -316,6 +349,95 @@ windows_pkg() {
 import json, sys
 print(json.dumps({"id": sys.argv[1], "run": {"command": ["${game}/Program/check.exe"]}, "permissions": {"multiarch": True}}))
 ' "$3")"
+}
+
+# bundled_version <runners dir>: the version of the bundled copy bundled_pkg makes (RUY-1248): the OS's
+# newest proton-ge with its last number raised by one, so the bundled copy is the higher of the two
+# (05 section 6.2: `newest` takes the higher version, a tie goes to the bundled copy; the rise keeps the
+# check from passing on a tie). GE-Proton11-13 gives GE-Proton11-14.
+bundled_version() {
+    local dir
+    dir="$(system_runner_dir "$1")" || return 1
+    python3 -I - "$1/$dir/runner.json" <<'PY'
+import json, re, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    version = json.load(f)["version"]
+raised = re.sub(r"(\d+)(\D*)$", lambda m: str(int(m.group(1)) + 1) + m.group(2), version)
+if raised == version or len(raised) > 32:
+    sys.exit("bundled_version: no version above %s" % version)
+print(raised)
+PY
+}
+
+# bundled_pkg <in.zip> <out.zip> <id> <source> <bump> <runners dir>: what the bundled mode installs (RUY-1248):
+# the Windows sample as launch-windows installs it (windows_pkg), its component given `source: <source>` and a
+# bundled copy under components/proton of the OS's family and kind with the version bundled_version gives,
+# its build raised by <bump>. The copy is two files, listed in play.files: runner.json, and `proton` (with the
+# licence text a bundled component needs, licences/proton-CC0-1.0.txt, ruya-pack validate wants it), a
+# script that appends "<version> <first argument>" to <data>/bundled-runner-ran and runs the image's GE-Proton
+# (/app/runners/<its folder>/proton) with the same arguments. So the launcher starts the bundled entry as it
+# starts any bundled runner and the game runs on a real Proton, while the package holds none of GE-Proton's
+# 1.5 GiB (nothing of it is redistributed). Whether the bundled or the system runner ran is the status file's
+# runner= and the marker file.
+bundled_pkg() {
+    local dir ver
+    dir="$(system_runner_dir "$6")" || return 1
+    ver="$(bundled_version "$6")" || return 1
+    windows_pkg "$1" "$2.win" "$3" || return 1
+    python3 -I - "$2.win" "$2" "$4" "$5" "$ver" "$dir" "$6/$dir/runner.json" <<'PY'
+import hashlib, json, sys, zipfile
+src, out, source, bump, version, runner_dir, system_json = sys.argv[1:8]
+with open(system_json, encoding="utf-8") as f:
+    system = json.load(f)
+runner = {"format": 1, "family": system["family"], "kind": system["kind"], "version": version, "arch": "x86_64",
+          "entry": {"proton": "proton"}, "licence": "CC0-1.0"}
+script = """#!/bin/sh
+# The bundled runner of vm-play-check.sh bundled (RUY-1248): records that the launcher started it, then
+# is the image's GE-Proton. It holds none of GE-Proton's files.
+echo "@VERSION@ $1" >> "${XDG_DATA_HOME:?}/bundled-runner-ran"
+exec /app/runners/@DIR@/proton "$@"
+""".replace("@VERSION@", version).replace("@DIR@", runner_dir)
+# A bundled component needs its licence text under licences/ (05 section 6.2; ruya-pack validate: licence.text_missing).
+licence = "The two files in components/proton are dedicated to the public domain (CC0-1.0).\n"
+new = {
+    "components/proton/proton": (script.encode(), 1),
+    "components/proton/runner.json": ((json.dumps(runner, indent=2) + "\n").encode(), 0),
+    "licences/proton-CC0-1.0.txt": (licence.encode(), 0),
+}
+z = zipfile.ZipFile(src)
+roots = [n[: -len("play.json")] for n in z.namelist() if n.endswith("play.json") and n.count("/") <= 1]
+if len(roots) != 1:
+    sys.exit("bundled_pkg: %s has no single play.json" % src)
+root = roots[0]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as o:
+    for i in z.infolist():
+        b, name = z.read(i.filename), i.filename[len(root):]
+        if name in new:
+            sys.exit("bundled_pkg: %s already has %s" % (src, name))
+        if name == "play.json":
+            m = json.loads(b)
+            m["build"] += int(bump)
+            c = next(c for c in m["components"] if c["id"] == m["run"]["component"])
+            c["source"] = source
+            c.setdefault("min", system["version"])
+            c["bundled"] = {"path": "components/proton", "version": version, "licence": "CC0-1.0"}
+            b = json.dumps(m, indent=2).encode()
+        elif name == "play.files":
+            lines = [json.loads(l) for l in b.decode("utf-8").splitlines()]
+            for path, (data, x) in new.items():
+                e = {"p": path, "t": "f", "s": len(data), "h": hashlib.sha256(data).hexdigest()}
+                if x:
+                    e["x"] = 1
+                lines.append(e)
+            lines.sort(key=lambda e: e["p"].encode("utf-8"))
+            b = ("\n".join(json.dumps(e, separators=(",", ":"), ensure_ascii=False) for e in lines) + "\n").encode("utf-8")
+        o.writestr(i, b)
+    for path, (data, x) in new.items():
+        o.writestr(root + path, data)
+PY
+    local rc=$?
+    rm -f "$2.win"
+    return "$rc"
 }
 
 # bump_build <in.zip> <out.zip> <path> <text>: the next build of a package (play.json build+1) whose
@@ -680,6 +802,14 @@ if [ "$mode" = sysrunner ]; then
     system_runner "${2:?runners dir}"
     exit $?
 fi
+if [ "$mode" = bundledver ]; then
+    bundled_version "${2:?runners dir}"
+    exit $?
+fi
+if [ "$mode" = bundledpkg ]; then
+    bundled_pkg "${2:?in.zip}" "${3:?out.zip}" "${4:?id}" "${5:?source}" "${6:?bump}" "${7:?runners dir}"
+    exit $?
+fi
 if [ "$mode" = libprobe ]; then
     # shellcheck disable=SC2086 # the sonames are a word list
     bash -c "$LIB_PROBE" probe "${2:?runner root}" ${3:?sonames}
@@ -923,7 +1053,7 @@ ppath=/org/ruyaos/Profiles1
 # What the cleanup undoes: the profile the check made (lcreated, with the admin ladmin that makes it
 # deletable), the monitor, the running instance, the SDL override, the removed routes. lzip is the
 # package launch_run installed (launch-windows makes its update from it).
-lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0; lzip=""; lpad=""; lwatch=""
+lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0; lzip=""; lpad=""; lwatch=""; lchoice=""
 
 list_profiles() { busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"'; }
 
@@ -1163,6 +1293,109 @@ launch_run() {
     "$checks"
 }
 
+# --- bundled (RUY-1248): which runner a launch uses, 05 section 6.2 -----------------------------------------
+lsvc=org.ruyaos.Library1
+lpath=/org/ruyaos/Library1
+runners_dir=/usr/lib/ruyaos/play/runners
+
+bundled_newest_pkg() { bundled_pkg "$1" "$2" "$3" newest 0 "$runners_dir"; }
+
+# resolved <app> <choice> <want> <seconds>: Library1 ResolveRunner of the app for the choice, as `parse
+# resolution` words it; asked again for up to <seconds> until it is <want> (the library reads Flatpak's
+# installation after an install or an update, a moment later). Prints the last answer.
+resolved() {
+    local i=0 got
+    while :; do
+        got="$(as_shell busctl --system --json=short call "$lsvc" "$lpath" "$lsvc" ResolveRunner ss "flatpak:$1" "$2" | parse resolution)"
+        { [ "$got" = "$3" ] || [ "$i" -ge "$4" ]; } && break
+        sleep 1; i=$((i + 1))
+    done
+    echo "$got"
+}
+
+# set_choice <app> <choice>: the signed-in profile's runner choice for the app (Library1 SetRunnerChoice); prints
+# busctl's answer, `s "ok"`. It runs in a command substitution (a subshell), so the caller records the choice
+# for the cleanup, which puts it back to package, before it calls this.
+set_choice() {
+    as_shell busctl --system call "$lsvc" "$lpath" "$lsvc" SetRunnerChoice sss "$lprof" "flatpak:$1" "$2"
+}
+
+# game_runs <marker>: how often the bundled `proton` script was started for the game (its first argument is
+# waitforexitandrun; the setup step's `run` does not count); 0 without the file.
+game_runs() {
+    local n
+    n="$(grep -c ' waitforexitandrun$' "$1" 2>/dev/null)"
+    echo "${n:-0}"
+}
+
+# expect_runner <runner> <data> <what>: the launcher's status file (05 section 6.3, step 7) names <runner>,
+# "<source>/<family>/<version>", as the runner of the last launch, the prefix made once.
+expect_runner() {
+    local got
+    got="$(launcher_state "$2/.ruya-play/state.json")"
+    got="${got% game=*}"
+    [ "$got" = "epoch=1 setup_done=first-run runner=$1" ] && ok "$3: the status file says the runner was $1" \
+        || bad "$3: the status file says '$got', want 'epoch=1 setup_done=first-run runner=$1'"
+}
+
+# bundled: three launches of one app and what each ran. The image's runner is `sys` (<family>/<version>), the
+# bundled copy `bundled/<family>/<version above it>`.
+bundled_checks() {
+    local app="play.$appid" user="ruya-$lprof" data report marker sys bundled got ref
+    data="/var/home/$user/.var/app/$app/data"
+    report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"
+    marker="$data/bundled-runner-ran"
+    echo "--- the runners: the image's, and the bundled copy one version above it"
+    sys="$(system_runner "$runners_dir")" && ok "the image ships the GE-Proton runner $sys" || { bad "no proton-ge runner.json under $runners_dir"; return; }
+    bundled="bundled/${sys%%/*}/$(bundled_version "$runners_dir")" || { bad "no version above the image's $sys"; return; }
+    ok "the package bundles ${bundled#bundled/}, source newest"
+    ref="$(compat_i386 "$app")" && ok "the 32-bit loader is installed for $app: $ref" \
+        || bad "$app's runtime has no 32-bit loader: ${ref:-no runtime} (Compat.i386) is not installed"
+    rm -rf "/var/home/$user/.var/app/$app"
+    sign_in "$lprof" && ok "$lprof signed in" || { bad "cannot sign in $lprof"; return; }
+    start_monitor
+    echo "--- ResolveRunner: the package's default and the System choice"
+    got="$(resolved "$app" package "$bundled" 60)"
+    [ "$got" = "$bundled" ] && ok "ResolveRunner(package): $got, the higher version wins under source newest" || bad "ResolveRunner(package) says '$got', want $bundled"
+    got="$(resolved "$app" system "system/$sys" 5)"
+    [ "$got" = "system/$sys" ] && ok "ResolveRunner(system): $got, the image's runner" || bad "ResolveRunner(system) says '$got', want system/$sys"
+    echo "--- first launch: no choice of the player, the bundled copy runs (a new prefix, the setup step: minutes)"
+    start_app "$app" 1 || return
+    expect_exit "$app" 1 600 '0 quit' "check.exe ends by itself" || return
+    expect_runner "$bundled" "$data" "first launch"
+    [ "$(game_runs "$marker")" = 1 ] && grep -qx "${bundled##*/} waitforexitandrun" "$marker" \
+        && ok "the bundled runner's own script started the game once (${bundled##*/})" \
+        || bad "the bundled script ran the game $(game_runs "$marker") times, want once: $(tr '\n' '|' < "$marker" 2>&1)"
+    [ "$(kv "$report" launches)" = 1 ] && ok "check.exe ran on it (launches=1)" || bad "check.txt says launches=$(kv "$report" launches), not 1 ($report)"
+    echo "--- the player's choice System (Library1 SetRunnerChoice): the image's runner"
+    lchoice="$app"
+    got="$(set_choice "$app" system)"
+    [ "$got" = 's "ok"' ] && ok "SetRunnerChoice system: ok" || { bad "SetRunnerChoice system: $got"; return; }
+    start_app "$app" 2 || return
+    expect_exit "$app" 2 300 '0 quit' "check.exe ends by itself on the system runner" || return
+    expect_runner "system/$sys" "$data" "second launch (System)"
+    [ "$(game_runs "$marker")" = 1 ] && ok "the bundled script did not run again: the image's GE-Proton started the game" \
+        || bad "the bundled script ran the game $(game_runs "$marker") times after the System choice, want still once"
+    [ "$(kv "$report" launches)" = 2 ] && ok "check.exe ran on it (launches=2)" || bad "check.txt says launches=$(kv "$report" launches), not 2"
+    echo "--- the next build with source: bundled: the System choice does not apply (05 section 6.2)"
+    bundled_pkg "$zip" "$work/bundled-only.play.zip" "$appid" bundled 1 "$runners_dir" || { bad "bundled_pkg: no source bundled copy of the sample"; return; }
+    install -m 0600 "$work/bundled-only.play.zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the source bundled build installs over the first" || { bad "the update to source bundled: $got"; return; }
+    got="$(as_shell busctl --system call "$lsvc" "$lpath" "$lsvc" GetRunnerChoice ss "$lprof" "flatpak:$app")"
+    [ "$got" = 'ss "ok" "system"' ] && ok "the profile's choice is still System" || bad "GetRunnerChoice: $got"
+    got="$(resolved "$app" system "$bundled fallback" 60)"
+    [ "$got" = "$bundled fallback" ] && ok "ResolveRunner(system) of source bundled: $got, the choice cannot be honoured" || bad "ResolveRunner(system) says '$got', want '$bundled fallback'"
+    start_app "$app" 3 || return
+    expect_exit "$app" 3 300 '0 quit' "check.exe ends by itself on the bundled copy again" || return
+    expect_runner "$bundled" "$data" "third launch (source bundled, System chosen)"
+    [ "$(game_runs "$marker")" = 2 ] && ok "the bundled script started the game again although the player chose System" \
+        || bad "the bundled script ran the game $(game_runs "$marker") times, want twice"
+    [ "$(kv "$report" launches)" = 3 ] && ok "check.exe ran on it (launches=3)" || bad "check.txt says launches=$(kv "$report" launches), not 3"
+    avc_checks
+    sigsys_checks
+}
+
 # The cleanup's part: stop what the modes started, give back the routes, remove the profile's data and
 # the profile the check made.
 launch_cleanup() {
@@ -1177,6 +1410,9 @@ launch_cleanup() {
         sleep 3
     fi
     [ -n "$lover" ] && flatpak override --system --reset "$lover" >/dev/null 2>&1
+    # The profile's runner choice (bundled): back to package, before the app goes (the library knows no choice for
+    # an app that is not installed, and the profile is a real one).
+    [ -n "$lchoice" ] && as_shell busctl --system call "$lsvc" "$lpath" "$lsvc" SetRunnerChoice sss "$lprof" "flatpak:$lchoice" package >/dev/null 2>&1
     [ -n "$lprof" ] && [ -n "${appid:-}" ] && rm -rf "/var/home/ruya-$lprof/.var/app/play.$appid"
     if [ -n "$lcreated" ]; then
         busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null 2>&1
@@ -1361,6 +1597,12 @@ fi
 if [ "$mode" = launch-windows ]; then
     launch_run launchwindows windows_pkg launch_windows_checks
     [ "$fail" = 0 ] && echo "vm-play-check launch-windows: PASS" || echo "vm-play-check launch-windows: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = bundled ]; then
+    launch_run bundled bundled_newest_pkg bundled_checks
+    [ "$fail" = 0 ] && echo "vm-play-check bundled: PASS" || echo "vm-play-check bundled: FAIL"
     exit "$fail"
 fi
 

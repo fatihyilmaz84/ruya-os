@@ -7,7 +7,7 @@
 # SKIPPED (the reason is in the summary). The .play checks (vm-play-check.sh check|helper|verify|perms|remove|launch,
 # vm-library-check.sh play) need output\play-vm\hello-play-native.play.zip and ruya-pack, copied to /root
 # when both exist (build them with `$script:PlayCommand in vm-queue-lib.ps1); otherwise they are SKIPPED with that command.
-# vm-play-check.sh launch-windows also needs output\play-vm\hello-play-wine.play.zip (same command).
+# vm-play-check.sh launch-windows and bundled also need output\play-vm\hello-play-wine.play.zip (same command).
 # Output: output\vm-queue\<script>-<mode>.log (full), output\vm-queue\summary.txt (at most 16 lines: every FAIL or SKIPPED line, passes counted when there are many).
 # Exits 0 when nothing FAILED. Run it only when no other QEMU is running; never builds an image.
 param(
