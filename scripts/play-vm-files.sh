@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # The files the .play VM checks need on the guest (RUY-860): the native sample package, ruya-pack
-# and, for vm-play-check.sh launch-windows (RUY-902), the Windows sample package.
+# and, for vm-play-check.sh launch-windows (RUY-902) and bundled (RUY-1248), the Windows sample package.
 # scripts/vm-queue.ps1 copies them to /root/ (vm-play-check.sh and vm-library-check.sh find them
 # there). Run it in Fedora 44 (WSL: FedoraLinux-44), from the repo root, with the same packages as
 # scripts/ci-samples-linux.sh:
@@ -13,7 +13,7 @@
 # output/play-vm/hello-play-wine.play.zip, then removes the samples' build outputs again, so
 # `git status` stays clean. The first two are written before the Windows sample is built: without
 # the MinGW cross compilers (mingw64-gcc and mingw32-gcc) the script says so and exits 1, and the
-# queue skips launch-windows only. CARGO_TARGET_DIR overrides where ruya-pack is built (default:
+# queue skips launch-windows and bundled only. CARGO_TARGET_DIR overrides where ruya-pack is built (default:
 # services/target-samples).
 set -eu
 
