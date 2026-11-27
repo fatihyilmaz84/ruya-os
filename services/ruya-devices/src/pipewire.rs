@@ -5,7 +5,7 @@
 
 use serde_json::Value;
 
-use crate::audio::{Kind, Sink, Source, SourceKind};
+use crate::audio::{Kind, Sink, Snapshot, Source, SourceKind};
 use crate::output_policy::{Avail, OutKind, Output};
 use crate::park::{PARKED_KEY, PARKED_SINK, TARGET_KEY};
 
@@ -515,7 +515,7 @@ fn parked_nodes(doc: &Value) -> Vec<u64> {
 pub const SHELL_BINARY: &str = "ruya-shell";
 
 /// Whether the stream belongs to the shell itself (its ambient bed and UI sounds).
-fn shells_own(props: &Value) -> bool {
+pub(crate) fn shells_own(props: &Value) -> bool {
     props["application.process.binary"].as_str() == Some(SHELL_BINARY)
 }
 
@@ -545,19 +545,70 @@ fn classify(props: &Value) -> Kind {
     Kind::Analog
 }
 
-/// "Volume: 0.50" or "Volume: 0.50 [MUTED]" -> (50, muted). Rounded, clamped to 0-100.
-pub fn parse_volume(line: &str) -> Result<(u32, bool), String> {
-    let rest = line
-        .trim()
-        .strip_prefix("Volume:")
-        .ok_or_else(|| format!("wpctl: unexpected output {line:?}"))?;
-    let value: f64 = rest
-        .split_whitespace()
-        .next()
-        .and_then(|v| v.parse().ok())
-        .ok_or_else(|| format!("wpctl: no volume in {line:?}"))?;
-    let percent = (value * 100.0).round().clamp(0.0, 100.0) as u32;
-    Ok((percent, rest.contains("[MUTED]")))
+/// All of a `Snapshot` from one `pw-dump` document: no other process is run to read it.
+pub fn parse_snapshot(dump: &str) -> Result<Snapshot, String> {
+    let (sinks, default) = parse_dump(dump)?;
+    let outputs = parse_outputs(dump, &sinks);
+    let playing = parse_playing(dump);
+    let (sources, default_source) = parse_sources(dump)?;
+    // No default output (none connected) means no volume to read.
+    let (volume, muted) = match &default {
+        Some(name) => parse_node_volume(dump, "Audio/Sink", name)?,
+        None => (0, false),
+    };
+    // No microphone (or a default that is none of the listed ones) means no mute to read.
+    let input_muted = match &default_source {
+        Some(name) if sources.iter().any(|s| &s.id == name) => {
+            parse_node_volume(dump, "Audio/Source", name)?.1
+        }
+        _ => false,
+    };
+    Ok(Snapshot {
+        sources,
+        default_source,
+        input_muted,
+        sinks,
+        outputs,
+        default,
+        volume,
+        muted,
+        playing,
+    })
+}
+
+/// The volume (0-100) and the mute of the node of this `media.class` and `node.name`, from the
+/// `Props` the dump already holds (what `wpctl get-volume` read until RUY-1251, one more process
+/// per refresh). The volume is the loudest channel (`channelVolumes`, else `volume`), a linear
+/// level that is shown on the cubic scale WirePlumber and the shell's slider use: 0.064 is 40.
+/// Rounded, clamped to 0-100.
+pub fn parse_node_volume(json: &str, class: &str, name: &str) -> Result<(u32, bool), String> {
+    let doc: Value = serde_json::from_str(json).map_err(|e| format!("pw-dump: {e}"))?;
+    let objects = doc.as_array().ok_or("pw-dump: not an array")?;
+    let props = objects
+        .iter()
+        .filter(|o| o.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Node"))
+        .filter(|o| {
+            let p = &o["info"]["props"];
+            p["media.class"].as_str() == Some(class) && p["node.name"].as_str() == Some(name)
+        })
+        .flat_map(|o| {
+            o["info"]["params"]["Props"]
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .find(|p| p["mute"].is_boolean())
+        .ok_or_else(|| format!("pw-dump: no volume in the Props of {name}"))?;
+    let loudest = props["channelVolumes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_f64)
+        .reduce(f64::max)
+        .or_else(|| props["volume"].as_f64())
+        .ok_or_else(|| format!("pw-dump: no volume in the Props of {name}"))?;
+    let percent = (loudest.max(0.0).cbrt() * 100.0).round().clamp(0.0, 100.0) as u32;
+    Ok((percent, props["mute"].as_bool().unwrap_or(false)))
 }
 
 #[cfg(target_os = "linux")]
@@ -568,10 +619,7 @@ mod linux {
     use std::process::{Child, Command};
     use std::time::{Duration, Instant};
 
-    use super::{
-        card_state, find_sink, parse_dump, parse_outputs, parse_playing, parse_sources,
-        parse_state, parse_volume, plan_switch,
-    };
+    use super::{card_state, find_sink, parse_snapshot, parse_state, plan_switch};
     use crate::audio::{PipeWire, Snapshot};
     use crate::output_policy::{tone_wav, Output};
 
@@ -663,34 +711,8 @@ mod linux {
 
     impl PipeWire for WpCtl {
         fn snapshot(&mut self) -> Result<Snapshot, String> {
-            let dump = run("pw-dump", &[])?;
-            let (sinks, default) = parse_dump(&dump)?;
-            let outputs = parse_outputs(&dump, &sinks);
-            let playing = parse_playing(&dump);
-            let (sources, default_source) = parse_sources(&dump)?;
-            // No default output (none connected) means no volume to read.
-            let (volume, muted) = if default.is_some() {
-                parse_volume(&run("wpctl", &["get-volume", DEFAULT_SINK])?)?
-            } else {
-                (0, false)
-            };
-            // No microphone (or none the default) means no mute to read.
-            let input_muted = if default_source.is_some() && !sources.is_empty() {
-                parse_volume(&run("wpctl", &["get-volume", DEFAULT_SOURCE])?)?.1
-            } else {
-                false
-            };
-            Ok(Snapshot {
-                sources,
-                default_source,
-                input_muted,
-                sinks,
-                outputs,
-                default,
-                volume,
-                muted,
-                playing,
-            })
+            // One process: everything, the volumes too, is in the dump (RUY-1251).
+            parse_snapshot(&run("pw-dump", &[])?)
         }
 
         fn set_default(&mut self, id: &str) -> Result<(), String> {
@@ -1131,13 +1153,81 @@ mod tests {
         assert_eq!(parse_dump("[]").unwrap(), (vec![], None));
     }
 
+    /// A sink and a microphone with the `Props` pw-dump shows: the loudest channel on the linear
+    /// scale (0.125 is 50 on the cubic one), a muted microphone, and a stream of the same name
+    /// as the sink that must not be read.
+    const LEVELS: &str = r#"[
+      {"id":31,"type":"PipeWire:Interface:Metadata","props":{"metadata.name":"default"},
+       "metadata":[
+         {"subject":0,"key":"default.audio.sink","type":"Spa:String:JSON","value":{"name":"out"}},
+         {"subject":0,"key":"default.audio.source","type":"Spa:String:JSON","value":{"name":"mic"}}]},
+      {"id":40,"type":"PipeWire:Interface:Node","info":{"state":"running","props":{
+         "media.class":"Audio/Sink","node.name":"out"},
+       "params":{"Props":[
+         {"volume":1.0,"mute":false,"channelVolumes":[0.125,0.064],"channelMap":["FL","FR"]}]}}},
+      {"id":41,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Audio/Source","node.name":"mic"},
+       "params":{"Props":[{"volume":1.0,"mute":true,"channelVolumes":[1.0]}]}}},
+      {"id":42,"type":"PipeWire:Interface:Node","info":{"props":{
+         "media.class":"Stream/Output/Audio","node.name":"out"},
+       "params":{"Props":[{"volume":1.0,"mute":true,"channelVolumes":[1.0]}]}}}
+    ]"#;
+
     #[test]
-    fn volume_lines() {
-        assert_eq!(parse_volume("Volume: 0.50\n").unwrap(), (50, false));
-        assert_eq!(parse_volume("Volume: 0.33 [MUTED]").unwrap(), (33, true));
-        assert_eq!(parse_volume("Volume: 1.20").unwrap(), (100, false));
-        assert!(parse_volume("oops").is_err());
-        assert!(parse_volume("Volume: x").is_err());
+    fn the_volume_comes_from_the_props_of_the_dump() {
+        assert_eq!(
+            parse_node_volume(LEVELS, "Audio/Sink", "out").unwrap(),
+            (50, false)
+        );
+        assert_eq!(
+            parse_node_volume(LEVELS, "Audio/Source", "mic").unwrap(),
+            (100, true),
+            "a source's own Props, the mute read as well"
+        );
+        let one = |props: &str| {
+            let node = format!(
+                r#"[{{"id":1,"type":"PipeWire:Interface:Node","info":{{"props":{{
+                   "media.class":"Audio/Sink","node.name":"o"}},"params":{{"Props":[{props}]}}}}}}]"#
+            );
+            parse_node_volume(&node, "Audio/Sink", "o")
+        };
+        assert_eq!(
+            one(r#"{"volume":0.064,"mute":false}"#).unwrap(),
+            (40, false),
+            "no channelVolumes: the master volume"
+        );
+        assert_eq!(
+            one(r#"{"mute":false,"channelVolumes":[8.0]}"#).unwrap().0,
+            100
+        );
+        assert_eq!(
+            one(r#"{"mute":false,"channelVolumes":[0.0]}"#).unwrap().0,
+            0
+        );
+        assert!(one(r#"{"mute":false}"#).is_err(), "no volume at all");
+        assert!(one("").is_err(), "no Props");
+        assert!(parse_node_volume(LEVELS, "Audio/Sink", "gone").is_err());
+        assert!(parse_node_volume("{}", "Audio/Sink", "out").is_err());
+    }
+
+    #[test]
+    fn a_snapshot_is_made_of_the_dump_alone() {
+        // `parse_snapshot` takes nothing but the dump text: the volume, the mute and the
+        // microphone's mute of a whole snapshot come from it, so no `wpctl` is run (RUY-1251).
+        let snap = parse_snapshot(LEVELS).unwrap();
+        assert_eq!(snap.default.as_deref(), Some("out"));
+        assert_eq!((snap.volume, snap.muted), (50, false));
+        assert_eq!(snap.default_source.as_deref(), Some("mic"));
+        assert!(snap.input_muted);
+        // No default output, no microphone: nothing to read, nothing to fail.
+        let snap = parse_snapshot("[]").unwrap();
+        assert_eq!(
+            (snap.volume, snap.muted, snap.input_muted),
+            (0, false, false)
+        );
+        // A default source that is not a listed microphone has no mute to read.
+        let monitor = LEVELS.replace(r#""name":"mic"}}"#, r#""name":"out"}}"#);
+        assert!(!parse_snapshot(&monitor).unwrap().input_muted);
     }
 
     const MICS: &str = r#"[
