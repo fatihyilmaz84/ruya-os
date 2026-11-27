@@ -852,6 +852,37 @@ out="$(runlimits "$(showfor 15461882265 8192 gone)" 16777216 "$cgroot")"
 expect_contains "judge_limits: no cgroup directory fails" "$out" "FAIL: limits: no cgroup directory"
 grep -q '| judge_limits "the app unit' "$here/vm-session-check.sh"     && pass "vm-session-check.sh check judges the running unit's limits" || fail "vm-session-check.sh: limits not judged"
 
+# --- vm-session-check.sh check / steam-pause: an idle app starts nothing in its manager (RUY-1250) -----
+quietsrc="$tmp/quiet.sh"
+sed -n '/^# --- judge_quiet_link begin/,/^# --- judge_quiet_link end/p' "$here/vm-session-check.sh" > "$quietsrc"
+[ -s "$quietsrc" ] && pass "vm-session-check.sh has the judge_quiet_link block" || fail "no judge_quiet_link block in vm-session-check.sh"
+runquiet() { # <journal text> <user>
+    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$quietsrc'; judge_quiet_link 'idle' '$2'; echo \"rc=\$?\"" 2>&1
+}
+q_pam='pam_unix(systemd-user:session): session opened for user ruya-p1(uid=1001) by ruya-p1(uid=0)'
+q_pam10='pam_unix(systemd-user:session): session opened for user ruya-p10(uid=1010) by ruya-p10(uid=0)'
+q_run='Started run-p48211-i48512.service - [systemd-run] /usr/bin/systemd-stdio-bridge --user.'
+q_runu='Started run-u77.service - /usr/bin/systemctl --user show.'
+q_idle='ruya-session: ruya-app-ruya-p1-org.ruyaos.Test-Sleeper.service: attached app-flatpak-org.ruyaos.Test\x2dSleeper-12.scope'
+out="$(runquiet "$q_idle" ruya-p1)"
+expect_contains "judge_quiet_link: an idle journal passes" "$out" "PASS: idle: no PAM session of ruya-p1 and no run-p unit started"
+expect_contains "judge_quiet_link: an idle journal returns 0" "$out" "rc=0"
+out="$(runquiet "$q_idle"$'\n'"$q_pam"$'\n'"$q_run" ruya-p1)"
+expect_contains "judge_quiet_link: the old poll's PAM session and run-p unit fail" "$out" "FAIL: idle: 2 PAM sessions of ruya-p1 or run-p units started"
+expect_contains "judge_quiet_link: a poll returns 1" "$out" "rc=1"
+out="$(runquiet "$q_runu" ruya-p1)"
+expect_contains "judge_quiet_link: a run-u unit (older systemd-run) fails too" "$out" "FAIL: idle: 1 PAM sessions"
+out="$(runquiet "$q_pam10" ruya-p1)"
+expect_contains "judge_quiet_link: another profile's session (ruya-p10) is not ruya-p1's" "$out" "PASS: idle"
+out="$(runquiet "" ruya-p1)"
+expect_contains "judge_quiet_link: an empty window passes" "$out" "rc=0"
+grep -q 'quiet_window "$user" "30 s with the app idle"' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh check judges an idle window" || fail "vm-session-check.sh check: no idle window judged"
+grep -q 'quiet_window "$user" "30 s with Steam and its game idle"' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh steam-pause judges an idle window" || fail "vm-session-check.sh steam-pause: no idle window judged"
+grep -q 'following the manager of {} over one connection' "$here/../services/ruya-session/src/follow.rs" \
+    && pass "the connection's journal line quiet_window waits for is the service's" || fail "follow.rs no longer logs 'following the manager of ... over one connection'"
+
 # --- vm-session-check.sh kill: the timing windows (RUY-736) ---------------------------------------
 # Kill must end the app within 2 s, the backstop 29-33 s after the Stop; judge_secs is the verdict.
 judgesrc="$tmp/judge.sh"

@@ -15,25 +15,36 @@
 //!
 //! A restart of this service leaves the apps running (they belong to the users' managers), but
 //! ends the `systemd-run --wait` processes that told us when they ended. `adopt_running` finds the
-//! `ruya-app-*` units again and follows the ones of each profile user over one long-lived bus
-//! connection to that user's manager (`UserLink`, `follow::Follower`, T-340). The connection goes
-//! the way `systemctl --machine=<user>@.host --user` goes, which works under this unit's
-//! hardening: zbus starts `systemd-run ... systemd-stdio-bridge --user` (`follow::bridge_address`,
-//! a `unixexec:` address) and talks over its pipes; `Subscribe` and the `PropertiesChanged` /
-//! `UnitRemoved` signals give the real exit status. Only while the bridge is dead are the units
-//! looked at with `systemctl show` every two seconds; the bridge is restarted with a growing pause.
+//! `ruya-app-*` units again and follows them over the connection of their user's watch (below,
+//! `follow::Follower`, T-340): `Subscribe` and the `PropertiesChanged` / `UnitRemoved` signals give
+//! the real exit status.
+//!
+//! **One watch per profile user's manager (RUY-1250):** a thread (`watch_user`, `Gate::watch`)
+//! with one long-lived bus connection (`UserLink`), started when the user's first run is begun
+//! (after `ensure_manager`) or adopted, shared by the scopes of every run and the adopted units,
+//! and dropped when nothing of the user is followed any more, so an idle profile costs nothing.
+//! The connection goes the way `systemctl --machine=<user>@.host --user` goes, which works under
+//! this unit's hardening: zbus starts `systemd-run ... systemd-stdio-bridge --user`
+//! (`follow::bridge_args`, a `unixexec:` address) and talks over its pipes; that is the one
+//! process chain (and PAM session) of the connection's life. The listing after `Subscribe`
+//! (`ListUnitsByPatterns`) and every later reading (`Properties.Get` of `ActiveEnterTimestamp`,
+//! `FreezerState`, `CPUUsageNSec`) are bus calls on it. Only while the bridge is dead are the
+//! units and scopes looked at with `systemctl show` (`follow::UserWatch`); the bridge is restarted
+//! with a growing pause. Other threads poke the watch (`Gate::poke`) when a unit's end is held, a
+//! probe's verdict came or a run began.
 //!
 //! `flatpak run` puts the game in its own `app-flatpak-<id>-<n>.scope`, outside the unit (T-363).
 //! Every event goes through `Gate`: `scope::RunScopes` attaches the scope to its run, reads its
-//! CPU, and holds the unit's end until the scope is gone (a watcher thread asks each manager
-//! with one `systemctl show` per second at most); `Stop` and the kill name every scope of the app.
+//! CPU, and holds the unit's end until the scope is gone (from the watch's signals; without the
+//! connection one `systemctl show` per manager and second at most); `Stop` and the kill name
+//! every scope of the app.
 //! When a run's end is handed on, the app's leftover scopes are stopped and their `failed` state
 //! cleared first (`RunScopes::take_sweeps`, `spawner::sweep_commands`, T-435).
 //!
 //! Steam's games are child instances (ADR-041, RUY-1052): a run whose app has `children = steam`
 //! in the app table has each new scope probed (`steam-probe` as the profile user,
 //! `spawner::steam_probe_command`) by a worker thread of its own (`probe_worker`), so a slow probe
-//! never holds up the scope watcher, and a child's name reaches only its own scopes
+//! never holds up a user's watch, and a child's name reaches only its own scopes
 //! (`RunScopes::child`, `spawner::child_command`).
 
 use std::collections::HashMap;
@@ -53,8 +64,8 @@ use zbus::{Connection, MatchRule, MessageStream};
 use crate::apps::{AppTable, Children, Display, Freeze, APPS_DIR};
 use crate::bounded::{run_bounded, run_bounded_status, run_capped};
 use crate::follow::{
-    bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
-    BRIDGE_PROGRAM,
+    bridge_args, deliver, existence, parse_signal, unit_path, usec_to_secs, Backoff, ManagerLink,
+    Probe, Sink, UserWatch, Wake, BRIDGE_PROGRAM,
 };
 use crate::scope::{ChildScopes, ProbeRequest, RunScopes, Sweep};
 use crate::spawner::{
@@ -82,10 +93,18 @@ const LOG_DIR: &str = "/run/ruya-session";
 /// How often the status file of a running `systemd-run` is read.
 const POLL: Duration = Duration::from_millis(100);
 
-/// How often the scope watcher wakes (what is due is decided by `RunScopes::plan`).
-const SCOPE_TICK: Duration = Duration::from_secs(1);
-
 type Registry = Arc<Mutex<HashMap<String, (String, String)>>>;
+
+/// How to reach the watch thread of one profile user's manager (`watch_user`).
+struct WatchHandle {
+    /// Units adopted after a restart, for its `Follower`.
+    adopt: std::sync::mpsc::Sender<Vec<String>>,
+    /// Ends its wait early: a held end, a probe's verdict, a new run.
+    poke: async_channel::Sender<()>,
+}
+
+/// The watch threads, by profile user: one while that user has a run followed (RUY-1250).
+type Watchers = Arc<Mutex<HashMap<String, WatchHandle>>>;
 
 /// The way every unit event takes to the core (T-363): the end of a unit whose Flatpak scope still
 /// lives is held back by `RunScopes` until the scope is gone, and a unit leaves the registry (so
@@ -97,18 +116,84 @@ struct Gate {
     /// manager and the app's scope.
     units: Registry,
     scopes: Arc<Mutex<RunScopes>>,
+    watchers: Watchers,
+    /// The probes of Steam's scopes, to `probe_worker`.
+    probes: std::sync::mpsc::Sender<ProbeRequest>,
+}
+
+impl Sink for Gate {
+    fn scopes(&self) -> &Mutex<RunScopes> {
+        &self.scopes
+    }
+
+    fn sweep(&self, sweeps: Vec<Sweep>) {
+        sweep(sweeps);
+    }
+
+    fn send(&self, event: UnitEvent) {
+        Gate::send(self, event);
+    }
+
+    fn probe(&self, probes: Vec<ProbeRequest>) {
+        queue_probes(self, &self.probes, probes);
+    }
 }
 
 impl Gate {
+    /// A unit's event from its `systemd-run --wait` (`Job`): a held end makes the user's watch
+    /// look at the scope at once (the CPU now, and every second without the connection).
     fn deliver(&self, event: UnitEvent) {
-        let (passed, sweeps) = {
-            let mut scopes = self.scopes.lock().unwrap_or_else(|e| e.into_inner());
-            let passed = scopes.on_unit_event(event, Instant::now());
-            (passed, scopes.take_sweeps())
+        let unit = match &event {
+            UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } => Some(unit.clone()),
+            UnitEvent::Started { .. } | UnitEvent::ChildStarted { .. } => None,
         };
-        sweep(sweeps);
-        if let Some(event) = passed {
-            self.send(event);
+        if deliver(self, event, Instant::now()) {
+            let user = unit.and_then(|u| self.owner(&u));
+            if let Some(user) = user {
+                self.poke(&user);
+            }
+        }
+    }
+
+    /// The profile user a running unit belongs to.
+    fn owner(&self, unit: &str) -> Option<String> {
+        self.units
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(unit)
+            .map(|(user, _)| user.clone())
+    }
+
+    /// Has the watch of `user`'s manager running (started when it is not), hands it the
+    /// `adopted` units and pokes it. Taken under the watchers' lock, which a watch that ends
+    /// takes too (`watch_user`), so a run begun meanwhile is never left without one.
+    fn watch(&self, user: &str, adopted: Vec<String>) -> Result<(), String> {
+        let mut watchers = self.watchers.lock().unwrap_or_else(|e| e.into_inner());
+        if !watchers.contains_key(user) {
+            let (adopt, adopted_rx) = std::sync::mpsc::channel();
+            let (poke, poked) = async_channel::bounded(1);
+            let gate = self.clone();
+            let who = user.to_owned();
+            std::thread::Builder::new()
+                .name("watch".to_owned())
+                .spawn(move || watch_user(who, gate, adopted_rx, poked))
+                .map_err(|err| format!("cannot watch the manager of {user}: {err}"))?;
+            watchers.insert(user.to_owned(), WatchHandle { adopt, poke });
+        }
+        if let Some(handle) = watchers.get(user) {
+            if !adopted.is_empty() {
+                let _ = handle.adopt.send(adopted);
+            }
+            let _ = handle.poke.try_send(());
+        }
+        Ok(())
+    }
+
+    /// Ends the wait of `user`'s watch (a full poke queue is a poke already).
+    fn poke(&self, user: &str) {
+        let watchers = self.watchers.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(handle) = watchers.get(user) {
+            let _ = handle.poke.try_send(());
         }
     }
 
@@ -148,7 +233,9 @@ fn probe(ProbeRequest { unit, user, scope }: &ProbeRequest) -> Verdict {
     verdict
 }
 
-/// Hands a probe's verdict to `RunScopes`; a child that starts is sent on.
+/// Hands a probe's verdict to `RunScopes`; a child that starts is sent on. The user's watch is
+/// poked: an undecided scope is probed again a second later, and a child's end may have waited
+/// for this verdict.
 fn settle_probe(gate: &Gate, request: &ProbeRequest, verdict: Verdict) {
     let started = gate
         .scopes
@@ -158,11 +245,12 @@ fn settle_probe(gate: &Gate, request: &ProbeRequest, verdict: Verdict) {
     if let Some(event) = started {
         gate.send(event);
     }
+    gate.poke(&request.user);
 }
 
-/// Runs the probes the scope watcher queues, one after the other, so the watcher never waits for
+/// Runs the probes the users' watches queue, one after the other, so a watch never waits for
 /// one (a hung probe would hold up the scope looks and child ends of every profile). The verdict
-/// goes straight to `RunScopes` under its lock, as the watcher's own answers do.
+/// goes straight to `RunScopes` under its lock, as the watches' own answers do.
 fn probe_worker(gate: Gate, jobs: std::sync::mpsc::Receiver<ProbeRequest>) {
     for request in jobs {
         let verdict = probe(&request);
@@ -193,34 +281,46 @@ fn has_children(table: &AppTable, app_id: &str) -> bool {
     table.children(app_id) == Some(Children::Steam)
 }
 
-/// Looks at the Flatpak scopes of the runs, one `systemctl show` per profile manager and round
-/// (`RunScopes::plan` / `apply`), and hands on the unit ends that waited for a scope.
-fn watch_scopes(gate: Gate, worker: std::sync::mpsc::Sender<ProbeRequest>) {
+/// The watch of one profile user's manager (`follow::UserWatch`), on its own thread with its own
+/// connection, until nothing of that user is followed any more: then the connection (and its
+/// bridge) is dropped, so an idle profile costs nothing (RUY-1250).
+fn watch_user(
+    user: String,
+    gate: Gate,
+    adopted: std::sync::mpsc::Receiver<Vec<String>>,
+    poked: async_channel::Receiver<()>,
+) {
+    let mut link = UserLink::new(&user, poked);
+    let mut watch = UserWatch::new(&user);
     loop {
-        std::thread::sleep(SCOPE_TICK);
-        let queries = gate
+        while let Ok(units) = adopted.try_recv() {
+            watch.adopt(&units);
+        }
+        if watch.step(&mut link, &gate) {
+            continue;
+        }
+        // Lock order: the watchers, then the scopes (`Gate::watch` takes only the first).
+        let mut watchers = gate.watchers.lock().unwrap_or_else(|e| e.into_inner());
+        let mut more = false;
+        while let Ok(units) = adopted.try_recv() {
+            watch.adopt(&units);
+            more = true;
+        }
+        let runs = gate
             .scopes
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .plan(Instant::now());
-        for query in queries {
-            let shows = show_many(&query.user, &query.names).map(|text| parse_show(&text));
-            let (ended, sweeps, probes) = {
-                let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
-                let ended = scopes.apply(&query.user, shows.as_deref(), Instant::now());
-                (ended, scopes.take_sweeps(), scopes.take_probes())
-            };
-            sweep(sweeps);
-            for event in ended {
-                gate.send(event);
-            }
-            queue_probes(&gate, &worker, probes);
+            .has_runs(&user);
+        if more || runs || watch.adopted_left() {
+            continue;
         }
+        watchers.remove(&user);
+        return;
     }
 }
 
 /// How long one `systemctl` of `Stop`, the kill or a sweep may take: a manager that does not
-/// answer must not hold up the scope watcher (every profile's runs) or a `Stop` for long.
+/// answer must not hold up its user's watch (a sweep runs on it) or a `Stop` for long.
 const SYSTEMCTL_LIMIT: Duration = Duration::from_secs(5);
 
 /// The scopes of `app_id` loaded in `user`'s manager (any state), by exact name: the glob
@@ -421,25 +521,20 @@ pub struct SystemdSpawner {
 
 impl SystemdSpawner {
     pub fn new(events: Sender<UnitEvent>) -> Self {
+        let (probes, probe_jobs) = std::sync::mpsc::channel();
         let gate = Gate {
             events,
             units: Arc::new(Mutex::new(HashMap::new())),
             scopes: Arc::new(Mutex::new(RunScopes::new())),
+            watchers: Arc::new(Mutex::new(HashMap::new())),
+            probes,
         };
-        let (probes, probe_jobs) = std::sync::mpsc::channel();
         let prober = gate.clone();
         if let Err(err) = std::thread::Builder::new()
             .name("steam-probe".to_owned())
             .spawn(move || probe_worker(prober, probe_jobs))
         {
             eprintln!("ruya-session: cannot probe Steam's scopes: its games stay Steam's: {err}");
-        }
-        let watcher = gate.clone();
-        if let Err(err) = std::thread::Builder::new()
-            .name("scopes".to_owned())
-            .spawn(move || watch_scopes(watcher, probes))
-        {
-            eprintln!("ruya-session: cannot watch the Flatpak scopes: {err}");
         }
         let (audio, jobs) = std::sync::mpsc::channel();
         if let Err(err) = std::thread::Builder::new()
@@ -477,7 +572,7 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("no running unit {unit}"))
     }
 
-    /// The child instance `name` (ADR-041) and the scopes it had at the scope watcher's last look.
+    /// The child instance `name` (ADR-041) and the scopes it had as its user's watch saw them last.
     fn child(&self, name: &str) -> Option<ChildScopes> {
         self.gate
             .scopes
@@ -567,7 +662,7 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("systemctl {verb} {unit} failed"))
     }
 
-    /// Every scope of the run `unit`'s child instances, as the scope watcher saw them last.
+    /// Every scope of the run `unit`'s child instances, as its user's watch saw them last.
     fn child_scopes(&self, unit: &str) -> Vec<String> {
         self.gate
             .scopes
@@ -918,14 +1013,10 @@ fn list_running_apps(gate: &Gate, adopt_failed: &std::sync::atomic::AtomicBool) 
         if mine.is_empty() {
             continue;
         }
-        // One thread and one connection per manager, however many apps it runs.
+        // One thread and one connection per manager, however many apps it runs, shared with the
+        // scopes of the runs launched since (RUY-1250).
         let names: Vec<String> = mine.iter().map(|u| u.unit.clone()).collect();
-        let watcher = gate.clone();
-        let who = user.clone();
-        let spawned = std::thread::Builder::new()
-            .name("watch".to_owned())
-            .spawn(move || follow_user(&who, &names, &watcher));
-        if let Err(err) = spawned {
+        if let Err(err) = gate.watch(&user, names) {
             eprintln!("ruya-session: cannot watch the apps of {user}: {err}");
             let mut registry = gate.units.lock().unwrap_or_else(|e| e.into_inner());
             let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
@@ -969,21 +1060,39 @@ fn show_many(user: &str, names: &[String]) -> Option<String> {
     run_bounded(&args, SYSTEMCTL_LIMIT)
 }
 
-/// Follows the adopted units of one profile user until the last one has ended.
-fn follow_user(user: &str, units: &[String], gate: &Gate) {
-    let mut link = UserLink::new(user);
-    let mut follower = Follower::new(units);
-    while !follower.is_done() {
-        for event in follower.step(&mut link) {
-            gate.deliver(event);
-        }
-    }
-}
-
 const SYSTEMD: &str = "org.freedesktop.systemd1";
 const MANAGER_PATH: &str = "/org/freedesktop/systemd1";
 const MANAGER_IFACE: &str = "org.freedesktop.systemd1.Manager";
+const UNIT_IFACE: &str = "org.freedesktop.systemd1.Unit";
+const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
 const NO_SUCH_UNIT: &str = "org.freedesktop.systemd1.NoSuchUnit";
+
+/// One row of `ListUnitsByPatterns`: name, description, load, active and sub state, followed
+/// unit, object path, job id, job type, job path.
+type ListedUnit = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    OwnedObjectPath,
+    u32,
+    String,
+    OwnedObjectPath,
+);
+
+/// The interface that holds a unit's `CPUUsageNSec`, by its type (only scopes and services are
+/// asked).
+fn cgroup_iface(unit: &str) -> Option<&'static str> {
+    if unit.ends_with(".scope") {
+        Some("org.freedesktop.systemd1.Scope")
+    } else if unit.ends_with(".service") {
+        Some("org.freedesktop.systemd1.Service")
+    } else {
+        None
+    }
+}
 
 /// The connection to one profile user's manager, and the means to look at a unit when it is down.
 struct UserLink {
@@ -995,10 +1104,20 @@ struct UserLink {
     stream: Option<MessageStream>,
     /// Was the failure to connect logged? Once per outage is enough.
     warned: bool,
+    /// The pokes of the other threads (`Gate::poke`): they end a wait early.
+    poked: async_channel::Receiver<()>,
+    /// The connection was dropped under a call since the last `wait`.
+    broken: bool,
+}
+
+/// What ended one wait of `UserLink::wait`.
+enum Woke {
+    Message(Option<zbus::Result<zbus::Message>>),
+    Time,
 }
 
 impl UserLink {
-    fn new(user: &str) -> Self {
+    fn new(user: &str, poked: async_channel::Receiver<()>) -> Self {
         UserLink {
             user: user.to_owned(),
             backoff: Backoff::default(),
@@ -1006,11 +1125,93 @@ impl UserLink {
             conn: None,
             stream: None,
             warned: false,
+            poked,
+            broken: false,
         }
     }
 
+    /// One property of the unit at `path`. `Ok(None)` when the manager answered with an error
+    /// (the unit went meanwhile, or has no such property); `Err` is a broken connection.
+    fn property(
+        conn: &Connection,
+        path: &str,
+        iface: &str,
+        name: &str,
+    ) -> Result<Option<OwnedValue>, zbus::Error> {
+        match future::block_on(conn.call_method(
+            Some(SYSTEMD),
+            path,
+            Some(PROPERTIES_IFACE),
+            "Get",
+            &(iface, name),
+        )) {
+            Ok(reply) => Ok(Some(reply.body().deserialize()?)),
+            Err(zbus::Error::MethodError(..)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// A unit's `CPUUsageNSec`, `None` when it has no reading (accounting off, or gone).
+    fn cpu_of(conn: &Connection, unit: &str, path: &str) -> Result<Option<u64>, zbus::Error> {
+        let Some(iface) = cgroup_iface(unit) else {
+            return Ok(None);
+        };
+        Ok(Self::property(conn, path, iface, "CPUUsageNSec")?
+            .and_then(|v| u64::try_from(v).ok())
+            .filter(|n| *n != u64::MAX))
+    }
+
+    /// `ListUnitsByPatterns` and, per unit, its timestamp, freezer state and CPU.
+    fn list_bus(&self, names: &[String]) -> Result<Vec<ShowUnit>, zbus::Error> {
+        let Some(conn) = &self.conn else {
+            return Err(zbus::Error::Failure("no connection".to_owned()));
+        };
+        let states: Vec<String> = Vec::new();
+        let reply = future::block_on(conn.call_method(
+            Some(SYSTEMD),
+            MANAGER_PATH,
+            Some(MANAGER_IFACE),
+            "ListUnitsByPatterns",
+            &(states, names),
+        ))?;
+        let listed: Vec<ListedUnit> = reply.body().deserialize()?;
+        let mut shows = Vec::new();
+        for (id, _, load_state, active_state, _, _, path, ..) in listed {
+            let path = path.as_str();
+            let entered = Self::property(conn, path, UNIT_IFACE, "ActiveEnterTimestamp")?
+                .and_then(|v| u64::try_from(v).ok())
+                .map_or(0, usec_to_secs);
+            let freezer_state = Self::property(conn, path, UNIT_IFACE, "FreezerState")?
+                .and_then(|v| String::try_from(v).ok())
+                .unwrap_or_default();
+            let cpu_nsec = Self::cpu_of(conn, &id, path)?;
+            shows.push(ShowUnit {
+                id,
+                load_state,
+                active_state,
+                entered,
+                cpu_nsec,
+                freezer_state,
+                ..ShowUnit::default()
+            });
+        }
+        Ok(shows)
+    }
+
+    /// The bus failed under a call: the connection is dropped, the watch falls back.
+    fn broke(&mut self, what: &str, err: &zbus::Error) {
+        eprintln!(
+            "ruya-session: the manager of {} did not answer {what}: {err}",
+            self.user
+        );
+        self.drop_connection();
+    }
+
+    /// Drops the connection; the next `wait` says so (`Lost`) when it was up.
     fn drop_connection(&mut self) {
-        self.conn = None;
+        if self.conn.take().is_some() {
+            self.broken = true;
+        }
         self.stream = None;
     }
 
@@ -1098,7 +1299,7 @@ impl UserLink {
         let entered = unit_props
             .get("ActiveEnterTimestamp")
             .and_then(|v| u64::try_from(v.clone()).ok())
-            .map_or(0, |usec| i64::try_from(usec / 1_000_000).unwrap_or(0));
+            .map_or(0, usec_to_secs);
         let show = ShowUnit {
             id: unit.to_owned(),
             load_state: text("LoadState"),
@@ -1118,6 +1319,10 @@ impl UserLink {
 }
 
 impl ManagerLink for UserLink {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
     fn wait(&mut self, max: Duration) -> Wake {
         let deadline = Instant::now() + max;
         loop {
@@ -1125,32 +1330,50 @@ impl ManagerLink for UserLink {
             if left.is_zero() {
                 return Wake::Quiet;
             }
-            let Some(stream) = self.stream.as_mut() else {
+            // A call that broke dropped the connection (`broke`, `probe`): the watch falls back.
+            if self.stream.is_none() && std::mem::take(&mut self.broken) {
                 return Wake::Lost;
+            }
+            let poked = &self.poked;
+            // A poke, or the time; a closed poke channel leaves only the time.
+            let pause = future::or(
+                async {
+                    if poked.recv().await.is_err() {
+                        future::pending::<()>().await;
+                    }
+                    Woke::Time
+                },
+                async {
+                    async_io::Timer::after(left).await;
+                    Woke::Time
+                },
+            );
+            let Some(stream) = self.stream.as_mut() else {
+                // No connection: only the wait.
+                future::block_on(pause);
+                return Wake::Quiet;
             };
-            let got = future::block_on(future::or(async { Some(stream.next().await) }, async {
-                async_io::Timer::after(left).await;
-                None
-            }));
+            let got = future::block_on(future::or(
+                async { Woke::Message(stream.next().await) },
+                pause,
+            ));
             match got {
-                None => return Wake::Quiet,
-                Some(Some(Ok(message))) => {
+                Woke::Time => return Wake::Quiet,
+                Woke::Message(Some(Ok(message))) => {
                     if let Some(event) = parse_signal(&message) {
                         return Wake::Event(event);
                     }
                 }
-                Some(_) => {
+                Woke::Message(_) => {
                     self.drop_connection();
+                    self.broken = false;
                     return Wake::Lost;
                 }
             }
         }
     }
 
-    fn reconnect(&mut self, pause: Duration) -> bool {
-        if !pause.is_zero() {
-            std::thread::sleep(pause);
-        }
+    fn reconnect(&mut self) -> bool {
         if self.next_try.is_some_and(|t| Instant::now() < t) {
             return false;
         }
@@ -1160,6 +1383,7 @@ impl ManagerLink for UserLink {
                 self.backoff.worked();
                 self.next_try = None;
                 self.warned = false;
+                self.broken = false;
                 true
             }
             Err(err) => {
@@ -1176,6 +1400,36 @@ impl ManagerLink for UserLink {
                 false
             }
         }
+    }
+
+    fn list(&mut self, names: &[String]) -> Option<Vec<ShowUnit>> {
+        match self.list_bus(names) {
+            Ok(shows) => Some(shows),
+            Err(err) => {
+                self.broke("a listing", &err);
+                None
+            }
+        }
+    }
+
+    fn cpu(&mut self, units: &[String]) -> Option<Vec<(String, u64)>> {
+        let conn = self.conn.clone()?;
+        let mut readings = Vec::new();
+        for unit in units {
+            match Self::cpu_of(&conn, unit, &unit_path(unit)) {
+                Ok(Some(cpu)) => readings.push((unit.clone(), cpu)),
+                Ok(None) => {}
+                Err(err) => {
+                    self.broke("a CPU reading", &err);
+                    return None;
+                }
+            }
+        }
+        Some(readings)
+    }
+
+    fn show(&mut self, names: &[String]) -> Option<Vec<ShowUnit>> {
+        show_many(&self.user, names).map(|text| parse_show(&text))
     }
 
     fn probe(&mut self, unit: &str) -> Probe {
@@ -1258,6 +1512,14 @@ struct Job {
 impl Job {
     fn run(self) {
         ensure_manager(&self.user);
+        // Its scope is followed by the user's watch, started once the manager runs (a
+        // `--machine=` call during the manager's start would hold that start up, T-162).
+        if let Err(err) = self.gate.watch(&self.user, Vec::new()) {
+            eprintln!(
+                "ruya-session: {}: its Flatpak scope is not followed: {err}",
+                self.unit
+            );
+        }
         let (code, signaled, follower) = self.follow();
         let event = follower.finish(code, signaled);
         // The gate forgets the unit's user when it hands the end on (after the scope is gone).
