@@ -6,7 +6,7 @@
 #include "Profiles.h"
 
 Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
-    : QObject(parent)
+    : SessionSignals(parent)
     , m_backend(std::move(backend))
 {
     connect(m_backend.get(), &SessionBackend::runningListed, this, [this](const QList<RunningApp> &apps) {
@@ -28,15 +28,16 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
                     m_backend->refresh();
                 emit launchItemFinished(item, profile, status, instance);
             });
-    connect(m_backend.get(), &SessionBackend::stopFinished, this, &Session::stopFinished);
+    // The pure forwards: the backend's signal is Session's own (SessionSignals).
+    connect(m_backend.get(), &SessionSignals::stopFinished, this, &SessionSignals::stopFinished);
     connect(m_backend.get(), &SessionBackend::killFinished, this, [this](const QString &instance, const QString &status) {
         if (status == QLatin1String("ok"))
             m_backend->refresh();       // the record is "stopping" now
         emit killFinished(instance, status);
     });
-    connect(m_backend.get(), &SessionBackend::freezeFinished, this, &Session::freezeFinished);
-    connect(m_backend.get(), &SessionBackend::thawFinished, this, &Session::thawFinished);
-    connect(m_backend.get(), &SessionBackend::instanceOfPidFinished, this, &Session::instanceOfPidFinished);
+    connect(m_backend.get(), &SessionSignals::freezeFinished, this, &SessionSignals::freezeFinished);
+    connect(m_backend.get(), &SessionSignals::thawFinished, this, &SessionSignals::thawFinished);
+    connect(m_backend.get(), &SessionSignals::instanceOfPidFinished, this, &SessionSignals::instanceOfPidFinished);
     // The record changes in place, so a binding on `running` sees the new `frozen` at once.
     connect(m_backend.get(), &SessionBackend::frozenChanged, this, [this](const QString &instance, bool frozen) {
         setRecordValue(instance, QStringLiteral("frozen"), frozen);
