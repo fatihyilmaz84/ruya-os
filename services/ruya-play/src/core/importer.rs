@@ -1411,13 +1411,22 @@ impl Importer {
     /// is queued or running (an install of it that is still queued has no app name yet and waits
     /// its turn, as for [`Self::queue_verify`]). The caller checked that an admin asked.
     pub fn queue_remove(&self, id: &str) -> (MethodStatus, String) {
-        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
-            return (MethodStatus::Invalid, String::new());
-        }
-        if !reconcile::ours(&self.cfg.flatpak, id) {
-            return (MethodStatus::UnknownApp, String::new());
+        if let Err(s) = self.our_app(id) {
+            return (s, String::new());
         }
         self.queue_app_job(JobKind::Remove, id, |_| true)
+    }
+
+    /// The id of a Remove or Rollback: `invalid` when it is not a plain name, `unknown-app` when its
+    /// deployment is not [`reconcile::ours`].
+    fn our_app(&self, id: &str) -> Result<(), MethodStatus> {
+        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
+            return Err(MethodStatus::Invalid);
+        }
+        if !reconcile::ours(&self.cfg.flatpak, id) {
+            return Err(MethodStatus::UnknownApp);
+        }
+        Ok(())
     }
 
     /// The pipeline of one remove job: Flatpak uninstalls the app, then the uninstall is recorded
@@ -1525,11 +1534,8 @@ impl Importer {
     /// any job of the same app is queued or running. The caller checked that an admin asked. No
     /// command runs here: the job checks what the repo keeps.
     pub fn queue_rollback(&self, id: &str) -> (MethodStatus, String) {
-        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
-            return (MethodStatus::Invalid, String::new());
-        }
-        if !reconcile::ours(&self.cfg.flatpak, id) {
-            return (MethodStatus::UnknownApp, String::new());
+        if let Err(s) = self.our_app(id) {
+            return (s, String::new());
         }
         match self.installed().get(id) {
             Ok(Some(r)) if r.older_previous().is_some() => {}

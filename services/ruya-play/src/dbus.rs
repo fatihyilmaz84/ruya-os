@@ -365,6 +365,21 @@ impl PlayIface {
         self.started(queue(&self.importer, id))
     }
 
+    /// Remove and Rollback: the admin gate ([`Self::admin_gate`]), then [`Self::queue_for_app`].
+    async fn admin_queue_for_app(
+        &self,
+        options: &HashMap<String, OwnedValue>,
+        header: &Header<'_>,
+        connection: &Connection,
+        app_id: &str,
+        queue: fn(&Importer, &str) -> (MethodStatus, String),
+    ) -> (String, String) {
+        if let Err(s) = self.admin_gate(options, header, connection).await {
+            return (s.as_str().to_string(), String::new());
+        }
+        self.queue_for_app(app_id, queue)
+    }
+
     /// The answer (status, job) of a call that queued a job: the queue runs when it accepted.
     fn started(&self, (status, job): (MethodStatus, String)) -> (String, String) {
         if status == MethodStatus::Ok {
@@ -452,10 +467,14 @@ impl PlayIface {
         app_id: String,
         options: HashMap<String, OwnedValue>,
     ) -> (String, String) {
-        if let Err(s) = self.admin_gate(&options, &header, connection).await {
-            return (s.as_str().to_string(), String::new());
-        }
-        self.queue_for_app(&app_id, Importer::queue_remove)
+        self.admin_queue_for_app(
+            &options,
+            &header,
+            connection,
+            &app_id,
+            Importer::queue_remove,
+        )
+        .await
     }
 
     /// The build an update replaced and kept (RUY-1245). The tuple is written out (not
@@ -489,10 +508,14 @@ impl PlayIface {
         app_id: String,
         options: HashMap<String, OwnedValue>,
     ) -> (String, String) {
-        if let Err(s) = self.admin_gate(&options, &header, connection).await {
-            return (s.as_str().to_string(), String::new());
-        }
-        self.queue_for_app(&app_id, Importer::queue_rollback)
+        self.admin_queue_for_app(
+            &options,
+            &header,
+            connection,
+            &app_id,
+            Importer::queue_rollback,
+        )
+        .await
     }
 
     /// Stop a queued or running job.
