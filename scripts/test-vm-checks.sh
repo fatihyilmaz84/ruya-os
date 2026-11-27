@@ -956,6 +956,18 @@ grep -q '^play_remote=ruyaos-play-local$' "$here/vm-store-check.sh" \
     && grep -q 'pub const PLAY_REMOTE: &str = "ruyaos-play-local";' "$here/../services/ruya-play-art/src/lib.rs" \
     && pass "vm-store-check.sh playmanaged: the stand-in remote is ruya_play_art::PLAY_REMOTE" \
     || fail "vm-store-check.sh playmanaged: play_remote differs from ruya_play_art::PLAY_REMOTE"
+# The clean-up removes only the stand-in this check made (by its URL), never the console's real remote, and the
+# check traps EXIT so a killed run leaves none.
+play_remote=ruyaos-play-local; pwork=/var/lib/ruya-store-perms-test
+eval "$(grep '^playmanaged_remote_is_ours()' "$here/vm-store-check.sh")"
+flatpak() { printf 'flathub\thttps://dl.flathub.org/repo/\nruyaos-play-local\t%s\n' "$FAKE_PLAY_URL"; }
+FAKE_PLAY_URL="file://$pwork/repo"
+playmanaged_remote_is_ours && pass "vm-store-check.sh playmanaged: the stand-in remote is recognised by its URL" || fail "vm-store-check.sh playmanaged: the stand-in is not recognised"
+FAKE_PLAY_URL="file:///var/lib/ruya-play/repo"
+playmanaged_remote_is_ours && fail "vm-store-check.sh playmanaged: the console's real remote would be removed" || pass "vm-store-check.sh playmanaged: the console's real remote is not the stand-in"
+unset -f flatpak
+grep -q '^    trap playmanaged_clean EXIT$' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh playmanaged: an EXIT trap removes the stand-in remote and the app" || fail "vm-store-check.sh playmanaged: no EXIT trap"
 storexml1190="$here/../api/dbus/org.ruyaos.Store1.xml"
 grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="status" type="s" direction="out"' \
     && grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="counts" type="a{su}" direction="out"' \

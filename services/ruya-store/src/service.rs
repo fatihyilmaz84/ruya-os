@@ -2346,16 +2346,27 @@ filesystems=/run/media:ro;
     }
 
     #[test]
-    fn a_play_app_that_is_not_installed_has_no_origin_to_refuse() {
-        // Once Play1 removed it (the local remote may still offer the commit), the Store's own
-        // not-installed answers again.
+    fn a_play_app_play1_removed_is_still_play1s_to_install() {
+        // `Play1.Remove` only runs `flatpak uninstall`: the commit stays in the local remote, which
+        // the catalogue still lists, so the app is offered with no origin to read. Installing it
+        // through the Store would bypass installed.json and the trust record (first version of
+        // this test took the Store's own `not-installed` for it, which left that door open).
         let s = store(fake().with_app(PLAY_REMOTE, PLAY, 1));
-        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::NotInstalled);
-        let f = &s.flatpak;
-        f.add_installed(PLAY_REMOTE, PLAY, 1);
-        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::PlayManaged);
-        f.remove_installed(PLAY);
-        assert_eq!(s.uninstall(PLAY, false, &mut none).0, Status::NotInstalled);
+        assert!(!s.get_app(PLAY).1.installed);
+        assert_play_managed(&s, PLAY);
+        // Installed, then removed behind the Store's back (what Play1.Remove does): the same.
+        s.flatpak.add_installed(PLAY_REMOTE, PLAY, 1);
+        assert_play_managed(&s, PLAY);
+        s.flatpak.remove_installed(PLAY);
+        assert_play_managed(&s, PLAY);
+        // An app the local remote does not offer at all stays unknown, and a `play.*` app offered
+        // by another remote is the Store's.
+        assert_eq!(
+            s.install("play.org.example.nope", &mut none).0,
+            Status::UnknownApp
+        );
+        let hub = store(fake().with_app("flathub", "play.org.example.hub", 1));
+        assert_eq!(hub.install("play.org.example.hub", &mut none).0, Status::Ok);
     }
 
     fn writes(s: &Store<FakeFlatpak>) -> Vec<Vec<String>> {

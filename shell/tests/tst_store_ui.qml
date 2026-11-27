@@ -120,6 +120,22 @@ Item {
             compare(find("page_appDetail").title, "Star Hopper")
         }
 
+        // RUY-1244: Play1.Remove leaves the commit in the local remote, so the Store still lists a removed .play app;
+        // its page must not offer to install it (the service answers play-managed), and the Store's own apps do.
+        function test_a_removed_play_app_has_no_install_button() {
+            const id = "play.com.example.removed"
+            Store.mockOffer(id, "removed")
+            tryVerify(() => Store.app(id).installed === false)
+            tc.shell.openPage("appDetail", { appId: id })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "hasRecord", true)
+            compare(find("page_appDetail").installed, false)
+            compare(find("page_appDetail").primaryKind, "")
+            tc.shell.openPage("appDetail", { appId: "org.example.Racer" })
+            tryCompare(find("page_appDetail"), "appId", "org.example.Racer")
+            tryCompare(find("page_appDetail"), "primaryKind", "install")
+        }
+
         function test_controller_filter() {
             openStore()
             // Hidden by default: the three apps without controller support.

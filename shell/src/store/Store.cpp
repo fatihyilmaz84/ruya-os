@@ -514,6 +514,12 @@ void Store::mockSetMinApiLevel(const QString &appId, int level)
         mock->setMinApiLevel(appId, level);
 }
 
+void Store::mockOffer(const QString &appId, const QString &name)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->offer(appId, name);
+}
+
 void Store::mockSetUpdateAvailable(const QString &appId, bool available)
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))

@@ -400,6 +400,18 @@ Item {
             tryCompare(finished, "count", 4)
         }
 
+        // The same for a removed .play app that the local remote still offers: Install is Play1's (RUY-1244).
+        function test_install_of_a_removed_play_app_is_refused_play_managed() {
+            const id = "play.com.example.removed"
+            Store.mockOffer(id, "removed")
+            tryVerify(() => Store.app(id).installed === false)
+            Store.install(id)
+            tryCompare(finished, "count", 1)
+            compare(finished.signalArguments[0][1], "play-managed")
+            verify(!isInstalled(id))
+            compare(Object.keys(Store.jobs).length, 0, "no job was started")
+        }
+
         function test_update() {
             verify(Store.app("org.example.Chess").updateAvailable)
             Store.update("org.example.Chess")

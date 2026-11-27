@@ -77,6 +77,9 @@ public:
     void addApps(int count);
     // Installed with no signal (RUY-854): the list shows it from the next refresh().
     void installOutside(const QString &id, const QString &name, const QStringList &permissions);
+    // Tests only: an app of the catalogue that is not installed (RUY-1244: a removed .play app, which the local remote
+    // still offers), until reset(); then CatalogChanged.
+    void offer(const QString &id, const QString &name);
     // Tests only: the console's API level (0 at start and after reset, like RUYA_API_LEVEL). An app is
     // compatible when its minimum level is at or below it. Then InstalledChanged and CatalogChanged (RUY-636).
     void setApiLevel(int level);
