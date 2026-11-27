@@ -382,6 +382,11 @@ impl RunScopes {
         }
     }
 
+    /// The profile user of the followed run `unit`.
+    pub fn user_of(&self, unit: &str) -> Option<String> {
+        self.runs.get(unit).map(|r| r.user.clone())
+    }
+
     /// The run is not followed any more (its start failed before anything ran).
     pub fn forget(&mut self, unit: &str) {
         if let Some(run) = self.runs.remove(unit) {

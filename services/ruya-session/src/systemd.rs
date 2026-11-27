@@ -47,7 +47,7 @@
 //! never holds up a user's watch, and a child's name reaches only its own scopes
 //! (`RunScopes::child`, `spawner::child_command`).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
@@ -64,8 +64,8 @@ use zbus::{Connection, MatchRule, MessageStream};
 use crate::apps::{AppTable, Children, Display, Freeze, APPS_DIR};
 use crate::bounded::{run_bounded, run_bounded_status, run_capped};
 use crate::follow::{
-    bridge_args, deliver, existence, parse_signal, unit_path, usec_to_secs, Backoff, ManagerLink,
-    Probe, Sink, UserWatch, Wake, BRIDGE_PROGRAM,
+    bounded, bridge_args, deliver, drain, existence, parse_signal, unit_path, usec_to_secs,
+    Backoff, ManagerEvent, ManagerLink, Probe, Sink, UserWatch, Wake, BRIDGE_PROGRAM,
 };
 use crate::scope::{ChildScopes, ProbeRequest, RunScopes, Sweep};
 use crate::spawner::{
@@ -141,27 +141,12 @@ impl Sink for Gate {
 
 impl Gate {
     /// A unit's event from its `systemd-run --wait` (`Job`): a held end makes the user's watch
-    /// look at the scope at once (the CPU now, and every second without the connection).
+    /// look at the scope at once (the CPU now, and every second without the connection), a run's
+    /// end that passes lets a watch with nothing left close at once (`Delivered::poke`).
     fn deliver(&self, event: UnitEvent) {
-        let unit = match &event {
-            UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } => Some(unit.clone()),
-            UnitEvent::Started { .. } | UnitEvent::ChildStarted { .. } => None,
-        };
-        if deliver(self, event, Instant::now()) {
-            let user = unit.and_then(|u| self.owner(&u));
-            if let Some(user) = user {
-                self.poke(&user);
-            }
+        if let Some(user) = deliver(self, event, Instant::now()).poke {
+            self.poke(&user);
         }
-    }
-
-    /// The profile user a running unit belongs to.
-    fn owner(&self, unit: &str) -> Option<String> {
-        self.units
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(unit)
-            .map(|(user, _)| user.clone())
     }
 
     /// Has the watch of `user`'s manager running (started when it is not), hands it the
@@ -1094,6 +1079,12 @@ fn cgroup_iface(unit: &str) -> Option<&'static str> {
     }
 }
 
+/// How many signals the connection's stream may hold unread. The watch takes them before every
+/// call (`UserLink::drain`), so it fills only while one call waits (at most `SYSTEMCTL_LIMIT`);
+/// zbus stops reading the socket when it is full, replies included (RUY-1250 review), so it is
+/// generous. A call that still stalls behind it fails after its limit and the watch falls back.
+const SIGNAL_QUEUE: usize = 4096;
+
 /// The connection to one profile user's manager, and the means to look at a unit when it is down.
 struct UserLink {
     user: String,
@@ -1102,6 +1093,8 @@ struct UserLink {
     next_try: Option<Instant>,
     conn: Option<Connection>,
     stream: Option<MessageStream>,
+    /// Signals taken from the stream before a call (`drain`), handed out by `wait` first.
+    pending: VecDeque<ManagerEvent>,
     /// Was the failure to connect logged? Once per outage is enough.
     warned: bool,
     /// The pokes of the other threads (`Gate::poke`): they end a wait early.
@@ -1124,27 +1117,54 @@ impl UserLink {
             next_try: None,
             conn: None,
             stream: None,
+            pending: VecDeque::new(),
             warned: false,
             poked,
             broken: false,
         }
     }
 
-    /// One property of the unit at `path`. `Ok(None)` when the manager answered with an error
-    /// (the unit went meanwhile, or has no such property); `Err` is a broken connection.
-    fn property(
-        conn: &Connection,
+    /// Takes the signals the stream holds into `pending`, so a full stream never stops zbus from
+    /// reading the reply of the call that follows. A stream that ended drops the connection.
+    fn drain(&mut self) {
+        let Some(stream) = self.stream.as_mut() else {
+            return;
+        };
+        if !drain(stream, &mut self.pending) {
+            self.drop_connection();
+        }
+    }
+
+    /// One method call on the connection, after `drain`, bounded to `SYSTEMCTL_LIMIT`
+    /// (`follow::bounded`): a manager that does not answer is an error like a broken connection.
+    fn call<B>(
+        &mut self,
         path: &str,
         iface: &str,
-        name: &str,
-    ) -> Result<Option<OwnedValue>, zbus::Error> {
-        match future::block_on(conn.call_method(
-            Some(SYSTEMD),
-            path,
-            Some(PROPERTIES_IFACE),
-            "Get",
-            &(iface, name),
-        )) {
+        member: &str,
+        body: &B,
+    ) -> zbus::Result<zbus::Message>
+    where
+        B: zbus::export::serde::Serialize + zbus::zvariant::DynamicType,
+    {
+        self.drain();
+        let Some(conn) = self.conn.clone() else {
+            return Err(zbus::Error::Failure("no connection".to_owned()));
+        };
+        bounded(
+            SYSTEMCTL_LIMIT,
+            conn.call_method(Some(SYSTEMD), path, Some(iface), member, body),
+        )
+    }
+
+    /// Every property of one interface of the unit at `path`. `Ok(None)` when the manager
+    /// answered with an error (the unit went meanwhile); `Err` is a broken connection.
+    fn get_all(
+        &mut self,
+        path: &str,
+        iface: &str,
+    ) -> Result<Option<HashMap<String, OwnedValue>>, zbus::Error> {
+        match self.call(path, PROPERTIES_IFACE, "GetAll", &(iface,)) {
             Ok(reply) => Ok(Some(reply.body().deserialize()?)),
             Err(zbus::Error::MethodError(..)) => Ok(None),
             Err(err) => Err(err),
@@ -1152,39 +1172,42 @@ impl UserLink {
     }
 
     /// A unit's `CPUUsageNSec`, `None` when it has no reading (accounting off, or gone).
-    fn cpu_of(conn: &Connection, unit: &str, path: &str) -> Result<Option<u64>, zbus::Error> {
+    fn cpu_of(&mut self, unit: &str, path: &str) -> Result<Option<u64>, zbus::Error> {
         let Some(iface) = cgroup_iface(unit) else {
             return Ok(None);
         };
-        Ok(Self::property(conn, path, iface, "CPUUsageNSec")?
-            .and_then(|v| u64::try_from(v).ok())
-            .filter(|n| *n != u64::MAX))
+        let value = match self.call(path, PROPERTIES_IFACE, "Get", &(iface, "CPUUsageNSec")) {
+            Ok(reply) => reply.body().deserialize::<OwnedValue>()?,
+            Err(zbus::Error::MethodError(..)) => return Ok(None),
+            Err(err) => return Err(err),
+        };
+        Ok(u64::try_from(value).ok().filter(|n| *n != u64::MAX))
     }
 
-    /// `ListUnitsByPatterns` and, per unit, its timestamp, freezer state and CPU.
-    fn list_bus(&self, names: &[String]) -> Result<Vec<ShowUnit>, zbus::Error> {
-        let Some(conn) = &self.conn else {
-            return Err(zbus::Error::Failure("no connection".to_owned()));
-        };
+    /// `ListUnitsByPatterns` and, per unit, its Unit properties (`GetAll`: timestamp, freezer
+    /// state) and its CPU: two calls per unit.
+    fn list_bus(&mut self, names: &[String]) -> Result<Vec<ShowUnit>, zbus::Error> {
         let states: Vec<String> = Vec::new();
-        let reply = future::block_on(conn.call_method(
-            Some(SYSTEMD),
+        let reply = self.call(
             MANAGER_PATH,
-            Some(MANAGER_IFACE),
+            MANAGER_IFACE,
             "ListUnitsByPatterns",
             &(states, names),
-        ))?;
+        )?;
         let listed: Vec<ListedUnit> = reply.body().deserialize()?;
         let mut shows = Vec::new();
         for (id, _, load_state, active_state, _, _, path, ..) in listed {
             let path = path.as_str();
-            let entered = Self::property(conn, path, UNIT_IFACE, "ActiveEnterTimestamp")?
-                .and_then(|v| u64::try_from(v).ok())
+            let props = self.get_all(path, UNIT_IFACE)?.unwrap_or_default();
+            let entered = props
+                .get("ActiveEnterTimestamp")
+                .and_then(|v| u64::try_from(v.clone()).ok())
                 .map_or(0, usec_to_secs);
-            let freezer_state = Self::property(conn, path, UNIT_IFACE, "FreezerState")?
-                .and_then(|v| String::try_from(v).ok())
+            let freezer_state = props
+                .get("FreezerState")
+                .and_then(|v| String::try_from(v.clone()).ok())
                 .unwrap_or_default();
-            let cpu_nsec = Self::cpu_of(conn, &id, path)?;
+            let cpu_nsec = self.cpu_of(&id, path)?;
             shows.push(ShowUnit {
                 id,
                 load_state,
@@ -1207,7 +1230,8 @@ impl UserLink {
         self.drop_connection();
     }
 
-    /// Drops the connection; the next `wait` says so (`Lost`) when it was up.
+    /// Drops the connection; the next `wait` says so (`Lost`) when it was up, after the signals
+    /// taken before.
     fn drop_connection(&mut self) {
         if self.conn.take().is_some() {
             self.broken = true;
@@ -1215,7 +1239,8 @@ impl UserLink {
         self.stream = None;
     }
 
-    /// Starts the bridge, connects over it and subscribes to the manager's signals.
+    /// Starts the bridge, connects over it and subscribes to the manager's signals, each step
+    /// bounded like a call (a bridge that never answers its handshake too).
     fn connect(&mut self) -> Result<(), String> {
         // The typed transport, not an address string (see `follow::bridge_args`).
         let args = bridge_args(&self.user)?;
@@ -1225,45 +1250,44 @@ impl UserLink {
             args.into_iter().map(OsString::from).collect(),
         );
         let address = Address::from(Transport::Unixexec(exec));
-        let conn = future::block_on(
-            Builder::address(address)
-                .map_err(|e| e.to_string())?
-                .build(),
-        )
-        .map_err(|e| e.to_string())?;
+        let builder = Builder::address(address).map_err(|e| e.to_string())?;
+        let conn = bounded(SYSTEMCTL_LIMIT, builder.build()).map_err(|e| e.to_string())?;
+        // One rule for every signal of the manager, in the order it sent them: the exit status
+        // of a unit comes in a PropertiesChanged before its UnitRemoved (`UnitWatch`), which
+        // streams per member could reorder. What `parse_signal` does not read is dropped at the
+        // next `drain` or `wait`.
         let rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
             .sender(SYSTEMD)
             .map_err(|e| e.to_string())?
             .build();
         // Open the stream first: nothing sent after `Subscribe` may be missed.
-        let stream = future::block_on(MessageStream::for_match_rule(rule, &conn, None))
-            .map_err(|e| e.to_string())?;
-        future::block_on(conn.call_method(
-            Some(SYSTEMD),
-            MANAGER_PATH,
-            Some(MANAGER_IFACE),
-            "Subscribe",
-            &(),
-        ))
+        let stream = bounded(
+            SYSTEMCTL_LIMIT,
+            MessageStream::for_match_rule(rule, &conn, Some(SIGNAL_QUEUE)),
+        )
         .map_err(|e| e.to_string())?;
+        bounded(
+            SYSTEMCTL_LIMIT,
+            conn.call_method(
+                Some(SYSTEMD),
+                MANAGER_PATH,
+                Some(MANAGER_IFACE),
+                "Subscribe",
+                &(),
+            ),
+        )
+        .map_err(|e| e.to_string())?;
+        // What an earlier connection left is older than the listing that follows.
+        self.pending.clear();
         self.conn = Some(conn);
         self.stream = Some(stream);
         Ok(())
     }
 
     /// A unit's state over the connection. `Err` is a broken connection.
-    fn probe_bus(&self, unit: &str) -> Result<Probe, zbus::Error> {
-        let Some(conn) = &self.conn else {
-            return Err(zbus::Error::Failure("no connection".to_owned()));
-        };
-        let reply = match future::block_on(conn.call_method(
-            Some(SYSTEMD),
-            MANAGER_PATH,
-            Some(MANAGER_IFACE),
-            "GetUnit",
-            &(unit,),
-        )) {
+    fn probe_bus(&mut self, unit: &str) -> Result<Probe, zbus::Error> {
+        let reply = match self.call(MANAGER_PATH, MANAGER_IFACE, "GetUnit", &(unit,)) {
             Ok(reply) => reply,
             Err(zbus::Error::MethodError(name, _, _)) if name.as_str() == NO_SUCH_UNIT => {
                 return Ok(Probe::Gone);
@@ -1271,19 +1295,11 @@ impl UserLink {
             Err(err) => return Err(err),
         };
         let path: OwnedObjectPath = reply.body().deserialize()?;
-        let all = |interface: &str| -> Result<HashMap<String, OwnedValue>, zbus::Error> {
-            future::block_on(conn.call_method(
-                Some(SYSTEMD),
-                &path,
-                Some("org.freedesktop.DBus.Properties"),
-                "GetAll",
-                &(interface,),
-            ))?
-            .body()
-            .deserialize()
-        };
-        let unit_props = all("org.freedesktop.systemd1.Unit")?;
-        let service_props = all("org.freedesktop.systemd1.Service")?;
+        let gone = || zbus::Error::Failure(format!("{unit} went while it was read"));
+        let unit_props = self.get_all(path.as_str(), UNIT_IFACE)?.ok_or_else(gone)?;
+        let service_props = self
+            .get_all(path.as_str(), "org.freedesktop.systemd1.Service")?
+            .ok_or_else(gone)?;
         let text = |key: &str| {
             unit_props
                 .get(key)
@@ -1326,6 +1342,10 @@ impl ManagerLink for UserLink {
     fn wait(&mut self, max: Duration) -> Wake {
         let deadline = Instant::now() + max;
         loop {
+            // What `drain` took before a call comes first, in the order it was sent.
+            if let Some(event) = self.pending.pop_front() {
+                return Wake::Event(event);
+            }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 return Wake::Quiet;
@@ -1413,10 +1433,10 @@ impl ManagerLink for UserLink {
     }
 
     fn cpu(&mut self, units: &[String]) -> Option<Vec<(String, u64)>> {
-        let conn = self.conn.clone()?;
+        self.conn.as_ref()?;
         let mut readings = Vec::new();
         for unit in units {
-            match Self::cpu_of(&conn, unit, &unit_path(unit)) {
+            match self.cpu_of(unit, &unit_path(unit)) {
                 Ok(Some(cpu)) => readings.push((unit.clone(), cpu)),
                 Ok(None) => {}
                 Err(err) => {

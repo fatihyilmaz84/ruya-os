@@ -16,6 +16,9 @@
 //! to `systemctl show` at their own pace (`RunScopes::plan`), the adopted units to a look at each
 //! every two seconds (`ManagerLink::probe`); the connection is tried again with a growing pause
 //! (`Backoff`), and once it is back the scopes are listed and every unit looked at once.
+//! Every call on the connection is bounded (`bounded`): a manager that does not answer is a lost
+//! connection, never a watch that hangs; and the signals queued so far are taken before each
+//! call (`drain`), because zbus stops reading a connection whose signal stream is full.
 //!
 //! A unit is never given up on a failed look: after `WATCH_MAX_MISSES` of them in a row the
 //! manager is asked whether the unit still exists (`ManagerLink::exists`), and only a "no" ends
@@ -23,9 +26,11 @@
 //! the user database is not a "no" (`existence`). The OS is behind `ManagerLink` and `Sink`
 //! (`systemd.rs`), so all of this runs on every host against a fake manager.
 
+use std::collections::VecDeque;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use futures_lite::{future, Stream, StreamExt};
 use zbus::message::{Message, Type};
 
 use crate::scope::{ProbeRequest, RunScopes, Sweep};
@@ -259,21 +264,66 @@ pub fn settle(sink: &dyn Sink, judge: impl FnOnce(&mut RunScopes) -> Vec<UnitEve
     sink.probe(probes);
 }
 
+/// What `deliver` did with a unit's event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Delivered {
+    /// The end waits for the run's scope (`RunScopes::on_unit_event`).
+    pub held: bool,
+    /// The user whose watch is to look at once: a held end (its scope's CPU, and every second
+    /// without the connection), or the end of a followed run (its watch may have nothing left
+    /// and then drops its connection at once, not an `EVENT_WAIT` later).
+    pub poke: Option<String>,
+}
+
 /// A unit's own event on its way to the core (T-363): the end of a unit whose scope still lives
-/// is held by `RunScopes::on_unit_event` until the scope is gone. True when it was held.
-pub fn deliver(sink: &dyn Sink, event: UnitEvent, now: Instant) -> bool {
-    let (passed, sweeps) = {
+/// is held by `RunScopes::on_unit_event` until the scope is gone.
+pub fn deliver(sink: &dyn Sink, event: UnitEvent, now: Instant) -> Delivered {
+    let (passed, sweeps, poke) = {
         let mut scopes = scopes_of(sink);
+        let poke = match &event {
+            UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } => scopes.user_of(unit),
+            UnitEvent::Started { .. } | UnitEvent::ChildStarted { .. } => None,
+        };
         let passed = scopes.on_unit_event(event, now);
-        (passed, scopes.take_sweeps())
+        (passed, scopes.take_sweeps(), poke)
     };
     sink.sweep(sweeps);
-    match passed {
-        Some(event) => {
-            sink.send(event);
-            false
+    let held = passed.is_none();
+    if let Some(event) = passed {
+        sink.send(event);
+    }
+    Delivered { held, poke }
+}
+
+/// `future`, but an error once `limit` has passed without its answer: every call on a user
+/// manager's connection is bounded so, and a manager (or a bridge) that does not answer drops the
+/// connection, and the watch falls back (RUY-1250 review).
+pub fn bounded<T>(
+    limit: Duration,
+    future: impl std::future::Future<Output = zbus::Result<T>>,
+) -> zbus::Result<T> {
+    future::block_on(future::or(future, async {
+        async_io::Timer::after(limit).await;
+        Err(zbus::Error::Failure(format!(
+            "no answer in {} ms",
+            limit.as_millis()
+        )))
+    }))
+}
+
+/// Takes every signal `stream` holds already, without waiting, into `pending` (the ones
+/// `parse_signal` reads, in the order they came): a stream left full stops zbus reading the
+/// connection, the reply of the next call included. False when the stream ended or failed.
+pub fn drain<S>(stream: &mut S, pending: &mut VecDeque<ManagerEvent>) -> bool
+where
+    S: Stream<Item = zbus::Result<Message>> + Unpin,
+{
+    loop {
+        match future::block_on(future::poll_once(stream.next())) {
+            None => return true,
+            Some(Some(Ok(message))) => pending.extend(parse_signal(&message)),
+            Some(_) => return false,
         }
-        None => true,
     }
 }
 
@@ -669,6 +719,9 @@ mod tests {
         connects: u32,
         lists: u32,
         cpu_reads: u32,
+        /// Every call on the connection gets no answer: it fails at its limit (`bounded`) and the
+        /// link drops the connection, as `UserLink` does.
+        stuck: bool,
     }
 
     impl Default for FakeLink {
@@ -687,6 +740,7 @@ mod tests {
                 connects: 0,
                 lists: 0,
                 cpu_reads: 0,
+                stuck: false,
             }
         }
     }
@@ -732,12 +786,20 @@ mod tests {
         fn list(&mut self, names: &[String]) -> Option<Vec<ShowUnit>> {
             assert!(self.connected, "a bus listing needs the connection");
             self.lists += 1;
+            if self.stuck {
+                self.connected = false;
+                return None;
+            }
             self.mgr.show(&query(names))
         }
 
         fn cpu(&mut self, units: &[String]) -> Option<Vec<(String, u64)>> {
             assert!(self.connected, "a bus read needs the connection");
             self.cpu_reads += 1;
+            if self.stuck {
+                self.connected = false;
+                return None;
+            }
             Some(
                 units
                     .iter()
@@ -1307,7 +1369,7 @@ mod tests {
         assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
         // The front end ends first: its end is held while the game runs.
         assert!(
-            deliver(&sink, run_exited(0), link.now()),
+            deliver(&sink, run_exited(0), link.now()).held,
             "held for the scope"
         );
         assert!(sink.sent.borrow().is_empty());
@@ -1435,12 +1497,33 @@ mod tests {
         assert_eq!(*sink.sent.borrow(), [child_started(1100, false)]);
     }
 
+    /// Without the connection the scope ends, which no signal tells: what the next look (within
+    /// two seconds) hands on.
+    fn gone_without_a_signal(
+        w: &mut UserWatch,
+        link: &mut FakeLink,
+        sink: &Recorder,
+    ) -> Vec<UnitEvent> {
+        link.mgr.gone(SCOPE);
+        let gone = link.now();
+        loop {
+            let sent = step(w, link, sink);
+            if !sent.is_empty() {
+                return sent;
+            }
+            assert!(
+                link.now() - gone <= Duration::from_secs(2),
+                "the look came late"
+            );
+        }
+    }
+
     #[test]
     fn a_lost_link_falls_back_and_recovers_with_no_lost_end() {
         let (mut w, mut link, sink) =
             launched(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
         assert!(
-            deliver(&sink, run_exited(3), link.now()),
+            deliver(&sink, run_exited(3), link.now()).held,
             "held for the scope"
         );
         // The connection drops and cannot be made again for a while: `systemctl show` looks.
@@ -1450,16 +1533,7 @@ mod tests {
         assert!(step(&mut w, &mut link, &sink).is_empty());
         assert_eq!(link.spawns, 1, "looked at once the connection was gone");
         // The scope ends while nothing signals it: the next look hands the held end on.
-        link.mgr.gone(SCOPE);
-        let gone = link.now();
-        let mut sent = Vec::new();
-        while sent.is_empty() {
-            sent = step(&mut w, &mut link, &sink);
-            assert!(
-                link.now() - gone <= Duration::from_secs(2),
-                "the look came late"
-            );
-        }
+        let sent = gone_without_a_signal(&mut w, &mut link, &sink);
         assert_eq!(sent, [run_exited(3)]);
         // A second run, and the connection is back before its scope's end is looked at: the
         // listing after the new Subscribe hands it on.
@@ -1468,7 +1542,7 @@ mod tests {
         while sink.runs().scope_of(UNIT).is_none() {
             step(&mut w, &mut link, &sink);
         }
-        assert!(deliver(&sink, run_exited(0), link.now()));
+        assert!(deliver(&sink, run_exited(0), link.now()).held);
         link.mgr.gone(SCOPE);
         link.can_connect = true;
         let looks = link.spawns;
@@ -1490,7 +1564,7 @@ mod tests {
         ]);
         // A Force quit: the kill ends the unit, its end is held for the scope.
         let held = link.now();
-        assert!(deliver(&sink, run_exited(137), held));
+        assert!(deliver(&sink, run_exited(137), held).held);
         // The hold reads the CPU at once (the last reading before the scope goes), no wait.
         link.mgr.set(scope_show(SCOPE, 1001, Some(900)));
         step(&mut w, &mut link, &sink);
@@ -1553,7 +1627,7 @@ mod tests {
         link.wakes
             .push_back(changed(A, Some("inactive"), Some(0), Some(1)));
         assert_eq!(drain(&mut w, &mut link, &sink), [exited(A, 0, false)]);
-        assert!(deliver(&sink, run_exited(0), link.now()));
+        assert!(deliver(&sink, run_exited(0), link.now()).held);
         removed(&mut link, SCOPE);
         assert_eq!(drain(&mut w, &mut link, &sink), [run_exited(0)]);
         assert_eq!(link.connects, 1, "one connection for both");
@@ -1574,7 +1648,7 @@ mod tests {
             scope_show(ZYGOTE, 1001, None),
         ]);
         assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
-        assert!(deliver(&sink, run_exited(0), link.now()));
+        assert!(deliver(&sink, run_exited(0), link.now()).held);
         removed(&mut link, SCOPE);
         assert_eq!(drain(&mut w, &mut link, &sink), [run_exited(0)]);
         // The relaunch: its unit's first signal, before any scope of its own exists.
@@ -1613,5 +1687,117 @@ mod tests {
         drain(&mut w, &mut link, &sink);
         assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
         assert_eq!((link.lists, link.spawns), (2, 0));
+    }
+
+    #[test]
+    fn a_bus_call_that_never_answers_fails_at_its_limit() {
+        // RUY-1250 review: a manager (or a bridge) that does not answer must not hold a user's
+        // watch, and every held end with it, for good.
+        let (done, result) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let answer = bounded(
+                Duration::from_millis(50),
+                future::pending::<zbus::Result<()>>(),
+            );
+            let _ = done.send(answer.is_err());
+        });
+        let failed = result
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap_or_else(|_| panic!("the call never came back"));
+        assert!(failed, "a call with no answer is an error");
+        // An answer in time is the answer.
+        assert_eq!(
+            bounded(Duration::from_secs(5), async { Ok(7) }).ok(),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn a_call_that_never_answers_drops_the_link_and_the_fallback_still_releases_the_held_end() {
+        let (mut w, mut link, sink) =
+            launched(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
+        assert_eq!(sink.runs().scope_of(UNIT).as_deref(), Some(SCOPE));
+        // The manager stops answering; the hold reads the CPU at once and that call fails.
+        link.stuck = true;
+        link.can_connect = false;
+        assert!(deliver(&sink, run_exited(0), link.now()).held);
+        assert!(step(&mut w, &mut link, &sink).is_empty());
+        assert_eq!(link.cpu_reads, 1);
+        // The watch fell back: `systemctl show` looks, and the scope's end hands the end on.
+        assert!(step(&mut w, &mut link, &sink).is_empty());
+        assert_eq!(link.spawns, 1, "looked at without the connection");
+        let sent = gone_without_a_signal(&mut w, &mut link, &sink);
+        assert_eq!(sent, [run_exited(0)]);
+    }
+
+    #[test]
+    fn drain_takes_every_queued_signal_in_order_without_waiting() {
+        use futures_lite::stream;
+        use zbus::zvariant::Value;
+        // More than zbus's 64 a stream holds by default, and signals the watch does not read
+        // (a job's) between them.
+        let mut queued = Vec::new();
+        for n in 0..200 {
+            let unit = format!("app-flatpak-org.ruyaos.Racer-{n}.scope");
+            queued.push(Ok(props_signal(
+                &unit,
+                "org.freedesktop.systemd1.Unit",
+                HashMap::from([("ActiveState", Value::from("active"))]),
+            )));
+            let job = Message::signal("/org/freedesktop/systemd1", MANAGER, "JobNew")
+                .and_then(|b| b.build(&()))
+                .unwrap_or_else(|e| panic!("{e}"));
+            queued.push(Ok(job));
+        }
+        let mut open = stream::iter(queued.clone()).chain(stream::pending());
+        let mut pending = VecDeque::new();
+        assert!(
+            super::drain(&mut open, &mut pending),
+            "nothing more ready: the stream is open"
+        );
+        assert_eq!(pending.len(), 200);
+        let first = |e: Option<&ManagerEvent>| match e {
+            Some(ManagerEvent::Changed { unit, .. }) => unit.clone(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            first(pending.front()),
+            "app-flatpak-org.ruyaos.Racer-0.scope"
+        );
+        assert_eq!(
+            first(pending.back()),
+            "app-flatpak-org.ruyaos.Racer-199.scope"
+        );
+        // A stream that ended is a lost connection, after what it held.
+        let mut ended = stream::iter(queued);
+        let mut pending = VecDeque::new();
+        assert!(!super::drain(&mut ended, &mut pending));
+        assert_eq!(pending.len(), 200);
+    }
+
+    #[test]
+    fn the_end_of_a_run_pokes_its_watch_so_the_connection_closes_at_once() {
+        // A run whose app made no scope: its end passes at once, and nothing is left to follow.
+        let (mut w, mut link, sink) = launched(vec![unit_show(1000, None)]);
+        let started = UnitEvent::Started {
+            unit: UNIT.to_owned(),
+        };
+        assert_eq!(
+            deliver(&sink, started, link.now()),
+            Delivered {
+                held: false,
+                poke: None
+            }
+        );
+        assert_eq!(
+            deliver(&sink, run_exited(0), link.now()),
+            Delivered {
+                held: false,
+                poke: Some(USER.to_owned())
+            }
+        );
+        assert!(!w.step(&mut link, &sink), "the poked watch ends at once");
+        // An end of a unit nobody follows pokes nobody.
+        assert_eq!(deliver(&sink, run_exited(0), link.now()).poke, None);
     }
 }
