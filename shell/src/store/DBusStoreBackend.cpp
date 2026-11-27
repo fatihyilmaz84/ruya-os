@@ -34,6 +34,17 @@ QVariantMap parseDict(const QDBusArgument &arg)
     return out;
 }
 
+// Sends `msg` and hands the reply (an error reply too) to `answered`, on `owner`'s thread.
+template<typename Answered>
+void callThen(QDBusConnection &bus, QObject *owner, const QDBusMessage &msg, Answered answered)
+{
+    auto *watcher = new QDBusPendingCallWatcher(bus.asyncCall(msg), owner);
+    QObject::connect(watcher, &QDBusPendingCallWatcher::finished, owner, [answered](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        answered(w->reply());
+    });
+}
+
 // a{su}: app id -> count, as ints
 QVariantMap parseCounts(const QDBusArgument &arg)
 {
@@ -315,12 +326,9 @@ void DBusStoreBackend::getPermissions(const QString &id)
 
 void DBusStoreBackend::getWithdrawnCounts()
 {
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetWithdrawnCounts"));
     const quint64 request = beginWithdrawnCountsRequest();
-    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
-        const QDBusMessage reply = w->reply();
+    callThen(m_bus, this, QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetWithdrawnCounts")),
+             [this, request](const QDBusMessage &reply) {
         // (status s, counts a{su})
         if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2
             || reply.arguments().at(0).toString() != QLatin1String("ok")) {

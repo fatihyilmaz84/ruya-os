@@ -940,7 +940,8 @@ expect_contains "vm-store-check.sh perms: an app that is not listed has no count
     "[$(echo 'sa{su} "ok" 1 "org.a.B" 4' | perms_count_of)]" '[]'
 expect_contains "vm-store-check.sh perms: a failed call has no count" \
     "[$(echo 'sa{su} "failed" 0' | perms_count_of)]" '[]'
-ms="$(perms_ms sleep 0.3)"
+# (the real sleep: the section's shim `sleep` does not wait)
+ms="$(perms_ms /usr/bin/sleep 0.3)"
 { [ "$ms" -ge 250 ] && [ "$ms" -lt 1500 ]; } && pass "vm-store-check.sh perms: perms_ms measures the wall clock of a command ($ms ms for 0.3 s)" || fail "vm-store-check.sh perms: perms_ms says $ms ms for a 0.3 s command"
 storexml1190="$here/../api/dbus/org.ruyaos.Store1.xml"
 grep -A3 'name="GetWithdrawnCounts"' "$storexml1190" | grep -q 'name="status" type="s" direction="out"' \

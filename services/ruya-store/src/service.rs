@@ -2583,25 +2583,42 @@ directory=launcher
         thread
     }
 
-    #[test]
-    fn a_change_that_comes_during_a_restore_waits_for_it() {
+    /// A restore of the network of `STREAM`, whose override withdraws the network and the home
+    /// files, with `call` run on a thread of its own at the moment `at` hooks into the fake
+    /// (`after_next_show_override`: the restore has read the override; `after_next_reset_override`:
+    /// it has reset it and not written the rest back yet). The restore finishes; returns the
+    /// store and what `call` answered.
+    fn restore_with_a_call_meanwhile<T: Send + 'static>(
+        at: impl FnOnce(&FakeFlatpak, Box<dyn FnOnce() + Send>),
+        call: impl FnOnce(std::sync::Arc<Store<FakeFlatpak>>) -> T + Send + 'static,
+    ) -> (std::sync::Arc<Store<FakeFlatpak>>, T) {
         let s = std::sync::Arc::new(perm_store(fake()));
         s.withdraw_permission(STREAM, "network", true, &mut none);
         s.withdraw_permission(STREAM, "home-files", true, &mut none);
-        // Between the restore's read of the override and its reset, the devices are withdrawn
-        // from another thread (a second page, or root).
         let (other, (send, receive)) = (s.clone(), std::sync::mpsc::channel());
-        s.flatpak.after_next_show_override(move || {
-            let _ = send.send(meanwhile(move || {
-                other.withdraw_permission(STREAM, "all-devices", true, &mut none)
-            }));
-        });
+        at(
+            &s.flatpak,
+            Box::new(move || {
+                let _ = send.send(meanwhile(move || call(other)));
+            }),
+        );
         assert_eq!(
             s.restore_permission(STREAM, "network", true, &mut none),
             Status::Ok
         );
-        let withdrawal = receive.recv().unwrap();
-        assert_eq!(withdrawal.join().unwrap(), Status::Ok);
+        let answer = receive.recv().unwrap().join().unwrap();
+        (s, answer)
+    }
+
+    #[test]
+    fn a_change_that_comes_during_a_restore_waits_for_it() {
+        // Between the restore's read of the override and its reset, the devices are withdrawn
+        // from another thread (a second page, or root).
+        let (s, withdrawal) = restore_with_a_call_meanwhile(
+            |flatpak, hook| flatpak.after_next_show_override(hook),
+            |other| other.withdraw_permission(STREAM, "all-devices", true, &mut none),
+        );
+        assert_eq!(withdrawal, Status::Ok);
         // Both answered ok, so both hold: the reset did not take the devices' withdrawal away.
         let (_, p) = s.get_permissions(STREAM, &mut none);
         assert_eq!(p.withdrawn, strings(&["home-files", "all-devices"]));
@@ -2629,25 +2646,18 @@ directory=launcher
         );
     }
 
-    /// Runs `read` on its own thread after a restore of the network has reset the override of
-    /// `STREAM` and has not written home-files' withdrawal back yet; the restore finishes, then
-    /// the answer of `read` is returned. Before the restore the override withdraws the network
-    /// and the home files; after it only the home files; in between it is gone.
+    /// Runs `read` after a restore of the network has reset the override of `STREAM` and has not
+    /// written home-files' withdrawal back yet, and returns its answer once the restore is done.
+    /// Before the restore the override withdraws the network and the home files; after it only the
+    /// home files; in between it is gone.
     fn read_between_a_restores_steps<T: Send + 'static>(
         read: impl FnOnce(std::sync::Arc<Store<FakeFlatpak>>) -> T + Send + 'static,
     ) -> T {
-        let s = std::sync::Arc::new(perm_store(fake()));
-        s.withdraw_permission(STREAM, "network", true, &mut none);
-        s.withdraw_permission(STREAM, "home-files", true, &mut none);
-        let (other, (send, receive)) = (s.clone(), std::sync::mpsc::channel());
-        s.flatpak.after_next_reset_override(move || {
-            let _ = send.send(meanwhile(move || read(other)));
-        });
-        assert_eq!(
-            s.restore_permission(STREAM, "network", true, &mut none),
-            Status::Ok
-        );
-        receive.recv().unwrap().join().unwrap()
+        restore_with_a_call_meanwhile(
+            |flatpak, hook| flatpak.after_next_reset_override(hook),
+            read,
+        )
+        .1
     }
 
     #[test]
