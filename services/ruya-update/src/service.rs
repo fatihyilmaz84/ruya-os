@@ -385,15 +385,23 @@ impl<B: Bootc> Update<B> {
     /// chosen channel differs from the tracked tag.
     fn check_locked(&self) -> Result<(HostStatus, bool), String> {
         // The start-up reading may not have finished (or failed): learn the tracked image now.
+        // `commands` is held, so what this reads is still true when the check ends without a
+        // `bootc upgrade --check` (a channel switch): it is the answer then, not a second spawn.
+        let mut read = None;
         if self.lock().host.tracked.is_empty() {
             let host = self.bootc.status()?;
-            self.lock().host = host;
+            self.lock().host = host.clone();
+            read = Some(host);
         }
         if self.lock().host.tracked.is_empty() {
             return Err("bootc does not say which image this console follows".to_owned());
         }
         if self.switch_target().is_some() {
-            return Ok((self.bootc.status()?, true));
+            let host = match read {
+                Some(host) => host,
+                None => self.bootc.status()?,
+            };
+            return Ok((host, true));
         }
         self.bootc.check()?;
         Ok((self.bootc.status()?, false))
@@ -1345,6 +1353,38 @@ mod tests {
         let r = u.record();
         assert_eq!((r.state, r.available.as_str()), (State::Idle, "beta"));
         assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
+        // One `bootc status --json` for the whole check: the reading that found the tracked
+        // image is the answer of a switch (RUY-1252; it was read again 64 ms later).
+        assert_eq!(u.bootc.calls(), ["status"]);
+    }
+
+    /// RUY-1252: a console installed from an oci-archive (the Dell's 0.0.105) tracks a file
+    /// path, which has no tag. With a channel chosen the check cannot ask any registry, so
+    /// it answers like any switch: the channel is "available", nothing is spawned but one
+    /// `bootc status`. Without a chosen channel the check is `bootc upgrade --check`.
+    #[test]
+    fn a_console_tracking_an_oci_archive_is_offered_the_chosen_channel() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(CHANNEL_FILE), "stable\n").expect("write");
+        let mut h = host();
+        h.tracked = "/var/tmp/ruyaos-0.0.106.oci".to_owned();
+        let u = Update::new(FakeBootc::new(h), Some(dir.path().to_owned()));
+        u.refresh().expect("refresh");
+        check(&u);
+        let r = u.record();
+        assert_eq!((r.state, r.available.as_str()), (State::Idle, "stable"));
+        assert_eq!(r.channel, "stable");
+        assert_eq!(
+            u.bootc.calls(),
+            ["status", "status"],
+            "refresh, then the check"
+        );
+        let mut h = host();
+        h.tracked = "/var/tmp/ruyaos-0.0.106.oci".to_owned();
+        let u = service(h);
+        check(&u);
+        assert_eq!(u.record().channel, "stable", "shown as the default");
+        assert_eq!(u.bootc.calls(), ["status", "check", "status"]);
     }
 
     #[test]
