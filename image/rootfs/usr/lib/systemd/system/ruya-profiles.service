@@ -12,8 +12,9 @@ Restart=on-failure
 # renames an older image's /var/lib/ruyaos/profiles.toml into profiles/ (RUY-1130). Every other
 # root ruya-* unit but the exceptions in image/security-baseline.json private_state hides profiles/
 # and /sysroot (InaccessiblePaths, scripts/lint-private-state.ps1), and the service makes itself
-# non-dumpable at start, so /proc/<pid>/root does not lead around that; 0755 here keeps the tree's
-# other directories (library, notifications, platform) reachable.
+# non-dumpable at start (no core dumps either), so its own /proc/<pid>/root does not lead around
+# that; its children (useradd, userdel, loginctl, getent) are dumpable again until ADR-049.
+# 0755 here keeps the tree's other directories (library, notifications, platform) reachable.
 StateDirectory=ruyaos
 StateDirectoryMode=0755
 ReadWritePaths=/etc /var/home

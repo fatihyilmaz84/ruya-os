@@ -1098,9 +1098,10 @@ for case in \
     [ "$rc" = 1 ] && pass "create, bug $bug: exit 1" || fail "create, bug $bug: exit $rc"
 done
 # private and migrate (RUY-1130): fake systemctl (units from a table: unit|User|InaccessiblePaths|MainPID|
-# CapabilityBoundingSet), nsenter (a pid sees the store when $PRIV_NS/<pid> exists, its /sysroot copy when
-# $PRIV_NS/<pid>.sysroot does), systemd-run (the /proc/<pid>/root probe: reads only when ruya-play's
-# capabilities are not passed or FAKE_BUG=dumpable) and stat (a path's "<mode> <owner>" from <path>.mode).
+# CapabilityBoundingSet|SystemCallFilter), nsenter (a pid sees the store when $PRIV_NS/<pid> exists, its
+# /sysroot copy when $PRIV_NS/<pid>.sysroot does), systemd-run (the /proc/<pid>/root probe: answers DENIED
+# with ruya-play's capabilities, READ for FAKE_BUG=dumpable, SELFCHECK-FAILED for selfcheck, and fails to
+# start without them or for runfails) and stat (a path's "<mode> <owner>" from <path>.mode).
 echo "vm-profiles-check.sh private and migrate: each assertion can fail"
 mkdir -p "$tmp/priv-bin"
 cat > "$tmp/priv-bin/systemctl" <<'SHIMEOF'
@@ -1109,7 +1110,7 @@ case "$1" in
 list-unit-files) cut -d'|' -f1 "$PRIV_UNITS" | sed 's/$/ enabled enabled/' ;;
 show)
     unit="$(echo "$2" | sed 's/@[^.]*\.service$/@.service/')"
-    grep "^$unit|" "$PRIV_UNITS" | awk -F'|' '{ print "User=" $2; print "DynamicUser=no"; print "InaccessiblePaths=" $3; print "MainPID=" $4; print "CapabilityBoundingSet=" $5 }'
+    grep "^$unit|" "$PRIV_UNITS" | awk -F'|' '{ print "User=" $2; print "DynamicUser=no"; print "InaccessiblePaths=" $3; print "MainPID=" $4; print "CapabilityBoundingSet=" $5; print "SystemCallFilter=" $6 }'
     ;;
 start) [ "${FAKE_BUG:-}" = no_move ] || mv "$RUYA_STATE_ROOT/profiles.toml" "$RUYA_STATE_ROOT/profiles/profiles.toml" ;;
 esac
@@ -1125,8 +1126,14 @@ SHIMEOF
 cat > "$tmp/priv-bin/systemd-run" <<'SHIMEOF'
 #!/bin/sh
 case "$*" in
-*"CapabilityBoundingSet=cap_chown cap_dac_override "*) [ "${FAKE_BUG:-}" = dumpable ] ;;
-*) exit 0 ;;
+*"CapabilityBoundingSet=cap_chown cap_dac_override "*)
+    case "${FAKE_BUG:-}" in
+    runfails) echo "Failed to start transient service unit: Invalid argument" >&2; exit 1 ;;
+    selfcheck) echo SELFCHECK-FAILED ;;
+    dumpable) echo READ ;;
+    *) echo DENIED ;;
+    esac ;;
+*) echo "fake systemd-run: not ruya-play's capabilities: $*" >&2; exit 1 ;;
 esac
 SHIMEOF
 cat > "$tmp/priv-bin/stat" <<'SHIMEOF'
@@ -1153,11 +1160,15 @@ runpriv() { # <mode>; FAKE_BUG picks the broken fixture
     [ "$bug" = alias_unhidden ] && session_hides="/run/x /var/lib/ruyaos/profiles"
     [ "$bug" = template ] && thing_hides="/sysroot"
     [ "$bug" = noexception ] && exceptions='[]'
+    local play_filter="accept openat read write"
+    [ "$bug" = obh ] && play_filter="accept open_by_handle_at openat read"
+    [ "$bug" = denylist ] && play_filter="~@privileged"
     printf '{"private_state": [{"path": "/var/lib/ruyaos/profiles", "aliases": ["/sysroot"], "owner": "ruya-profiles.service", "exceptions": %s}]}\n' "$exceptions" > "$p/baseline.json"
-    printf '%s\n' "ruya-profiles.service|||100|cap_chown cap_dac_override cap_dac_read_search" \
-        "ruya-session.service||$session_hides|200|" "ruya-play.service||/var/lib/ruyaos/profiles /sysroot|400|cap_chown cap_dac_override cap_dac_read_search" \
-        "ruya-thing@.service||$thing_hides|0|" "ruya-update.service||/run/x|0|cap_sys_admin" \
-        "ruya-library.service|ruya-library||300|" > "$p/units"
+    printf '%s\n' "ruya-profiles.service|||100|cap_chown cap_dac_override cap_dac_read_search|" \
+        "ruya-session.service||$session_hides|200||" \
+        "ruya-play.service||/var/lib/ruyaos/profiles /sysroot|400|cap_chown cap_dac_override cap_dac_read_search|$play_filter" \
+        "ruya-thing@.service||$thing_hides|0||" "ruya-update.service||/run/x|0|cap_sys_admin|" \
+        "ruya-library.service|ruya-library||300||" > "$p/units"
     PRIV_UNITS="$p/units" PRIV_NS="$p/ns" RUYA_STATE_ROOT="$p/state" RUYA_PROC_ROOT="$p/proc" RUYA_SYSROOT="$p/sysroot" \
         PROFILES_BASELINE="$p/baseline.json" \
         PROF_PY="$tmp/fake-profiles.py" PROF_STATE="$tmp/prof/state.json" PROF_HOMES="$tmp/prof/home" \
@@ -1169,7 +1180,8 @@ expect_contains "private: the template unit is checked" "$out" "PASS: ruya-thing
 expect_contains "private: the alias is checked" "$out" "PASS: ruya-session.service hides /sysroot"
 expect_contains "private: a running unit is looked into" "$out" "PASS: ruya-session.service (pid 200) cannot see"
 expect_contains "private: and through /sysroot" "$out" "PASS: ruya-session.service (pid 200) cannot see it under /sysroot"
-expect_contains "private: the /proc/<pid>/root probe" "$out" "PASS: a root process with ruya-play's capabilities cannot read"
+expect_contains "private: the /proc/<pid>/root probe" "$out" "PASS: a root process with ruya-play's capabilities: DENIED"
+expect_contains "private: the filter of a cap_dac_read_search unit" "$out" "PASS: ruya-play.service holds cap_dac_read_search; its SystemCallFilter has no open_by_handle_at"
 expect_contains "private: a unit of its own user is skipped" "$out" "skip: ruya-library.service runs as ruya-library"
 expect_contains "private: a listed exception is skipped" "$out" "skip: ruya-update.service is a private_state exception"
 expect_lacks "private, a good image: no FAIL" "$out" "FAIL"
@@ -1181,7 +1193,11 @@ for case in \
     "noexception|FAIL: ruya-update.service runs as root and does not hide" \
     "sees|FAIL: ruya-session.service (pid 200) sees" \
     "alias_sees|FAIL: ruya-session.service (pid 200) sees the store's directory under /sysroot" \
-    "dumpable|FAIL: a root process with ruya-play's capabilities" \
+    "dumpable|FAIL: a root process with ruya-play's capabilities (cap_chown cap_dac_override cap_dac_read_search): READ" \
+    "runfails|FAIL: the /proc/100/root probe with ruya-play's capabilities did not answer DENIED or READ (exit 1)" \
+    "selfcheck|did not answer DENIED or READ (exit 0): 'SELFCHECK-FAILED'" \
+    "obh|FAIL: ruya-play.service holds cap_dac_read_search and its SystemCallFilter allows open_by_handle_at" \
+    "denylist|FAIL: ruya-play.service holds cap_dac_read_search and its SystemCallFilter is no allow list" \
     "no_alias_copy|the alias probe below would prove nothing" \
     "proc_blind|the ruya-play probe would prove nothing" \
     "dirmode|profiles is '755 root:root', want 700 root:root" \

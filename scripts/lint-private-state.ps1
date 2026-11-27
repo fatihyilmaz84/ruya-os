@@ -8,8 +8,8 @@
 #   1. tmpfiles.d makes the directory `d <path> 0700 root root` (at boot, before any unit starts: a
 #      missing InaccessiblePaths= path fails the unit);
 #   2. every systemd/system/ruya-*.service but the owner that can read it (it runs as root: no User=,
-#      User=root or 0, no DynamicUser=yes; or it holds CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH or
-#      CAP_SYS_ADMIN in AmbientCapabilities=):
+#      User=root or 0, no DynamicUser=yes; or its AmbientCapabilities= hold CAP_DAC_OVERRIDE,
+#      CAP_DAC_READ_SEARCH, CAP_SYS_ADMIN or CAP_SYS_PTRACE, a `~` list holding all it does not name):
 #      - when its CapabilityBoundingSet= (none = every capability) holds CAP_SYS_ADMIN (it can unmount
 #        the cover) or CAP_SYS_PTRACE (it can read the owner's /proc/<pid>/root even though the owner is
 #        not dumpable), it must be one of the entry's "exceptions", and an exception must still hold one
@@ -17,7 +17,10 @@
 #      - otherwise it lists the path and every one of the entry's "aliases" (/sysroot: /var is a bind of
 #        /sysroot/ostree/deploy/<stateroot>/var), or a folder above each, in InaccessiblePaths= of
 #        [Service], drop-ins (<unit>.d/*.conf) included; an empty assignment clears the list, and a
-#        `-` path (ignored when missing) does not count;
+#        `-` path (ignored when missing) does not count; and when its bounding set holds
+#        CAP_DAC_READ_SEARCH (open_by_handle_at opens a file by handle past any mount hiding), its
+#        SystemCallFilter= is an allow list naming neither @privileged nor open_by_handle_at (as
+#        written; the VM check reads systemd's expansion of the groups);
 #   3. no unit but the owner has a BindPaths= or BindReadOnlyPaths= source at, above or below the path
 #      or an alias (a bind would show the directory somewhere else);
 #   4. the owner unit exists and does not hide it.
@@ -30,7 +33,7 @@ param([switch]$SelfTest, [string]$Root = "")
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $Root) { $Root = $Repo }
 
-$ReadingCaps = @("CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_SYS_ADMIN")
+$ReadingCaps = @("CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_SYS_ADMIN", "CAP_SYS_PTRACE")
 $UnhidingCaps = @("CAP_SYS_ADMIN", "CAP_SYS_PTRACE")
 
 # The [Service] assignments of a unit and its drop-ins, in the order systemd reads them: key -> values.
@@ -71,13 +74,14 @@ function Get-PathList($settings, [string]$key) {
     return $list
 }
 
-# True when the unit's capability bounding set holds `cap`. No CapabilityBoundingSet= is every
-# capability; "" empties the set; "~A B" is every capability but those; a plain list after the first
-# assignment adds to the set (systemd.exec(5)).
-function Test-HasCap($settings, [string]$cap) {
-    $all = $true; $set = New-Object System.Collections.Generic.List[string]; $first = $true
-    if ($settings.ContainsKey("CapabilityBoundingSet")) {
-        foreach ($value in $settings["CapabilityBoundingSet"]) {
+# True when the unit's capability set `key` holds `cap`. Unset is every capability for
+# CapabilityBoundingSet= and none for AmbientCapabilities= (`unsetIsAll`); "" empties the set;
+# "~A B" is every capability but those; a plain list after the first assignment adds to the set
+# (systemd.exec(5)).
+function Test-HasCap($settings, [string]$cap, [string]$key = "CapabilityBoundingSet", [bool]$unsetIsAll = $true) {
+    $all = $unsetIsAll; $set = New-Object System.Collections.Generic.List[string]; $first = $true
+    if ($settings.ContainsKey($key)) {
+        foreach ($value in $settings[$key]) {
             if ($value -eq "") { $all = $false; $set.Clear(); $first = $false; continue }
             if ($value.StartsWith("~")) {
                 $all = $true; $set.Clear()
@@ -105,9 +109,27 @@ function Get-ReadReason($settings) {
     $user = Get-Last $settings "User"
     $dynamic = (Get-Last $settings "DynamicUser") -match '^(yes|true|1|on)$'
     if (-not $dynamic -and ($user -eq "" -or $user -eq "root" -or $user -eq "0")) { return "runs as root" }
-    $caps = @()
-    foreach ($v in @(Get-PathList $settings "AmbientCapabilities")) { $caps += $v.TrimStart('~') }
-    foreach ($c in $ReadingCaps) { if ($caps -contains $c) { return "holds $c" } }
+    foreach ($c in $ReadingCaps) { if (Test-HasCap $settings $c "AmbientCapabilities" $false) { return "holds $c" } }
+    return ""
+}
+
+# Why the unit's SystemCallFilter= may let open_by_handle_at through ("" when it cannot): only an
+# allow list without @privileged and without the call itself holds. Names as written: whether a group
+# such as @system-service holds the call is systemd's expansion, which the VM check reads
+# (vm-profiles-check.sh private, `systemctl show -p SystemCallFilter`).
+function Get-HandleOpenReason($settings) {
+    if (-not $settings.ContainsKey("SystemCallFilter")) { return "has no SystemCallFilter=" }
+    $allowed = New-Object System.Collections.Generic.List[string]; $allowList = $null
+    foreach ($value in $settings["SystemCallFilter"]) {
+        if ($value -eq "") { $allowed.Clear(); $allowList = $null; continue }
+        $deny = $value.StartsWith("~")
+        $names = @(($value.TrimStart('~') -split '\s+') | Where-Object { $_ })
+        if ($null -eq $allowList) { $allowList = -not $deny }
+        if ($deny) { foreach ($n in $names) { [void]$allowed.Remove($n) } } else { foreach ($n in $names) { $allowed.Add($n) } }
+    }
+    if ($null -eq $allowList) { return "has an empty SystemCallFilter= (every call)" }
+    if (-not $allowList) { return "has a deny-list SystemCallFilter= (it allows every call it does not name)" }
+    foreach ($n in "@privileged", "open_by_handle_at") { if ($allowed -contains $n) { return "allows $n in SystemCallFilter=" } }
     return ""
 }
 
@@ -165,6 +187,11 @@ function Find-PrivateStateProblems([string]$root) {
                 $out.Add("$($u.Name): $why with $($unhiding -join ' and ') in its CapabilityBoundingSet (none set = all), which undoes the hide of $($path): drop the capability or name the unit, with its reason, in private_state exceptions")
                 continue
             }
+            # CAP_DAC_READ_SEARCH opens any file by handle (open_by_handle_at), past every mount hiding.
+            if (Test-HasCap $settings "CAP_DAC_READ_SEARCH") {
+                $open = Get-HandleOpenReason $settings
+                if ($open) { $out.Add("$($u.Name): holds CAP_DAC_READ_SEARCH and $open, so open_by_handle_at reaches $path past the hiding: use an allow list without @privileged and open_by_handle_at") }
+            }
             foreach ($p in @($path) + $aliases) {
                 if (@($hidden | Where-Object { Test-Covers $_.TrimStart('+') $p }).Count -gt 0) { continue }
                 if (@($hidden | Where-Object { $_.StartsWith("-") -and (Test-Covers $_.TrimStart('-').TrimStart('+') $p) }).Count -gt 0) {
@@ -209,11 +236,23 @@ if ($SelfTest) {
         & $unit "ruya-inverted.service" @("CapabilityBoundingSet=~CAP_SYS_ADMIN", $hide)
         & $unit "ruya-stale.service" @("CapabilityBoundingSet=", $hide)
         & $unit "ruya-bind.service" @("User=ruya-bind", "BindReadOnlyPaths=/var/lib/x:/mnt/x")
-        $want = @("ruya-allcaps.service", "ruya-bind.service", "ruya-caps.service", "ruya-caps.service", "ruya-inverted.service", "ruya-noalias.service", "ruya-optional.service", "ruya-ptrace.service", "ruya-reset.service", "ruya-reset.service", "ruya-root.service", "ruya-root.service", "ruya-rootuser.service", "ruya-stale.service")
+        # Ambient capabilities: CAP_SYS_PTRACE reads (and, in the bounding set, is unlisted); "~" holds all it does not name.
+        & $unit "ruya-ambptrace.service" @("User=ruya-a", "AmbientCapabilities=CAP_SYS_PTRACE", "CapabilityBoundingSet=CAP_SYS_PTRACE")
+        & $unit "ruya-ambtilde.service" @("User=ruya-a", "AmbientCapabilities=~CAP_CHOWN", "CapabilityBoundingSet=")
+        & $unit "ruya-ambnone.service" @("User=ruya-a", "AmbientCapabilities=~CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_SYS_ADMIN CAP_SYS_PTRACE", "CapabilityBoundingSet=")
+        # CAP_DAC_READ_SEARCH: the syscall filter must be an allow list without @privileged and open_by_handle_at.
+        & $unit "ruya-dacok.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide, "SystemCallFilter=@system-service")
+        & $unit "ruya-dacremoved.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide, "SystemCallFilter=@system-service open_by_handle_at", "SystemCallFilter=~open_by_handle_at")
+        & $unit "ruya-dacnofilter.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide)
+        & $unit "ruya-dacpriv.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide, "SystemCallFilter=@system-service @privileged")
+        & $unit "ruya-dacobh.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide, "SystemCallFilter=@system-service open_by_handle_at")
+        & $unit "ruya-dacdeny.service" @("CapabilityBoundingSet=CAP_DAC_READ_SEARCH", $hide, "SystemCallFilter=~@mount")
+        $want = @("ruya-allcaps.service", "ruya-bind.service", "ruya-caps.service", "ruya-caps.service", "ruya-caps.service", "ruya-inverted.service", "ruya-noalias.service", "ruya-optional.service", "ruya-ptrace.service", "ruya-reset.service", "ruya-reset.service", "ruya-root.service", "ruya-root.service", "ruya-rootuser.service", "ruya-stale.service",
+            "ruya-ambptrace.service", "ruya-ambtilde.service", "ruya-ambtilde.service", "ruya-dacnofilter.service", "ruya-dacpriv.service", "ruya-dacobh.service", "ruya-dacdeny.service") | Sort-Object
         $hits = @(Find-PrivateStateProblems $tmp)
         $got = @($hits | ForEach-Object { ($_ -split ':')[0] } | Sort-Object)
         $ok = (($got -join ',') -eq ($want -join ','))
-        Write-Host ("    self-test units (root, User=root, a reading capability, '-' path, a reset drop-in, no /sysroot, all or CAP_SYS_PTRACE or ~CAP_SYS_ADMIN caps unlisted, a stale exception, a bind above; not a folder above, another user, DynamicUser, the owner, a listed exception): {0}" -f $(if ($ok) { "ok" } else { "WRONG: " + ($hits -join ' | ') }))
+        Write-Host ("    self-test units (root, User=root, a reading capability, ambient CAP_SYS_PTRACE and a '~' ambient list, '-' path, a reset drop-in, no /sysroot, all or CAP_SYS_PTRACE or ~CAP_SYS_ADMIN caps unlisted, a stale exception, a bind above, CAP_DAC_READ_SEARCH without a filter or with @privileged, open_by_handle_at or a deny list; not a folder above, another user, DynamicUser, a '~' ambient list without a reading cap, the owner, a listed exception, a filter that takes the call out again): {0}" -f $(if ($ok) { "ok" } else { "WRONG: " + ($hits -join ' | ') }))
         if (-not $ok) { $failed = $true }
 
         # The owner hiding its own state, a wrong tmpfiles mode, a missing owner and an exception that names no unit.

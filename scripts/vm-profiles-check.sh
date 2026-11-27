@@ -19,9 +19,12 @@
 # /var/lib/ruyaos/profiles.toml is gone, ruya-profiles sees its store, and every other ruya-* system
 # unit that runs as root, but the baseline's private_state exceptions, lists /var/lib/ruyaos/profiles
 # and the aliases (/sysroot) in InaccessiblePaths and, when it runs, sees neither the store nor its
-# /sysroot/ostree/deploy/*/var copy from its mount namespace (nsenter -m); a process with ruya-play's
-# capabilities cannot read the store through /proc/<ruya-profiles pid>/root (it is not dumpable),
-# while this root shell can (the probe is not vacuous).
+# /sysroot/ostree/deploy/*/var copy from its mount namespace (nsenter -m), and, when it holds
+# cap_dac_read_search, has a SystemCallFilter allow list without open_by_handle_at; a transient with
+# ruya-play's capabilities answers DENIED for the store through /proc/<ruya-profiles pid>/root (it is
+# not dumpable; READ, no answer or a failed systemd-run FAIL), while this root shell can read it (the
+# probe is not vacuous). The open window: ruya-profiles' children (useradd, userdel, loginctl,
+# getent) are dumpable after execve; this mode does not probe them (ADR-049 closes it).
 # migrate (RUY-1130, after create): puts the store back where an earlier image kept it, restarts
 # ruya-profiles, and checks that it moved the store (600 root:root, the old file gone, the same
 # profiles) and that the admin still signs in with the PIN; ends locked.
@@ -253,18 +256,27 @@ for e in json.load(open(sys.argv[1], encoding="utf-8")).get("private_state", [])
     else
         fail "this root shell cannot read $proc_root/${owner:-none}/root$hidden/profiles.toml: the ruya-play probe would prove nothing"
     fi
+    # The transient says what it saw: DENIED is the only pass. It first checks that it can walk its own
+    # /proc/self/root, so an empty answer, a systemd-run that did not start (a property it refused) or
+    # a broken probe is a FAIL, never a pass.
     play_caps="$(systemctl show ruya-play.service -p CapabilityBoundingSet | prop CapabilityBoundingSet)"
-    if systemd-run --quiet --wait --pipe --collect -p "CapabilityBoundingSet=$play_caps" -p NoNewPrivileges=yes \
-        test -e "/proc/$owner/root$hidden/profiles.toml"; then
-        fail "a root process with ruya-play's capabilities ($play_caps) reads the store through /proc/$owner/root: ruya-profiles is dumpable"
+    probe='if ! test -e /proc/self/root/; then echo SELFCHECK-FAILED; exit 0; fi
+if test -e "/proc/$1/root$2/profiles.toml"; then echo READ; else echo DENIED; fi'
+    verdict="$(systemd-run --quiet --wait --pipe --collect -p "CapabilityBoundingSet=$play_caps" -p NoNewPrivileges=yes \
+        /bin/sh -c "$probe" sh "${owner:-0}" "$hidden" 2>&1)"; rc=$?
+    verdict="$(echo "$verdict" | tr -d '\r' | tail -1)"
+    if [ "$rc" = 0 ] && [ "$verdict" = DENIED ]; then
+        pass "a root process with ruya-play's capabilities: DENIED reading the store through /proc/$owner/root"
+    elif [ "$verdict" = READ ]; then
+        fail "a root process with ruya-play's capabilities ($play_caps): READ the store through /proc/$owner/root: ruya-profiles is dumpable"
     else
-        pass "a root process with ruya-play's capabilities cannot read the store through /proc/$owner/root"
+        fail "the /proc/$owner/root probe with ruya-play's capabilities did not answer DENIED or READ (exit $rc): '$verdict'"
     fi
     for unit in $(systemctl list-unit-files --type=service --no-legend 'ruya-*' | tr -d '\r' | awk '{ print $1 }'); do
         [ "$unit" = ruya-profiles.service ] && continue
         name="$unit"
         case "$unit" in *@.service) name="${unit%@.service}@check.service" ;; esac
-        props="$(systemctl show "$name" -p User -p DynamicUser -p InaccessiblePaths -p MainPID)"
+        props="$(systemctl show "$name" -p User -p DynamicUser -p InaccessiblePaths -p MainPID -p CapabilityBoundingSet -p SystemCallFilter)"
         user="$(echo "$props" | prop User)"
         if [ "$(echo "$props" | prop DynamicUser)" = yes ] || { [ -n "$user" ] && [ "$user" != root ]; }; then
             echo "skip: $unit runs as ${user:-a dynamic user} (the 0700 root directory is closed to it)"
@@ -281,6 +293,19 @@ for e in json.load(open(sys.argv[1], encoding="utf-8")).get("private_state", [])
             *) fail "$unit runs as root and does not hide $p: InaccessiblePaths='${paths# }'" ;;
             esac
         done
+        # CAP_DAC_READ_SEARCH opens a file by handle (open_by_handle_at) past any mount hiding: such a unit's
+        # filter, as systemd expanded it, must be an allow list without that call.
+        case " $(echo "$props" | prop CapabilityBoundingSet) " in
+        *" cap_dac_read_search "*)
+            filter="$(echo "$props" | prop SystemCallFilter)"
+            case "$filter" in
+            "" | "~"*) fail "$unit holds cap_dac_read_search and its SystemCallFilter is no allow list: '${filter:0:60}'" ;;
+            *) case " $filter " in
+                *" open_by_handle_at "*) fail "$unit holds cap_dac_read_search and its SystemCallFilter allows open_by_handle_at" ;;
+                *) pass "$unit holds cap_dac_read_search; its SystemCallFilter has no open_by_handle_at" ;;
+                esac ;;
+            esac ;;
+        esac
         pid="$(echo "$props" | prop MainPID)"
         if [ "${pid:-0}" -gt 0 ]; then
             if nsenter -m -t "$pid" -- test -e "$hidden/profiles.toml"; then
