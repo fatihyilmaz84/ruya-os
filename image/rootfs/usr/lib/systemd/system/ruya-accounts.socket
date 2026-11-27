@@ -1,0 +1,20 @@
+[Unit]
+Description=RuyaOS accounts helper socket (the profiles' Unix users for ruya-profiles)
+# ADR-049 (RUY-1264): ruya-profiles holds the PIN hashes, runs as its own user without a capability
+# and never runs a program; it sends one request line per account change here (create, delete,
+# remove-guest) and the root helper makes or removes the user. Only root and the ruya-profiles
+# group may connect, and the helper answers the ruya-profiles user alone (SO_PEERCRED).
+Before=ruya-profiles.service
+
+[Socket]
+ListenSequentialPacket=/run/ruya-accounts.sock
+SocketUser=root
+SocketGroup=ruya-profiles
+SocketMode=0660
+# One helper process per request (ruya-accounts@.service). ruya-profiles asks one at a time, a few
+# per profile change; systemd's trigger limit for Accept=yes (200 in 2 s) is far above that.
+Accept=yes
+MaxConnections=4
+
+[Install]
+WantedBy=sockets.target

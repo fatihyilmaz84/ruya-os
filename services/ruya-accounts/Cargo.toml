@@ -1,0 +1,19 @@
+[package]
+name = "ruya-accounts"
+description = "RuyaOS accounts helper (ADR-049): makes and removes the profiles' Unix users for ruya-profiles over a bus-less socket; the one-line request grammar, the user rules and the helper's steps are a pure lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
+ruya-users = { path = "../ruya-users" }  # the passwd record of a user and the peer's uid (getpwnam_r), the one copy of the NSS calls
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# SO_PEERCRED and recv/send on the accepted socket, a safe API (linux_raw); already in the tree.
+rustix = { version = "1", default-features = false, features = ["std", "net"] }
+
+[[bin]]
+name = "ruya-accounts"
+path = "src/main.rs"

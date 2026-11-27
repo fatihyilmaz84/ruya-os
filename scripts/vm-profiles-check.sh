@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# modes: create guests introspect lifecycle security state private migrate
+# modes: create guests introspect lifecycle security state private helper
 # Looks at the Profiles service inside a running VM (T-120). Copy it over and run it as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-profiles-check.sh image/security-baseline.json root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh [introspect|state|security|create|lifecycle|guests|private|migrate]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh [introspect|state|security|create|lifecycle|guests|private|helper]
+# security: the unit is active, and systemd-analyze security of ruya-profiles and of the accounts
+# helper (ADR-049), recorded for image/security-baseline.json.
 # No argument = state: what the service lists and what is on disk.
 # create: on an empty store, creates an admin "Check Admin" (PIN 1234) and a standard profile
 # "Check Kid" over the bus as root (no UI), then prints the state and the modes of the account
@@ -14,29 +16,30 @@
 # comment "RuyaOS profile (guest)" and gid == uid, ListProfiles never lists one, VerifyPin with a wrong PIN leaves
 # ActiveProfile alone, RemoveGuest leaves no user and no home and the next guest's uid is greater,
 # Lock wipes every guest. Host fixtures: scripts/test-vm-checks.sh.
-# private (RUY-1130, after create; copy image/security-baseline.json next to the script): PASS/FAIL,
-# exit 1 on a failure: the store directory is 700 root:root and the store 600 root:root, the old
-# /var/lib/ruyaos/profiles.toml is gone, ruya-profiles sees its store, and every other ruya-* system
-# unit that runs as root, but the baseline's private_state exceptions, lists /var/lib/ruyaos/profiles
-# and the aliases (/sysroot) in InaccessiblePaths and, when it runs, sees neither the store nor its
-# /sysroot/ostree/deploy/*/var copy from its mount namespace (nsenter -m), and, when it holds
-# cap_dac_read_search, has a SystemCallFilter allow list without open_by_handle_at; a transient with
-# ruya-play's capabilities answers DENIED for the store through /proc/<ruya-profiles pid>/root (it is
-# not dumpable; READ, no answer or a failed systemd-run FAIL), while this root shell can read it (the
-# probe is not vacuous). The open window: ruya-profiles' children (useradd, userdel, loginctl,
-# getent) are dumpable after execve; this mode does not probe them (ADR-049 closes it).
-# migrate (RUY-1130, after create): puts the store back where an earlier image kept it, restarts
-# ruya-profiles, and checks that it moved the store (600 root:root, the old file gone, the same
-# profiles) and that the admin still signs in with the PIN; ends locked.
+# private (RUY-1130, ADR-049, after create; copy image/security-baseline.json next to the script):
+# PASS/FAIL, exit 1 on a failure: the store directory is 700 and the store 600, both
+# ruya-profiles:ruya-profiles, ruya-profiles sees its store, and every other ruya-* system unit that runs as root, but the baseline's private_state
+# exceptions, lists /var/lib/ruyaos/profiles and the aliases (/sysroot) in InaccessiblePaths and,
+# when it runs, sees neither the store nor its /sysroot/ostree/deploy/*/var copy from its mount
+# namespace (nsenter -m), and, when it holds cap_dac_read_search, has a SystemCallFilter allow list
+# without open_by_handle_at; a transient with ruya-play's capabilities answers DENIED for the store
+# through /proc/<ruya-profiles pid>/root (it is not dumpable; READ, no answer or a failed systemd-run
+# FAIL), and so does a transient with ruya-store's capabilities that takes the ruya-profiles uid with
+# setpriv (CAP_SETUID: the same uid meets dumpable=0, ADR-049), while this root shell can read it (the
+# probes are not vacuous). ruya-profiles runs no program (ADR-049), so it has no dumpable children.
+# helper (ADR-049, RUY-1264, after create): ruya-profiles runs as the user ruya-profiles (all four
+# uids) with every capability set 0; the accounts helper's socket is 660 root:ruya-profiles; a root
+# request is not-allowed, nobody cannot connect, the ruya-profiles uid gets bad-request for a path,
+# not-a-profile-user for `delete shell` (ruya-shell stays) and ok for a user that is gone; the
+# helper's journal has the `create` lines of the create mode.
 set -u
 svc=org.ruyaos.Profiles1
 path=/org/ruyaos/Profiles1
-# The store (RUY-1130): its own 0700 directory; earlier images kept it at $old_store.
+# The store (RUY-1130): its own 0700 directory.
 # RUYA_STATE_ROOT is for the host fixtures only; the units hide the real $hidden.
 state_root="${RUYA_STATE_ROOT:-/var/lib/ruyaos}"
 store_dir="$state_root/profiles"
 store="$store_dir/profiles.toml"
-old_store="$state_root/profiles.toml"
 hidden=/var/lib/ruyaos/profiles
 # The host's views of the same store (RUYA_PROC_ROOT, RUYA_SYSROOT: host fixtures only).
 proc_root="${RUYA_PROC_ROOT:-/proc}"
@@ -79,6 +82,11 @@ introspect)
     ;;
 security)
     systemctl is-active ruya-profiles
+    # ADR-049: the service as its own user and the accounts helper, recorded for the baseline.
+    for unit in ruya-profiles.service ruya-accounts@check.service; do
+        echo "--- systemd-analyze security $unit"
+        systemd-analyze security --no-pager "$unit" | tail -1
+    done
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 create)
@@ -235,9 +243,8 @@ for e in json.load(open(sys.argv[1], encoding="utf-8")).get("private_state", [])
     }
     aliases="$(private_state_of aliases)"
     exceptions=" $(private_state_of exceptions) "
-    expect_modes "$store_dir" "700 root:root"
-    expect_modes "$store" "600 root:root"
-    if [ -e "$old_store" ]; then fail "the old store $old_store is still there"; else pass "no old store $old_store"; fi
+    expect_modes "$store_dir" "700 ruya-profiles:ruya-profiles"
+    expect_modes "$store" "600 ruya-profiles:ruya-profiles"
     # The store's other view, which a unit must hide as well (else the check of it is vacuous).
     if ls -d "$sysroot"/ostree/deploy/*"$hidden" >/dev/null 2>&1; then
         pass "the store's directory is also at $sysroot/ostree/deploy/*$hidden (hidden by the /sysroot alias)"
@@ -271,6 +278,22 @@ if test -e "/proc/$1/root$2/profiles.toml"; then echo READ; else echo DENIED; fi
         fail "a root process with ruya-play's capabilities ($play_caps): READ the store through /proc/$owner/root: ruya-profiles is dumpable"
     else
         fail "the /proc/$owner/root probe with ruya-play's capabilities did not answer DENIED or READ (exit $rc): '$verdict'"
+    fi
+    # ADR-049: a peer with CAP_SETUID (ruya-store's capability set) takes the ruya-profiles uid. The
+    # store's directory is that uid's own, so only dumpable=0 stands between it and the store. The
+    # transient first checks that it did become ruya-profiles: a setpriv that failed is a FAIL.
+    store_caps="$(systemctl show ruya-store.service -p CapabilityBoundingSet | prop CapabilityBoundingSet)"
+    setuid_probe='if [ "$(id -un)" != ruya-profiles ] || ! test -e /proc/self/root/; then echo SELFCHECK-FAILED; exit 0; fi
+if test -e "/proc/$1/root$2/profiles.toml"; then echo READ; else echo DENIED; fi'
+    verdict="$(systemd-run --quiet --wait --pipe --collect -p "CapabilityBoundingSet=$store_caps" -p NoNewPrivileges=yes \
+        setpriv --reuid=ruya-profiles --regid=ruya-profiles --clear-groups -- /bin/sh -c "$setuid_probe" sh "${owner:-0}" "$hidden" 2>&1)"; rc=$?
+    verdict="$(echo "$verdict" | tr -d '\r' | tail -1)"
+    if [ "$rc" = 0 ] && [ "$verdict" = DENIED ]; then
+        pass "a process with ruya-store's capabilities that took the ruya-profiles uid: DENIED reading the store through /proc/$owner/root"
+    elif [ "$verdict" = READ ]; then
+        fail "a process with ruya-store's capabilities ($store_caps) as ruya-profiles READ the store through /proc/$owner/root: ruya-profiles is dumpable"
+    else
+        fail "the /proc/$owner/root probe as ruya-profiles with ruya-store's capabilities did not answer DENIED or READ (exit $rc): '$verdict'"
     fi
     for unit in $(systemctl list-unit-files --type=service --no-legend 'ruya-*' | tr -d '\r' | awk '{ print $1 }'); do
         [ "$unit" = ruya-profiles.service ] && continue
@@ -322,25 +345,59 @@ if test -e "/proc/$1/root$2/profiles.toml"; then echo READ; else echo DENIED; fi
     done
     if [ "$fails" = 0 ]; then echo "ALL CHECKS PASSED"; else echo "$fails CHECK(S) FAILED"; exit 1; fi
     ;;
-migrate)
-    # RUY-1130: an earlier image's store (the old path, no directory copy) is moved at the next start,
-    # and a PIN still signs in. ADMIN_ID / ADMIN_PIN as in guests.
-    admin="${ADMIN_ID:-p1}"
-    admin_pin="${ADMIN_PIN:-1234}"
-    if [ ! -e "$store" ]; then echo "FAIL: no $store: run create first"; exit 1; fi
-    before="$(call ListProfiles | first_fields | sort | tr '\n' ' ')"
-    systemctl stop ruya-profiles.service
-    mv "$store" "$old_store"
-    echo "--- the store is back at $old_store, as an earlier image left it; starting ruya-profiles"
-    systemctl start ruya-profiles.service
-    if [ -e "$old_store" ]; then fail "the old store $old_store is still there after the start"; else pass "the old store $old_store is gone"; fi
-    expect_modes "$store" "600 root:root"
-    expect_modes "$store_dir" "700 root:root"
-    after="$(call ListProfiles | first_fields | sort | tr '\n' ' ')"
-    if [ -n "${before// /}" ] && [ "$after" = "$before" ]; then pass "ListProfiles lists the same profiles: $after"; else fail "ListProfiles lists '$after', before the move '$before'"; fi
-    out="$(call SwitchTo ss "$admin" "$admin_pin")"
-    if [ "$(echo "$out" | field 0)" = ok ]; then pass "SwitchTo $admin with the PIN after the move"; else fail "SwitchTo $admin after the move: $out"; fi
-    call Lock >/dev/null
+helper)
+    # ADR-049 (RUY-1264): ruya-profiles runs as its own user with no capability, and the root
+    # accounts helper answers the ruya-profiles user alone and only its grammar.
+    socket="${ACCOUNTS_SOCKET:-/run/ruya-accounts.sock}"
+    puid="$(getent passwd ruya-profiles | tr -d '\r' | cut -d: -f3)"
+    if [ -n "$puid" ]; then pass "the user ruya-profiles exists (uid $puid)"; else fail "no user ruya-profiles"; fi
+    pid="$(systemctl show ruya-profiles.service -p MainPID | prop MainPID)"
+    status="$proc_root/${pid:-0}/status"
+    if [ "${pid:-0}" -gt 0 ] && [ -r "$status" ]; then
+        uids="$(awk '$1 == "Uid:" { print $2, $3, $4, $5 }' "$status" | tr -d '\r')"
+        if [ -n "$puid" ] && [ "$uids" = "$puid $puid $puid $puid" ]; then
+            pass "ruya-profiles (pid $pid) runs as uid $puid (real, effective, saved, filesystem)"
+        else
+            fail "ruya-profiles (pid $pid) runs as the uids '$uids', want ${puid:-the ruya-profiles uid}"
+        fi
+        for set in CapInh CapPrm CapEff CapBnd CapAmb; do
+            v="$(awk -v k="$set:" '$1 == k { print $2 }' "$status" | tr -d '\r')"
+            if [ "$v" = 0000000000000000 ]; then pass "ruya-profiles $set is 0"; else fail "ruya-profiles $set is '$v', want 0000000000000000"; fi
+        done
+    else
+        fail "ruya-profiles is not running (MainPID '${pid:-}')"
+    fi
+    expect_modes "$socket" "660 root:ruya-profiles"
+    # ask <user> <line>: the helper's reply to <line> sent as <user>, CONNECT-DENIED when the socket
+    # refused the connection, NO-REPLY when the helper closed it without an answer.
+    ask() {
+        setpriv --reuid="$1" --regid="$1" --clear-groups -- python3 -c 'import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+s.settimeout(30)
+try:
+    s.connect(sys.argv[1])
+except PermissionError:
+    print("CONNECT-DENIED")
+    sys.exit(0)
+s.send(sys.argv[2].encode() + b"\n")
+print(s.recv(128).decode(errors="replace").strip() or "NO-REPLY")' "$socket" "$2" 2>&1 | tr -d '\r' | tail -1
+    }
+    expect_reply() { # <user> <line> <want>
+        local got
+        got="$(ask "$1" "$2")"
+        if [ "$got" = "$3" ]; then pass "'$2' as $1: $3"; else fail "'$2' as $1 answered '$got', want '$3'"; fi
+    }
+    # A user that does not exist: a request that got through would answer ok and remove nothing.
+    expect_reply root "delete p99999" "error not-allowed"
+    expect_reply nobody "delete p99999" "CONNECT-DENIED"
+    expect_reply ruya-profiles "delete ../../etc" "error bad-request"
+    expect_reply ruya-profiles "delete p1 --force" "error bad-request"
+    expect_reply ruya-profiles "delete shell" "error not-a-profile-user"
+    if getent passwd ruya-shell >/dev/null; then pass "ruya-shell is still a user"; else fail "ruya-shell is gone"; fi
+    expect_reply ruya-profiles "delete p99999" "ok"
+    # The users of the create mode were made through the helper.
+    made="$(journalctl -b --no-pager -o cat -u 'ruya-accounts@*' | tr -d '\r' | grep -cE '^ruya-accounts: create p[0-9]+ regular: ok$')"
+    if [ "${made:-0}" -ge 1 ]; then pass "the helper's journal has $made 'create ... regular: ok' line(s)"; else fail "no 'ruya-accounts: create p<n> regular: ok' line in the helper's journal (run create first)"; fi
     if [ "$fails" = 0 ]; then echo "ALL CHECKS PASSED"; else echo "$fails CHECK(S) FAILED"; exit 1; fi
     ;;
 state)
@@ -356,13 +413,12 @@ state)
     else
         echo "(does not exist)"
     fi
-    if [ -e "$old_store" ]; then echo "--- $old_store is still there (an earlier image's store, RUY-1130)"; fi
     echo "--- unix users ruya-p*"
     getent passwd | grep '^ruya-p' || echo "(none)"
     ls -ld /var/home/ruya-p* 2>/dev/null || echo "(no /var/home/ruya-p*)"
     ;;
 *)
-    echo "usage: $0 [introspect|state|security|create|lifecycle|guests|private|migrate]" >&2
+    echo "usage: $0 [introspect|state|security|create|lifecycle|guests|private|helper]" >&2
     exit 2
     ;;
 esac

@@ -8,6 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
+ruya-accounts = { path = "../ruya-accounts" }  # the accounts helper's request grammar and user rules (ADR-049)
+ruya-users = { path = "../ruya-users" }  # id_in_use and the store's owner in-process (getpwuid_r, getgrgid_r), no getent (ADR-049)
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["getrandom"] }  # OsRng for salts
 serde = { version = "1", features = ["derive"] }
@@ -16,8 +18,9 @@ zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# prctl(PR_SET_DUMPABLE, 0): no root peer reads the store through /proc/<pid>/root (RUY-1130); already in the tree
-rustix = { version = "1", default-features = false, features = ["std", "process"] }
+# prctl(PR_SET_DUMPABLE, 0): no root peer reads the store through /proc/<pid>/root (RUY-1130); the
+# accounts helper's socket (net, ADR-049); already in the tree
+rustix = { version = "1", default-features = false, features = ["std", "process", "net"] }
 
 [dev-dependencies]
 ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)

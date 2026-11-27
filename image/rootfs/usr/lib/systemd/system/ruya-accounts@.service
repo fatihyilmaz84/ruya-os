@@ -1,0 +1,58 @@
+[Unit]
+Description=RuyaOS accounts helper (one request of ruya-profiles)
+# ADR-049 (RUY-1264), the ADR-022 decision 4 pattern. ruya-profiles runs as its own user, so the
+# root work of a profile's Unix user is done here: useradd (create), loginctl terminate-user and
+# disable-linger, then userdel --remove (delete, remove-guest). The request is one line of a fixed
+# grammar (ids validated, no paths, no free arguments; services/ruya-accounts/src/wire.rs), the peer
+# must be the ruya-profiles user, and only a user with the profile marker is ever deleted. It owns
+# no bus name and nothing on the bus reaches it; loginctl is its one bus client (to logind). It
+# never sees the PIN store (InaccessiblePaths, scripts/lint-private-state.ps1).
+# One instance per connection: a failed one is logged and unloaded, not left behind as a failed unit.
+CollectMode=inactive-or-failed
+
+[Service]
+ExecStart=/usr/libexec/ruya-accounts
+StandardInput=socket
+# The socket carries the reply only; the journal line and the commands' output go to the journal.
+StandardOutput=journal
+StandardError=journal
+# The PIN store is ruya-profiles' alone, also through /sysroot, where /var comes from (RUY-1130).
+InaccessiblePaths=/var/lib/ruyaos/profiles /sysroot
+# useradd and userdel write /etc/passwd, /etc/group, /etc/shadow (mode 0000) and /etc/subuid, and
+# make, chown and remove the home under /var/home (copying /etc/skel). Nothing else (T-126; checked
+# with scripts/vm-profiles-check.sh create, guests and lifecycle).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID
+ReadWritePaths=/etc /var/home
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+# A request is a few commands; delete waits up to 5 s for userdel while the user's apps end. The
+# client (ruya-profiles) waits 30 s.
+TasksMax=8
+RuntimeMaxSec=20s
+# An allow list without @privileged or open_by_handle_at: with CAP_DAC_READ_SEARCH a file could be
+# opened by handle past the store's hiding (lint-private-state.ps1).
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# useradd sets the modes of what it writes explicitly.
+UMask=0077
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+# loginctl talks to logind over the system bus.
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes

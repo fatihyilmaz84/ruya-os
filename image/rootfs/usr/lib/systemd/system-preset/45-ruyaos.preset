@@ -3,7 +3,7 @@
 # masks the ones listed in MASKED there. The reason for each is in docs/image-packages.md.
 
 # User accounts over D-Bus for desktop greeters (Flatpak pulls the package in); profiles are plain
-# Unix users from useradd (ruya-profiles), not systemd-homed users.
+# Unix users from useradd (ruya-accounts, for ruya-profiles), not systemd-homed users.
 disable accounts-daemon.service
 disable systemd-homed.service
 disable systemd-homed-activate.service

@@ -5,8 +5,8 @@
 # Root reads any file whatever its mode, and ProtectSystem=strict leaves /var readable, so a mode alone
 # hides nothing from a root service; only a hidden directory holds (a hidden file is undone by the
 # owner's tmp + rename). For each entry, under image/rootfs/usr/lib:
-#   1. tmpfiles.d makes the directory `d <path> 0700 root root` (at boot, before any unit starts: a
-#      missing InaccessiblePaths= path fails the unit);
+#   1. tmpfiles.d makes the directory `d <path> 0700 <user> <user>` (the entry's "user", root when it
+#      names none; at boot, before any unit starts: a missing InaccessiblePaths= path fails the unit);
 #   2. every systemd/system/ruya-*.service but the owner that can read it (it runs as root: no User=,
 #      User=root or 0, no DynamicUser=yes; or its AmbientCapabilities= hold CAP_DAC_OVERRIDE,
 #      CAP_DAC_READ_SEARCH, CAP_SYS_ADMIN or CAP_SYS_PTRACE, a `~` list holding all it does not name):
@@ -23,7 +23,20 @@
 #        written; the VM check reads systemd's expansion of the groups);
 #   3. no unit but the owner has a BindPaths= or BindReadOnlyPaths= source at, above or below the path
 #      or an alias (a bind would show the directory somewhere else);
-#   4. the owner unit exists and does not hide it.
+#   4. the owner unit exists and does not hide it;
+#   5. when the entry names a "user" (ADR-049: ruya-profiles holds the PIN hashes as its own user), the
+#      owner unit runs as that user (its last User=), its CapabilityBoundingSet= is empty (set, and the
+#      last assignment is empty), it has no AmbientCapabilities=, and no Exec*= command of it runs
+#      with full or root privileges (a "+" or "!" prefix): no step of the owner runs as root;
+#   6. when the entry names a "source" (the owner's src/ folder), no line of its *.rs files but a
+#      comment starts a program (Command::new, process::Command, CommandExt, exec*, fexecve,
+#      posix_spawn, fork): a child is dumpable again after execve and lives in the owner's mount
+#      namespace; and one makes the process non-dumpable (DumpableBehavior::NotDumpable), which a
+#      peer that takes the owner's uid with CAP_SETUID meets (ADR-049 consequences). It scans that
+#      folder only, not the dependencies: zbus 5 can start a program for a `unixexec:` or `launchd:`
+#      bus address, which it reaches only through DBUS_SYSTEM_BUS_ADDRESS (or a session address);
+#      ruya-profiles.service sets no such variable and the service connects with
+#      Builder::system(), so that path stays closed (RUY-1264 review).
 # A new root unit is covered without a list to edit: it fails here until it carries the line.
 # -SelfTest proves each rule on a temporary tree.
 #
@@ -35,6 +48,8 @@ if (-not $Root) { $Root = $Repo }
 
 $ReadingCaps = @("CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_SYS_ADMIN", "CAP_SYS_PTRACE")
 $UnhidingCaps = @("CAP_SYS_ADMIN", "CAP_SYS_PTRACE")
+# Rule 6: what starts a program in Rust (std, libc or rustix names).
+$ExecPattern = 'Command::new|process::Command|CommandExt|\bexecv[pe]{0,2}\b|\bexecvpe\b|\bfexecve\b|\bexecl[pe]?\b|posix_spawn|\bfork\s*\('
 
 # The [Service] assignments of a unit and its drop-ins, in the order systemd reads them: key -> values.
 function Get-ServiceSettings([string]$unitFile) {
@@ -157,9 +172,43 @@ function Find-PrivateStateProblems([string]$root) {
             if (-not $exceptions[$x]) { $out.Add("image/security-baseline.json: the exception $x for $path has no reason") }
             if (-not ($units | Where-Object { $_.Name -eq $x })) { $out.Add("image/security-baseline.json: the exception $x for $path is not in systemd/system") }
         }
-        $made = @($tmpfiles | Where-Object { ($_.Trim() -split '\s+') -join ' ' -like "d $path 0700 root root*" })
-        if ($made.Count -eq 0) { $out.Add("tmpfiles.d: no 'd $path 0700 root root' line (InaccessiblePaths= of a missing path fails the unit)") }
-        if (-not ($units | Where-Object { $_.Name -eq $owner })) { $out.Add("$($owner): the owner of $path is not in systemd/system") }
+        $user = [string]$e.user; $owning = $(if ($user) { $user } else { "root" })
+        $made = @($tmpfiles | Where-Object { ($_.Trim() -split '\s+') -join ' ' -clike "d $path 0700 $owning $owning*" })
+        if ($made.Count -eq 0) { $out.Add("tmpfiles.d: no 'd $path 0700 $owning $owning' line (InaccessiblePaths= of a missing path fails the unit)") }
+        $ownerUnit = @($units | Where-Object { $_.Name -eq $owner })
+        if ($ownerUnit.Count -eq 0) { $out.Add("$($owner): the owner of $path is not in systemd/system") }
+        elseif ($user) {
+            # Rule 5: the owner runs as its own user without a capability.
+            $os = Get-ServiceSettings $ownerUnit[0].FullName
+            $ranAs = Get-Last $os "User"
+            if ($ranAs -cne $user) { $out.Add("$($owner): runs as '$(if ($ranAs) { $ranAs } else { 'root' })', want User=$user (the owner of $path)") }
+            if (-not $os.ContainsKey("CapabilityBoundingSet") -or (Get-Last $os "CapabilityBoundingSet") -ne "") { $out.Add("$($owner): its CapabilityBoundingSet= is not empty (none set = all); want 'CapabilityBoundingSet=' as the last assignment") }
+            if (@(Get-PathList $os "AmbientCapabilities").Count -gt 0) { $out.Add("$($owner): has AmbientCapabilities=; the owner of $path holds no capability") }
+            # The command prefixes of systemd.service(5): "+" (full privileges) and "!" (User= not applied).
+            foreach ($key in @($os.Keys | Where-Object { $_ -clike "Exec*" } | Sort-Object)) {
+                foreach ($cmd in $os[$key]) {
+                    if ($cmd -match '^[-@:|]*[+!]') { $out.Add("$($owner): $key=$cmd runs with root privileges ('+' or '!'); no step of the owner of $path runs as root") }
+                }
+            }
+        }
+        if ($e.source) {
+            # Rule 6: the owner starts no program and is not dumpable.
+            $src = Join-Path $root ([string]$e.source)
+            $files = @(); if (Test-Path $src) { $files = @(Get-ChildItem $src -Recurse -Filter "*.rs" -File) }
+            if ($files.Count -eq 0) { $out.Add("$($e.source): no *.rs files (the source of $owner)") }
+            $dumpable = $false
+            foreach ($f in $files) {
+                $n = 0
+                foreach ($line in [IO.File]::ReadAllLines($f.FullName)) {
+                    $n++
+                    $code = $line.Trim()
+                    if ($code.StartsWith("//")) { continue }
+                    if ($code -cmatch $ExecPattern) { $out.Add("$($e.source)/$($f.Name):$($n): starts a program ($($Matches[0])); the owner of $path runs none (ADR-049)") }
+                    if ($code -cmatch 'DumpableBehavior::NotDumpable') { $dumpable = $true }
+                }
+            }
+            if ($files.Count -gt 0 -and -not $dumpable) { $out.Add("$($e.source): nothing makes $owner non-dumpable (DumpableBehavior::NotDumpable)") }
+        }
         foreach ($u in $units) {
             $settings = Get-ServiceSettings $u.FullName
             $hidden = @(Get-PathList $settings "InaccessiblePaths")
@@ -211,13 +260,18 @@ if ($SelfTest) {
     $tmpd = Join-Path $tmp "image/rootfs/usr/lib/tmpfiles.d"
     New-Item -ItemType Directory -Force $sys, $tmpd, (Join-Path $sys "ruya-reset.service.d") | Out-Null
     $failed = $false
-    $baselineText = '{ "private_state": [ { "path": "/var/lib/x/secret", "aliases": ["/sysroot"], "owner": "ruya-owner.service", "reason": "fixture", "exceptions": [ { "unit": "ruya-admin.service", "reason": "fixture" }, { "unit": "ruya-stale.service", "reason": "fixture" } ] } ] }'
+    $baselineText = '{ "private_state": [ { "path": "/var/lib/x/secret", "aliases": ["/sysroot"], "owner": "ruya-owner.service", "user": "x-owner", "source": "src", "reason": "fixture", "exceptions": [ { "unit": "ruya-admin.service", "reason": "fixture" }, { "unit": "ruya-stale.service", "reason": "fixture" } ] } ] }'
+    $srcDir = Join-Path $tmp "src"
+    New-Item -ItemType Directory -Force (Join-Path $srcDir "sub") | Out-Null
+    $goodMain = @("//! Starts no program: no Command::new, no execve (a comment does not count).", "fn main() {", "    set_dumpable_behavior(DumpableBehavior::NotDumpable);", "}")
     try {
         [IO.File]::WriteAllText((Join-Path $tmp "image/security-baseline.json"), $baselineText)
-        [IO.File]::WriteAllLines((Join-Path $tmpd "x.conf"), @("d /var/lib/x 0755 root root -", "d /var/lib/x/secret 0700 root root -"))
+        [IO.File]::WriteAllLines((Join-Path $tmpd "x.conf"), @("d /var/lib/x 0755 root root -", "d /var/lib/x/secret 0700 x-owner x-owner -"))
+        [IO.File]::WriteAllLines((Join-Path $srcDir "main.rs"), $goodMain)
+        [IO.File]::WriteAllLines((Join-Path $srcDir "sub/store.rs"), @("/// fork() is not called here.", "pub fn save() {}"))
         $hide = "InaccessiblePaths=/var/lib/x/secret /sysroot"
         $unit = { param($name, [string[]]$service) [IO.File]::WriteAllLines((Join-Path $sys $name), (@("[Unit]", "Description=fixture", "InaccessiblePaths=/var/lib/x/secret /sysroot", "[Service]", "ExecStart=/bin/true") + $service)) }
-        & $unit "ruya-owner.service" @("StateDirectory=x", "CapabilityBoundingSet=CAP_DAC_OVERRIDE")
+        & $unit "ruya-owner.service" @("StateDirectory=x", "User=x-owner", "CapabilityBoundingSet=CAP_DAC_OVERRIDE", "CapabilityBoundingSet=")
         & $unit "ruya-good.service" @("CapabilityBoundingSet=", "InaccessiblePaths=/run/dbus", $hide)
         & $unit "ruya-above.service" @("CapabilityBoundingSet=CAP_CHOWN", "InaccessiblePaths=/var/lib/x /sysroot")
         & $unit "ruya-user.service" @("User=ruya-user")
@@ -265,6 +319,40 @@ if ($SelfTest) {
         $hits2 = @(Find-PrivateStateProblems $tmp)
         $ok = $ok -and (@($hits2 | Where-Object { $_ -like "ruya-owner.service: the owner*" }).Count -eq 1)
         Write-Host ("    self-test owner, tmpfiles and exceptions (the owner hides it, mode 0755, no owner unit, an exception with no unit): {0}" -f $(if ($ok) { "ok" } else { "WRONG: " + (($hits + $hits2) -join ' | ') }))
+        if (-not $ok) { $failed = $true }
+
+        # Rules 5 and 6 (ADR-049): each broken owner is reported by its own rule, the good one by none.
+        [IO.File]::WriteAllLines((Join-Path $tmpd "x.conf"), @("d /var/lib/x/secret 0700 x-owner x-owner -"))
+        $goodOwner = @("User=x-owner", "CapabilityBoundingSet=")
+        $ownerCases = @(
+            @{ Name = "good"; Owner = $goodOwner; Main = $goodMain; Want = "" },
+            @{ Name = "root"; Owner = @("CapabilityBoundingSet="); Main = $goodMain; Want = "ruya-owner.service: runs as 'root', want User=x-owner*" },
+            @{ Name = "another user"; Owner = @("User=x-owner", "User=root", "CapabilityBoundingSet="); Main = $goodMain; Want = "ruya-owner.service: runs as 'root', want User=x-owner*" },
+            @{ Name = "no bounding set"; Owner = @("User=x-owner"); Main = $goodMain; Want = "ruya-owner.service: its CapabilityBoundingSet= is not empty*" },
+            @{ Name = "a capability after the empty set"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "CapabilityBoundingSet=CAP_CHOWN"); Main = $goodMain; Want = "ruya-owner.service: its CapabilityBoundingSet= is not empty*" },
+            @{ Name = "ambient"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "AmbientCapabilities=CAP_CHOWN"); Main = $goodMain; Want = "ruya-owner.service: has AmbientCapabilities=*" },
+            @{ Name = "a root step (+)"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStartPre=+/usr/bin/x --migrate"); Main = $goodMain; Want = "ruya-owner.service: ExecStartPre=+/usr/bin/x --migrate runs with root privileges*" },
+            @{ Name = "a root step behind '-' (!)"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStopPost=-!/usr/bin/x"); Main = $goodMain; Want = "ruya-owner.service: ExecStopPost=-!/usr/bin/x runs with root privileges*" },
+            @{ Name = "a plain ExecStartPre"; Owner = @("User=x-owner", "CapabilityBoundingSet=", "ExecStartPre=-/usr/bin/x"); Main = $goodMain; Want = "" },
+            @{ Name = "Command::new"; Owner = $goodOwner; Main = ($goodMain + @("fn f() { std::process::Command::new(`"useradd`").status(); }")); Want = "src/main.rs:5: starts a program (process::Command)*" },
+            @{ Name = "execve"; Owner = $goodOwner; Main = ($goodMain + @("fn f() { rustix::runtime::execve(p, a, e); }")); Want = "src/main.rs:5: starts a program (execve)*" },
+            @{ Name = "fork"; Owner = $goodOwner; Main = ($goodMain + @("    let pid = libc::fork ();")); Want = "src/main.rs:5: starts a program (fork (*" },
+            @{ Name = "not dumpable"; Owner = $goodOwner; Main = @("fn main() {}", "// DumpableBehavior::NotDumpable in a comment does not count"); Want = "src: nothing makes ruya-owner.service non-dumpable*" }
+        )
+        foreach ($c in $ownerCases) {
+            & $unit "ruya-owner.service" $c.Owner
+            [IO.File]::WriteAllLines((Join-Path $srcDir "main.rs"), [string[]]$c.Main)
+            $got = @(Find-PrivateStateProblems $tmp | Where-Object { $_ -like "ruya-owner.service: *" -or $_ -like "src*" -or $_ -like "tmpfiles.d:*" })
+            $ok = $(if ($c.Want) { $got.Count -eq 1 -and $got[0] -like $c.Want } else { $got.Count -eq 0 })
+            Write-Host ("    self-test owner rule 5/6, {0}: {1}" -f $c.Name, $(if ($ok) { "ok" } else { "WRONG: " + ($got -join ' | ') }))
+            if (-not $ok) { $failed = $true }
+        }
+        & $unit "ruya-owner.service" $goodOwner
+        [IO.File]::WriteAllLines((Join-Path $srcDir "main.rs"), $goodMain)
+        [IO.File]::WriteAllLines((Join-Path $tmpd "x.conf"), @("d /var/lib/x/secret 0700 root root -"))
+        $got = @(Find-PrivateStateProblems $tmp | Where-Object { $_ -like "tmpfiles.d:*" })
+        $ok = ($got.Count -eq 1 -and $got[0] -like "tmpfiles.d: no 'd /var/lib/x/secret 0700 x-owner x-owner' line*")
+        Write-Host ("    self-test owner rule 1, a root tmpfiles line for a user's directory: {0}" -f $(if ($ok) { "ok" } else { "WRONG: " + ($got -join ' | ') }))
         if (-not $ok) { $failed = $true }
     } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
     if ($failed) { exit 1 }

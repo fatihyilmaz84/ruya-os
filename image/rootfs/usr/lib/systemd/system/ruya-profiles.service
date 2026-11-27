@@ -1,37 +1,42 @@
 [Unit]
 Description=RuyaOS profiles service (org.ruyaos.Profiles1)
 Before=ruya-compositor@tty1.service
+# The profiles' Unix users are made and removed by the accounts helper (ADR-049).
+Wants=ruya-accounts.socket
+After=ruya-accounts.socket
 
 [Service]
 Type=dbus
 BusName=org.ruyaos.Profiles1
+# ADR-049 (RUY-1264): the PIN hashes' holder runs as its own user (sysusers.d/ruyaos.conf) with no
+# capability and runs no program (scripts/lint-private-state.ps1): a child would be dumpable again
+# after execve and live in this mount namespace. It makes itself non-dumpable before the first read
+# (src/process.rs), so even a peer that takes this uid with CAP_SETUID cannot open /proc/<pid>/root.
+# Account work goes to ruya-accounts.socket; whether an id is taken is asked in-process.
+User=ruya-profiles
+Group=ruya-profiles
+# No step of this unit runs as root (no "+" or "!" Exec prefix, lint-private-state.ps1 rule 5):
+# there is no migration of an older image's store (owner, 2026-11-27: RuyaOS has no installs to
+# migrate). A store an older image wrote as root is not readable here: the service then fails
+# (EACCES), it never starts with an empty store.
 ExecStart=/usr/bin/ruya-profiles
 Restart=on-failure
-# /var/lib/ruyaos/profiles/profiles.toml (the directory 0700, the file 0600) and new profile users
-# in /etc + /var/home. The whole of /var/lib/ruyaos is writable here: the first start of this image
-# renames an older image's /var/lib/ruyaos/profiles.toml into profiles/ (RUY-1130). Every other
-# root ruya-* unit but the exceptions in image/security-baseline.json private_state hides profiles/
-# and /sysroot (InaccessiblePaths, scripts/lint-private-state.ps1), and the service makes itself
-# non-dumpable at start (no core dumps either), so its own /proc/<pid>/root does not lead around
-# that; its children (useradd, userdel, loginctl, getent) are dumpable again until ADR-049.
-# 0755 here keeps the tree's other directories (library, notifications, platform) reachable.
-StateDirectory=ruyaos
-StateDirectoryMode=0755
-ReadWritePaths=/etc /var/home
+# /var/lib/ruyaos/profiles/profiles.toml: the directory 0700 and the file 0600, both ruya-profiles'.
+# Every other root ruya-* unit but the exceptions in image/security-baseline.json private_state
+# hides profiles/ and /sysroot (InaccessiblePaths, scripts/lint-private-state.ps1).
+StateDirectory=ruyaos/profiles
+StateDirectoryMode=0700
+CapabilityBoundingSet=
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=yes
 PrivateTmp=yes
 PrivateNetwork=yes
 PrivateDevices=yes
 PrivateIPC=yes
 NoNewPrivileges=yes
-# Root only for useradd: write /etc/passwd, /etc/shadow (mode 0000), create and chown the home
-# and copy /etc/skel. Nothing else (T-126; checked with scripts/vm-profiles-check.sh create).
-CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
-# useradd sets the modes of what it writes explicitly; the store is written 0600 anyway.
 UMask=0077
 ProtectProc=invisible
 ProcSubset=pid

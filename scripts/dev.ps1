@@ -1162,9 +1162,10 @@ function Test-AppTable {
     Record "app table lint self-test" ($LASTEXITCODE -eq 0)
 }
 
-# The rules live in scripts\lint-private-state.ps1 (shared with CI): the PIN store is hidden from every other root unit (RUY-1130).
+# The rules live in scripts\lint-private-state.ps1 (shared with CI): the PIN store is hidden from every other root unit (RUY-1130),
+# and its owner runs as its own user without a capability and starts no program (ADR-049, RUY-1264).
 function Test-PrivateState {
-    Step "private state lint (every other root ruya-* unit hides /var/lib/ruyaos/profiles with InaccessiblePaths=)"
+    Step "private state lint (every other root ruya-* unit hides /var/lib/ruyaos/profiles with InaccessiblePaths=; ruya-profiles runs as its own user and starts no program)"
     & (Join-Path $PSScriptRoot "lint-private-state.ps1") -SelfTest
     Record "private state lint (with its self-test)" ($LASTEXITCODE -eq 0)
 }

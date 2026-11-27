@@ -17,6 +17,7 @@ ruya-update.service           updates
 ruya-notifications.service    notification history and settings per profile (RUY-730)
 ruya-platform.service         org.ruyaos.Platform1, the one door for sandboxed apps (RUY-157)
 ruya-platform-identify.socket identity helper: a caller's .flatpak-info for the door (ADR-022 decision 4, RUY-1129)
+ruya-accounts.socket          accounts helper: the profiles' Unix users for ruya-profiles (ADR-049, RUY-1264)
 ruya-devices.service          audio, network, Bluetooth, batteries (user unit)
 greenboot-healthcheck.service           automatic rollback
 greenboot-set-rollback-trigger.service  automatic rollback
