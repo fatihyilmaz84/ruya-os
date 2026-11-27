@@ -1477,6 +1477,10 @@ pub struct UnitChange {
     pub active_state: Option<String>,
     pub exec_main_status: Option<i32>,
     pub exec_main_code: Option<i32>,
+    /// `ActiveEnterTimestamp` in unix seconds (0: never entered), for a scope's attach (RUY-1250).
+    pub entered: Option<i64>,
+    /// `FreezerState`, for the frozen flag of a child a probe starts (RUY-1250).
+    pub freezer_state: Option<String>,
 }
 
 /// Follows a unit this service did not start (it has no `systemd-run --wait` to tell its end):
@@ -1512,6 +1516,7 @@ impl UnitWatch {
             active_state: Some(show.active_state.clone()),
             exec_main_status: Some(show.exec_main_status),
             exec_main_code: Some(show.exec_main_code),
+            ..UnitChange::default()
         })
     }
 

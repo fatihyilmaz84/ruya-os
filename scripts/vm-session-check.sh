@@ -33,6 +33,9 @@
 # T-165 (RUY-87): after the Freeze/Thaw steps a Lock must freeze the profile's app (its unit and every
 # scope, FrozenChanged, the journal's "froze" line) with no Freeze from the check; a Thaw while locked
 # is refused; after the sign-in a Thaw (the shell's sweep stands in) runs it again.
+# RUY-1250: `check` (with the app idle) and `steam-pause` (with Steam and its game idle, before the Guide
+# key) judge QUIET_SECS (default 30) of the journal once the service follows the profile's manager over
+# its connection: no PAM session of the profile user and no run-p/run-u unit started (judge_quiet_link).
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
@@ -469,6 +472,33 @@ judge_limits() {
     ok "$1: memory.max=$mem bytes and pids.max=8192 in the kernel"
 }
 # --- judge_limits end
+# --- judge_quiet_link begin (test-vm-checks.sh sources these lines)
+# judge_quiet_link <what> <user> (RUY-1250), the journal of an idle window on stdin: a game of the profile
+# runs and nothing is asked of it, so ruya-session follows its scopes over the one connection to the
+# user's manager and starts nothing there. Every `systemctl --machine=<user>@.host` (the old 5 s scope
+# poll, 1 s for Steam) opened a PAM session for the user and a transient run-u/run-p unit in PID 1, both
+# in the journal; a process that lives 60 ms is easily missed by `ps`, the journal is not. PASS when the
+# window has neither; a FAIL counts them and shows the first three.
+judge_quiet_link() {
+    local hits n
+    hits="$(grep -a -E "pam_unix\(systemd-user:session\): session opened for user $2([( ]|\$)|Started run-[pu][0-9][0-9a-z-]*[.]service" | head -50)"
+    n="$(printf '%s' "$hits" | grep -c .)"
+    if [ "$n" -eq 0 ]; then ok "$1: no PAM session of $2 and no run-p unit started"; return 0; fi
+    bad "$1: $n PAM sessions of $2 or run-p units started: $(printf '%s\n' "$hits" | head -3 | tr '\n' '|')"
+    return 1
+}
+# --- judge_quiet_link end
+# quiet_window <user> <what> (RUY-1250): waits until the service follows the manager of <user> over its
+# connection (its journal line), then judges ${QUIET_SECS:-30} s of the whole journal in which the
+# check asks nothing of that profile.
+quiet_window() {
+    local n=0 t0 t1
+    until journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "following the manager of $1 over one connection" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+    [ "$n" -lt 20 ] || { bad "$2: no 'following the manager of $1 over one connection' line in the journal"; return 1; }
+    sleep 2
+    t0="$(date +%s)"; sleep "${QUIET_SECS:-30}"; t1="$(date +%s)"
+    journalctl -b --no-pager -o cat --since "@$t0" --until "@$t1" 2>/dev/null | judge_quiet_link "$2" "$1"
+}
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
@@ -629,6 +659,8 @@ steam-pause)
     echo "info: game scopes:$game_scopes; Steam's own:${own_scopes:- none}"
     clog="$(getent passwd "$user" | cut -d: -f6)/.var/app/com.valvesoftware.Steam/.local/share/Steam/logs/connection_log.txt"
     before="$(wc -l < "$clog" 2>/dev/null || echo 0)"
+    # RUY-1250: Steam and its game idle; their scopes are followed over the one connection.
+    quiet_window "$user" "30 s with Steam and its game idle"
     python3 /root/vm-inject-key.py guide
     sleep 3
     for sc in $game_scopes; do [ "$(cg_frozen "$sc")" = 1 ] && ok "the game's scope $sc is frozen" || bad "the game's scope $sc is not frozen"; done
@@ -742,8 +774,8 @@ restart)
     # runs `systemctl show` only while that connection is down, and says so in the journal ("no
     # connection to the manager of ..." / "lost a user manager, looking at its apps every 2 s",
     # follow.rs, systemd.rs). A 0.3 s `pgrep` loop for a short-lived `systemctl` could miss one;
-    # the journal cannot (RUY-23). The Flatpak scope watcher's `show` of the unit and its scope
-    # every 5 s (T-363, scope.rs WATCH_EVERY) is a different poll and logs nothing.
+    # the journal cannot (RUY-23). The app's Flatpak scope is followed over the same connection
+    # (RUY-1250; `systemctl show` every 5 s, scope.rs WATCH_EVERY, only while it is down).
     sleep 6
     pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"
     polled="$(journalctl -u ruya-session -b --no-pager -o cat --since "@$trestart" 2>/dev/null | grep -a -E "no connection to the manager|looking at its apps every 2 s" | tail -3)"
@@ -1158,6 +1190,9 @@ check)
     # T-363: the run follows the app's own Flatpak scope (the service logs the attach and the end).
     n=0; while ! journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$sleeper_re-[0-9]*[.]scope" && [ "$n" -lt 20 ]; do sleep 1; n=$((n + 1)); done
     [ "$n" -lt 20 ] && ok "the run attached the app's Flatpak scope (after about $n s)" || bad "no 'attached app-flatpak-$sleeper-N.scope' line for $inst in the journal"
+    # RUY-1250: the app idles and its scope is followed over the one connection to the manager.
+    echo "--- an idle app starts nothing in its manager (RUY-1250)"
+    quiet_window "$user" "30 s with the app idle"
     # T-435: no X server on the console, so Electron/Chromium must be told it is a Wayland session.
     systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | grep -q "^XDG_SESSION_TYPE=wayland$" \
         && ok "the app got XDG_SESSION_TYPE=wayland (Electron picks Wayland)" || bad "the app has no XDG_SESSION_TYPE=wayland"

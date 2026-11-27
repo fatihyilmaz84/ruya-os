@@ -1,5 +1,17 @@
 //! The Flatpak scope of a run (T-363). Pure: time comes in as `Instant`, the OS answers through
-//! the `ShowUnit`s the caller got from `systemctl show` (`systemd.rs`).
+//! the `ShowUnit`s and the manager's signals the caller got (`follow::UserWatch`, `systemd.rs`).
+//!
+//! Two ways to know a user manager, one rule set (`look`), RUY-1250:
+//!   - **events**, while the user's watch has its one connection to the manager: after each
+//!     `Subscribe` one listing over the bus (`listing`, `on_listing`) is the picture of the runs'
+//!     units and scopes, then the manager's `UnitNew` (the new unit read over the bus, `on_read`),
+//!     `PropertiesChanged` and `UnitRemoved` keep it (`on_manager_event`), and every change is
+//!     judged at once. What has no signal is timed (`next_deadline`, `tick`): the attach window,
+//!     a child's grace, the next probe of an undecided scope, and the CPU (`CPUUsageNSec` sends no
+//!     change), read over the bus every `CPU_EVERY` and at once when an end is held (`cpu_due`,
+//!     `on_cpu`). No process is started for it;
+//!   - **looks**, only while that connection is down (`link_lost`): `plan` and `apply` with a
+//!     `systemctl show`, at the pace below.
 //!
 //! `flatpak run <app>` moves itself into its own `app-flatpak-<app>-<n>.scope` in the user's
 //! manager and starts the sandbox there, outside our `ruya-app-*` unit (the unit's accounting
@@ -9,14 +21,15 @@
 //!
 //! `RunScopes` knows every run the spawner started or adopted. It
 //!   - finds the run's scope: the live `app-flatpak-<app>-<n>.scope` of the run's app that
-//!     entered `active` no earlier than the unit (`attach`), looked for every second for a
-//!     minute after the start (an adopted unit is looked at once, at once);
+//!     entered `active` no earlier than the unit (`attach`), for a minute after the start (looked
+//!     for every second without the connection; an adopted unit is looked at once, at once);
 //!   - reads the CPU of the unit and of every scope of the app that started after it (`cpu_nsec`;
 //!     the sum is the run's usage, kept after a scope has gone);
 //!   - holds the unit's end (`on_unit_event`) while the scope lives, and hands it on when the
-//!     scope is gone, so a run ends when **both** are gone; while an end is held the scope is
-//!     looked at every second (`ATTACH_EVERY`), so a `Stop` that needed the kill ends well inside
-//!     the wait of the `Launch` after it;
+//!     scope is gone, so a run ends when **both** are gone; a held end is handed on at the scope's
+//!     `UnitRemoved` (or its `inactive`/`failed`), and without the connection the scope is looked
+//!     at every second while an end is held (`ATTACH_EVERY`), so a `Stop` that needed the kill
+//!     ends well inside the wait of the `Launch` after it;
 //!   - names the attached scope (`scope_of`, for a freeze, T-165);
 //!   - asks for the app's leftover scopes to be cleared when the run's end is handed on
 //!     (`take_sweeps`, T-435). A run can have more than one scope: an Electron app's sandboxed
@@ -42,28 +55,36 @@
 //!     existed for `CHILD_GRACE` and no probe of the run is still out, or at once when the run's
 //!     attached scope is gone: a parent's end ends its children first, before the run's own end
 //!     is handed on;
-//!   - such a run is looked at every second (`ATTACH_EVERY`) while its scope lives, so a game's
-//!     start is seen within a second and its end within `CHILD_GRACE` and a second;
+//!   - a game's scope is seen at its `UnitNew` and its end at its `UnitRemoved`, the child's end
+//!     `CHILD_GRACE` later; without the connection such a run is looked at every second
+//!     (`ATTACH_EVERY`) while its scope lives, so a game's start is seen within a second and its
+//!     end within `CHILD_GRACE` and a second; an undecided scope is probed again a second after
+//!     its last probe, never at every event;
 //!   - `child`, `child_of_scope` and `child_scopes` name what a Stop, Freeze, Thaw, Kill and
 //!     `InstanceOfPid` of a child reach, and what the freeze of a parent's own scopes leaves out.
 //!
-//! One round is `plan` (what to ask each manager), the caller's `systemctl show`, and `apply`
-//! (the answer). Nothing here starts a process or waits.
+//! One round without the connection is `plan` (what to ask the user's manager), the caller's
+//! `systemctl show`, and `apply` (the answer). Nothing here starts a process or waits.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
+use crate::follow::ManagerEvent;
 use crate::spawner::{child_name, scope_pattern, ShowUnit, UnitEvent};
 use crate::steam_probe::Verdict;
 use ruya_flatpak::scope::is_app_scope;
 
-/// How often a run without a scope is looked at.
+/// How often a run without a scope is looked at (without the connection), and how long after its
+/// last probe an undecided scope is probed again.
 pub const ATTACH_EVERY: Duration = Duration::from_secs(1);
 /// How long after its start a run is looked at for its scope; then it is taken to have none (a
 /// launcher that is not a Flatpak sandbox).
 pub const ATTACH_WINDOW: Duration = Duration::from_secs(60);
-/// How often an attached scope is looked at.
+/// How often an attached scope is looked at without the connection.
 pub const WATCH_EVERY: Duration = Duration::from_secs(5);
+/// How often the CPU of a user's runs is read over the connection (`cpu_due`): `CPUUsageNSec`
+/// sends no change signal. As often as the looks without the connection read it.
+pub const CPU_EVERY: Duration = Duration::from_secs(5);
 /// Failed looks in a row after which a scope is taken to be gone (its manager is gone).
 pub const MAX_MISSES: u32 = 5;
 /// A child instance ends when none of its scopes has existed for this long (ADR-041 point 5): a
@@ -132,10 +153,11 @@ struct Run {
     /// parent's. A scope is probed once.
     sorted: BTreeMap<String, Option<String>>,
     /// The scopes whose probe is out: when each became active (unix seconds) and whether it was
-    /// frozen, for the child it may start.
-    probing: BTreeMap<String, (i64, bool)>,
-    /// The live scopes that were probed undecided, with how often: probed again at the next look.
-    undecided: BTreeMap<String, u32>,
+    /// frozen, for the child it may start, and when the probe was asked.
+    probing: BTreeMap<String, (i64, bool, Instant)>,
+    /// The live scopes that were probed undecided, with how often and when they are probed again
+    /// (a second after the last probe, `ATTACH_EVERY`).
+    undecided: BTreeMap<String, (u32, Instant)>,
     /// The child instances, by Steam app id.
     kids: BTreeMap<String, Kid>,
 }
@@ -181,6 +203,12 @@ pub struct Sweep {
     pub app_id: String,
 }
 
+/// Is `unit` a followed run's own unit or a scope of its app, in `user`'s manager?
+fn concerns(runs: &HashMap<String, Run>, user: &str, unit: &str) -> bool {
+    runs.iter()
+        .any(|(u, r)| r.user == user && !r.done && (u == unit || is_app_scope(&r.app_id, unit)))
+}
+
 /// The end of a child instance as the core takes it: an `Exited` of its name.
 fn child_end(name: &str) -> UnitEvent {
     UnitEvent::Exited {
@@ -190,11 +218,22 @@ fn child_end(name: &str) -> UnitEvent {
     }
 }
 
+/// What one user's manager said last about the units and scopes of that user's runs, while the
+/// user's watch has its connection (RUY-1250): the listing after `Subscribe`, kept by the signals.
+#[derive(Debug)]
+struct Picture {
+    units: BTreeMap<String, ShowUnit>,
+    /// When the CPU is read next (`cpu_due`).
+    cpu_at: Instant,
+}
+
 #[derive(Debug, Default)]
 pub struct RunScopes {
     runs: HashMap<String, Run>,
     sweeps: Vec<Sweep>,
     probes: Vec<ProbeRequest>,
+    /// The users whose manager is followed by its signals, and what it said.
+    pictures: HashMap<String, Picture>,
 }
 
 impl RunScopes {
@@ -247,11 +286,12 @@ impl RunScopes {
     /// gone meanwhile.
     pub fn probed(&mut self, unit: &str, scope: &str, verdict: Verdict) -> Option<UnitEvent> {
         let run = self.runs.get_mut(unit).filter(|r| !r.done)?;
-        let (started, frozen) = run.probing.remove(scope)?;
-        let tries = run.undecided.remove(scope).unwrap_or(0) + 1;
+        let (started, frozen, asked) = run.probing.remove(scope)?;
+        let tries = run.undecided.remove(scope).map_or(0, |(n, _)| n) + 1;
         let game = match verdict {
             Verdict::Undecided if tries < MAX_PROBES => {
-                run.undecided.insert(scope.to_owned(), tries);
+                run.undecided
+                    .insert(scope.to_owned(), (tries, asked + ATTACH_EVERY));
                 return None;
             }
             Verdict::Undecided => {
@@ -334,6 +374,7 @@ impl RunScopes {
     /// A run's end is handed on: it is forgotten, and its app's leftover scopes are to go.
     fn end_run(&mut self, unit: &str) {
         if let Some(run) = self.runs.remove(unit) {
+            self.prune(&run.user);
             self.sweeps.push(Sweep {
                 user: run.user,
                 app_id: run.app_id,
@@ -341,9 +382,28 @@ impl RunScopes {
         }
     }
 
+    /// The profile user of the followed run `unit`.
+    pub fn user_of(&self, unit: &str) -> Option<String> {
+        self.runs.get(unit).map(|r| r.user.clone())
+    }
+
     /// The run is not followed any more (its start failed before anything ran).
     pub fn forget(&mut self, unit: &str) {
-        self.runs.remove(unit);
+        if let Some(run) = self.runs.remove(unit) {
+            self.prune(&run.user);
+        }
+    }
+
+    /// The picture of `user` keeps only what a followed run still cares about: the scopes of a
+    /// run that ended are swept, and their later signals concern nobody, so a relaunch of the
+    /// app must not find them in it.
+    fn prune(&mut self, user: &str) {
+        let Some(picture) = self.pictures.get_mut(user) else {
+            return;
+        };
+        picture
+            .units
+            .retain(|unit, _| concerns(&self.runs, user, unit));
     }
 
     /// The scope the run follows: `None` before one is attached and after it has gone. `Stop`
@@ -382,58 +442,81 @@ impl RunScopes {
             run.held.get_or_insert(event);
             // The scope is looked at every second from now on, not every `WATCH_EVERY`: a `Stop`
             // that needed the kill (a Force quit) must end inside `LAUNCH_WAIT`, or the launch
-            // after it answers "already-running".
+            // after it answers "already-running". With the connection its `UnitRemoved` hands the
+            // end on; the CPU is read at once, the last reading before the scope goes.
             run.next_at = run.next_at.min(now + ATTACH_EVERY);
+            if let Some(picture) = self.pictures.get_mut(&run.user) {
+                picture.cpu_at = picture.cpu_at.min(now);
+            }
             return None;
         }
         self.end_run(&unit);
         Some(event)
     }
 
-    /// What to ask the managers now: for every run that is due, its unit (for the CPU) and its
-    /// scope (the attached one, or the pattern of the app's scopes while none is).
-    pub fn plan(&mut self, now: Instant) -> Vec<Query> {
-        let mut by_user: Vec<Query> = Vec::new();
-        let mut units: Vec<&String> = self.runs.keys().collect();
+    /// The runs of `user` still followed (their scope not gone), by unit name.
+    fn live_units(&self, user: &str) -> Vec<String> {
+        let mut units: Vec<String> = self
+            .runs
+            .iter()
+            .filter(|(_, r)| r.user == user && !r.done)
+            .map(|(u, _)| u.clone())
+            .collect();
         units.sort();
-        let units: Vec<String> = units.into_iter().cloned().collect();
+        units
+    }
+
+    /// Does `user` have a run that is followed (begun, its end not handed on yet)? While it has,
+    /// its manager's watch keeps its connection.
+    pub fn has_runs(&self, user: &str) -> bool {
+        self.runs.values().any(|r| r.user == user)
+    }
+
+    /// The names to ask `user`'s manager about the runs `units`: each run's unit (for the CPU),
+    /// its attached scope by name (asked for even when the glob misses it) and the pattern of its
+    /// app's scopes for the others (a Steam client, a game's own). A run whose app id makes no
+    /// pattern is given up.
+    fn query(&mut self, user: &str, units: &[String], mark: bool) -> Option<Query> {
+        let mut names: Vec<String> = Vec::new();
         for unit in units {
-            let Some(run) = self.runs.get_mut(&unit) else {
+            let Some(run) = self.runs.get_mut(unit) else {
                 continue;
             };
-            if run.done || run.next_at > now {
-                continue;
-            }
-            // The attached scope by name (it is asked for even when the glob misses it), and
-            // the pattern of the app's scopes for the others (a Steam client, a game's own).
             let Ok(pattern) = scope_pattern(&run.app_id) else {
                 run.done = true;
                 continue;
             };
-            let mut names = vec![unit.clone()];
-            names.extend(run.scope.clone());
-            names.push(pattern);
-            run.queried = true;
-            let at = match by_user.iter().position(|q| q.user == run.user) {
-                Some(at) => at,
-                None => {
-                    by_user.push(Query {
-                        user: run.user.clone(),
-                        names: Vec::new(),
-                    });
-                    by_user.len() - 1
-                }
-            };
-            for name in names {
-                if !by_user[at].names.contains(&name) {
-                    by_user[at].names.push(name);
+            run.queried |= mark;
+            let mut asked = vec![unit.clone()];
+            asked.extend(run.scope.clone());
+            asked.push(pattern);
+            for name in asked {
+                if !names.contains(&name) {
+                    names.push(name);
                 }
             }
         }
-        by_user
+        (!names.is_empty()).then(|| Query {
+            user: user.to_owned(),
+            names,
+        })
     }
 
-    /// The answer to a `Query` of `user`: `shows` is what `systemctl show` printed, `None` when
+    /// What to ask `user`'s manager now without the connection (`None` while its signals follow
+    /// it): for every run that is due, its unit and its scopes (`query`).
+    pub fn plan(&mut self, user: &str, now: Instant) -> Option<Query> {
+        if self.pictures.contains_key(user) {
+            return None;
+        }
+        let due: Vec<String> = self
+            .live_units(user)
+            .into_iter()
+            .filter(|u| self.runs.get(u).is_some_and(|r| r.next_at <= now))
+            .collect();
+        self.query(user, &due, true)
+    }
+
+    /// The answer to the `plan` of `user`: `shows` is what `systemctl show` printed, `None` when
     /// the call failed. Returns the unit ends that were held for a scope that is gone now.
     pub fn apply(
         &mut self,
@@ -450,147 +533,372 @@ impl RunScopes {
             .collect();
         units.sort();
         for unit in units {
-            let Some(run) = self.runs.get_mut(&unit) else {
-                continue;
-            };
-            run.queried = false;
-            let Some(shows) = shows else {
-                run.misses += 1;
-                run.next_at = now + WATCH_EVERY.min(ATTACH_EVERY * 2);
-                if (run.attached() && run.misses >= MAX_MISSES)
-                    || (run.scope.is_none() && now >= run.give_up_at)
-                {
-                    run.done = true;
-                }
-                if run.done {
-                    run.end_kids(&mut released);
-                    if let Some(event) = run.held.take() {
-                        released.push(event);
-                        self.end_run(&unit);
-                    }
-                }
-                continue;
-            };
-            run.misses = 0;
-            let unit_show = shows.iter().find(|s| s.id == unit);
-            if let Some(cpu) = unit_show.and_then(|s| s.cpu_nsec) {
-                run.unit_cpu = Some(run.unit_cpu.map_or(cpu, |old| old.max(cpu)));
+            if let Some(run) = self.runs.get_mut(&unit) {
+                run.queried = false;
             }
-            let entered = unit_show.map_or(0, |s| s.entered);
-            let own: Vec<&ShowUnit> = shows
-                .iter()
-                .filter(|s| is_app_scope(&run.app_id, &s.id) && s.alive())
-                // A scope is made after the unit started. A second of slack: the timestamps
-                // are whole seconds.
-                .filter(|s| entered == 0 || s.entered + 1 >= entered)
-                .collect();
-            for scope in &own {
-                if let Some(cpu) = scope.cpu_nsec {
-                    let seen = run.scope_cpu.entry(scope.id.clone()).or_insert(cpu);
-                    *seen = (*seen).max(cpu);
-                }
-            }
-            match run.scope.clone() {
-                None => {
-                    let found = own
-                        .iter()
-                        .min_by(|a, b| (a.entered, &a.id).cmp(&(b.entered, &b.id)));
-                    match found {
-                        Some(scope) => {
-                            eprintln!("ruya-session: {unit}: attached {}", scope.id);
-                            run.scope = Some(scope.id.clone());
-                            run.next_at = now + WATCH_EVERY;
-                        }
-                        None if now >= run.give_up_at => run.done = true,
-                        None => run.next_at = now + ATTACH_EVERY,
-                    }
-                }
-                Some(name) => {
-                    let live = shows.iter().any(|s| s.id == name && s.alive());
-                    if live {
-                        run.next_at = now
-                            + if run.held.is_some() {
-                                ATTACH_EVERY
-                            } else {
-                                WATCH_EVERY
-                            };
-                    } else {
-                        eprintln!(
-                            "ruya-session: {unit}: scope gone, cpu {} ms, {} scopes counted",
-                            run.cpu().unwrap_or(0) / 1_000_000,
-                            run.scope_cpu.len()
-                        );
-                        run.done = true;
-                    }
-                }
-            }
-            if run.children && !run.done {
-                if let Some(attached) = run.scope.clone() {
-                    let live: BTreeSet<&str> = own.iter().map(|s| s.id.as_str()).collect();
-                    run.sorted.retain(|scope, _| live.contains(scope.as_str()));
-                    run.undecided
-                        .retain(|scope, _| live.contains(scope.as_str()));
-                    for scope in own.iter().filter(|s| s.id != attached) {
-                        if run.sorted.contains_key(&scope.id) || run.probing.contains_key(&scope.id)
-                        {
-                            continue;
-                        }
-                        let frozen = matches!(scope.freezer_state.as_str(), "frozen" | "freezing");
-                        run.probing
-                            .insert(scope.id.clone(), (scope.entered, frozen));
-                        self.probes.push(ProbeRequest {
-                            unit: unit.clone(),
-                            user: run.user.clone(),
-                            scope: scope.id.clone(),
-                        });
-                    }
-                    let mut ended = Vec::new();
-                    for (appid, kid) in run.kids.iter_mut() {
-                        kid.scopes.retain(|scope| live.contains(scope.as_str()));
-                        if !kid.scopes.is_empty() {
-                            kid.gone_since = None;
-                            continue;
-                        }
-                        let since = *kid.gone_since.get_or_insert(now);
-                        // A probe still out may be this game's next scope (an undecided scope is
-                        // queued again above, so its probe is out too).
-                        if run.probing.is_empty()
-                            && now.saturating_duration_since(since) >= CHILD_GRACE
-                        {
-                            ended.push(appid.clone());
-                        }
-                    }
-                    for appid in ended {
-                        if let Some(kid) = run.kids.remove(&appid) {
-                            eprintln!("ruya-session: {unit}: child {} has ended", kid.name);
-                            released.push(child_end(&kid.name));
-                        }
-                    }
-                    run.next_at = now + ATTACH_EVERY;
-                }
-            }
-            if run.done {
-                run.end_kids(&mut released);
-                if let Some(event) = run.held.take() {
-                    released.push(event);
-                    self.end_run(&unit);
-                }
+            match shows {
+                Some(shows) => self.look(&unit, shows, now, &mut released),
+                None => self.missed(&unit, now, &mut released),
             }
         }
         released
     }
+
+    /// A look at the run `unit` failed (its manager did not answer): 5 in a row count as the
+    /// scope gone.
+    fn missed(&mut self, unit: &str, now: Instant, released: &mut Vec<UnitEvent>) {
+        let Some(run) = self.runs.get_mut(unit) else {
+            return;
+        };
+        run.misses += 1;
+        run.next_at = now + WATCH_EVERY.min(ATTACH_EVERY * 2);
+        if (run.attached() && run.misses >= MAX_MISSES)
+            || (run.scope.is_none() && now >= run.give_up_at)
+        {
+            run.done = true;
+        }
+        if run.done {
+            run.end_kids(released);
+            if let Some(event) = run.held.take() {
+                released.push(event);
+                self.end_run(unit);
+            }
+        }
+    }
+
+    /// The names to list over `user`'s connection right after its `Subscribe` (`on_listing`):
+    /// every followed run's (`query`).
+    pub fn listing(&mut self, user: &str) -> Option<Query> {
+        let units = self.live_units(user);
+        self.query(user, &units, false)
+    }
+
+    /// The listing after a `Subscribe` of `user`'s connection: from now on its signals follow the
+    /// manager (`on_manager_event`), and every run is judged on it at once.
+    pub fn on_listing(&mut self, user: &str, shows: &[ShowUnit], now: Instant) -> Vec<UnitEvent> {
+        self.pictures.insert(
+            user.to_owned(),
+            Picture {
+                units: BTreeMap::new(),
+                cpu_at: now + CPU_EVERY,
+            },
+        );
+        self.on_read(user, shows, now)
+    }
+
+    /// Units of `user` read over the connection (the unit of a `UnitNew`, `concerns`): they
+    /// replace what the picture had of them, and every run is judged again.
+    pub fn on_read(&mut self, user: &str, shows: &[ShowUnit], now: Instant) -> Vec<UnitEvent> {
+        let Some(picture) = self.pictures.get_mut(user) else {
+            return Vec::new();
+        };
+        for show in shows {
+            picture.units.insert(show.id.clone(), show.clone());
+        }
+        self.judge(user, now)
+    }
+
+    /// Is `unit` one `user`'s runs care about: a run's own unit or a scope of its app?
+    pub fn concerns(&self, user: &str, unit: &str) -> bool {
+        concerns(&self.runs, user, unit)
+    }
+
+    /// A signal of `user`'s manager: what it says of a unit the runs care about goes into the
+    /// picture, and every run is judged again. Returns the ends that were handed on. A `UnitNew`
+    /// only names the unit: the caller reads it (`on_read`).
+    pub fn on_manager_event(
+        &mut self,
+        user: &str,
+        event: &ManagerEvent,
+        now: Instant,
+    ) -> Vec<UnitEvent> {
+        let unit = match event {
+            ManagerEvent::New { unit }
+            | ManagerEvent::Removed { unit }
+            | ManagerEvent::Changed { unit, .. } => unit,
+        };
+        if !self.concerns(user, unit) {
+            return Vec::new();
+        }
+        let Some(picture) = self.pictures.get_mut(user) else {
+            return Vec::new();
+        };
+        match event {
+            ManagerEvent::New { .. } => return Vec::new(),
+            ManagerEvent::Removed { unit } => {
+                picture.units.remove(unit);
+            }
+            ManagerEvent::Changed { unit, change } => {
+                let show = picture
+                    .units
+                    .entry(unit.clone())
+                    .or_insert_with(|| ShowUnit {
+                        id: unit.clone(),
+                        load_state: "loaded".to_owned(),
+                        ..ShowUnit::default()
+                    });
+                if let Some(state) = &change.active_state {
+                    show.active_state.clone_from(state);
+                }
+                if let Some(entered) = change.entered {
+                    show.entered = entered;
+                }
+                if let Some(state) = &change.freezer_state {
+                    show.freezer_state.clone_from(state);
+                }
+            }
+        }
+        self.judge(user, now)
+    }
+
+    /// The names whose CPU to read over `user`'s connection now (`on_cpu`), every `CPU_EVERY`
+    /// and at once when an end is held: each followed run's unit and the live scopes of its app.
+    /// Empty when nothing is due.
+    pub fn cpu_due(&mut self, user: &str, now: Instant) -> Vec<String> {
+        let units = self.live_units(user);
+        let Some(picture) = self.pictures.get_mut(user) else {
+            return Vec::new();
+        };
+        if units.is_empty() || now < picture.cpu_at {
+            return Vec::new();
+        }
+        picture.cpu_at = now + CPU_EVERY;
+        let mut names: Vec<String> = Vec::new();
+        for unit in units {
+            let Some(run) = self.runs.get(&unit) else {
+                continue;
+            };
+            let scopes = picture
+                .units
+                .values()
+                .filter(|s| s.alive() && is_app_scope(&run.app_id, &s.id))
+                .map(|s| s.id.clone());
+            for name in std::iter::once(unit.clone()).chain(scopes) {
+                if picture.units.contains_key(&name) && !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        names
+    }
+
+    /// The CPU readings of `cpu_due`, kept in the picture until the runs are judged next.
+    pub fn on_cpu(&mut self, user: &str, readings: &[(String, u64)]) {
+        let Some(picture) = self.pictures.get_mut(user) else {
+            return;
+        };
+        for (name, cpu) in readings {
+            if let Some(show) = picture.units.get_mut(name) {
+                show.cpu_nsec = Some(*cpu);
+            }
+        }
+    }
+
+    /// The runs of `user` judged on the picture at `now`, for what has no signal: the attach
+    /// window, a child's grace, the next probe of an undecided scope. Nothing without the
+    /// connection (`plan` and `apply` time those).
+    pub fn tick(&mut self, user: &str, now: Instant) -> Vec<UnitEvent> {
+        self.judge(user, now)
+    }
+
+    /// When the watch of `user` has something to do next: without the connection, the next look
+    /// (`plan`); with it, the end of a run's attach window, of a child's grace, the next probe of
+    /// an undecided scope and the next CPU reading. `None`: only a signal or a poke can change
+    /// anything.
+    pub fn next_deadline(&self, user: &str) -> Option<Instant> {
+        let picture = self.pictures.get(user);
+        let runs = self.runs.values().filter(|r| r.user == user && !r.done);
+        let mut times: Vec<Instant> = Vec::new();
+        for run in runs {
+            let Some(picture) = picture else {
+                times.push(run.next_at);
+                continue;
+            };
+            times.push(picture.cpu_at);
+            if run.scope.is_none() {
+                times.push(run.give_up_at);
+            }
+            // A scope whose probe is out is not waited for: its verdict pokes the watch.
+            times.extend(
+                run.undecided
+                    .iter()
+                    .filter(|(scope, _)| !run.probing.contains_key(*scope))
+                    .map(|(_, (_, at))| *at),
+            );
+            if run.probing.is_empty() && run.undecided.is_empty() {
+                times.extend(
+                    run.kids
+                        .values()
+                        .filter_map(|k| k.gone_since.map(|since| since + CHILD_GRACE)),
+                );
+            }
+        }
+        times.into_iter().min()
+    }
+
+    /// `user`'s connection is gone: its runs are looked at with `systemctl show` from now on,
+    /// the first time at once.
+    pub fn link_lost(&mut self, user: &str, now: Instant) {
+        self.pictures.remove(user);
+        for run in self.runs.values_mut().filter(|r| r.user == user) {
+            run.next_at = now;
+            run.queried = false;
+        }
+    }
+
+    /// Every followed run of `user` judged on the picture (`look`). Nothing without one.
+    fn judge(&mut self, user: &str, now: Instant) -> Vec<UnitEvent> {
+        let Some(picture) = self.pictures.get(user) else {
+            return Vec::new();
+        };
+        let shows: Vec<ShowUnit> = picture.units.values().cloned().collect();
+        let mut released = Vec::new();
+        for unit in self.live_units(user) {
+            self.look(&unit, &shows, now, &mut released);
+        }
+        released
+    }
+
+    /// The run `unit` judged on what its manager said (`shows`: a look's answer, or the picture):
+    /// the CPU readings, the attach, the scope's end, the children; the held end is handed on
+    /// (into `released`) once the scope is gone.
+    fn look(
+        &mut self,
+        unit: &str,
+        shows: &[ShowUnit],
+        now: Instant,
+        released: &mut Vec<UnitEvent>,
+    ) {
+        let Some(run) = self.runs.get_mut(unit) else {
+            return;
+        };
+        run.misses = 0;
+        let unit_show = shows.iter().find(|s| s.id == unit);
+        if let Some(cpu) = unit_show.and_then(|s| s.cpu_nsec) {
+            run.unit_cpu = Some(run.unit_cpu.map_or(cpu, |old| old.max(cpu)));
+        }
+        let entered = unit_show.map_or(0, |s| s.entered);
+        let own: Vec<&ShowUnit> = shows
+            .iter()
+            .filter(|s| is_app_scope(&run.app_id, &s.id) && s.alive())
+            // A scope is made after the unit started. A second of slack: the timestamps
+            // are whole seconds.
+            .filter(|s| entered == 0 || s.entered + 1 >= entered)
+            .collect();
+        for scope in &own {
+            if let Some(cpu) = scope.cpu_nsec {
+                let seen = run.scope_cpu.entry(scope.id.clone()).or_insert(cpu);
+                *seen = (*seen).max(cpu);
+            }
+        }
+        match run.scope.clone() {
+            None => {
+                let found = own
+                    .iter()
+                    .min_by(|a, b| (a.entered, &a.id).cmp(&(b.entered, &b.id)));
+                match found {
+                    Some(scope) => {
+                        eprintln!("ruya-session: {unit}: attached {}", scope.id);
+                        run.scope = Some(scope.id.clone());
+                        run.next_at = now + WATCH_EVERY;
+                    }
+                    None if now >= run.give_up_at => run.done = true,
+                    None => run.next_at = now + ATTACH_EVERY,
+                }
+            }
+            Some(name) => {
+                let live = shows.iter().any(|s| s.id == name && s.alive());
+                if live {
+                    run.next_at = now
+                        + if run.held.is_some() {
+                            ATTACH_EVERY
+                        } else {
+                            WATCH_EVERY
+                        };
+                } else {
+                    eprintln!(
+                        "ruya-session: {unit}: scope gone, cpu {} ms, {} scopes counted",
+                        run.cpu().unwrap_or(0) / 1_000_000,
+                        run.scope_cpu.len()
+                    );
+                    run.done = true;
+                }
+            }
+        }
+        if run.children && !run.done {
+            if let Some(attached) = run.scope.clone() {
+                let live: BTreeSet<&str> = own.iter().map(|s| s.id.as_str()).collect();
+                run.sorted.retain(|scope, _| live.contains(scope.as_str()));
+                run.undecided
+                    .retain(|scope, _| live.contains(scope.as_str()));
+                for scope in own.iter().filter(|s| s.id != attached) {
+                    if run.sorted.contains_key(&scope.id) || run.probing.contains_key(&scope.id) {
+                        continue;
+                    }
+                    // An undecided scope is probed again a second after its last probe, not
+                    // at every signal of its manager (its sandbox needs that time).
+                    if run
+                        .undecided
+                        .get(&scope.id)
+                        .is_some_and(|(_, at)| now < *at)
+                    {
+                        continue;
+                    }
+                    let frozen = matches!(scope.freezer_state.as_str(), "frozen" | "freezing");
+                    run.probing
+                        .insert(scope.id.clone(), (scope.entered, frozen, now));
+                    self.probes.push(ProbeRequest {
+                        unit: unit.to_owned(),
+                        user: run.user.clone(),
+                        scope: scope.id.clone(),
+                    });
+                }
+                let mut ended = Vec::new();
+                for (appid, kid) in run.kids.iter_mut() {
+                    kid.scopes.retain(|scope| live.contains(scope.as_str()));
+                    if !kid.scopes.is_empty() {
+                        kid.gone_since = None;
+                        continue;
+                    }
+                    let since = *kid.gone_since.get_or_insert(now);
+                    // A probe still out, or an undecided scope waiting for its next one, may
+                    // be this game's next scope.
+                    if run.probing.is_empty()
+                        && run.undecided.is_empty()
+                        && now.saturating_duration_since(since) >= CHILD_GRACE
+                    {
+                        ended.push(appid.clone());
+                    }
+                }
+                for appid in ended {
+                    if let Some(kid) = run.kids.remove(&appid) {
+                        eprintln!("ruya-session: {unit}: child {} has ended", kid.name);
+                        released.push(child_end(&kid.name));
+                    }
+                }
+                run.next_at = now + ATTACH_EVERY;
+            }
+        }
+        if run.done {
+            run.end_kids(released);
+            if let Some(event) = run.held.take() {
+                released.push(event);
+                self.end_run(unit);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    const USER: &str = "ruya-p1";
-    const APP: &str = "net.supertuxkart.SuperTuxKart";
-    const UNIT: &str = "ruya-app-ruya-p1-net.supertuxkart.SuperTuxKart.service";
-    const SCOPE: &str = "app-flatpak-net.supertuxkart.SuperTuxKart-4242.scope";
+    pub(crate) const USER: &str = "ruya-p1";
+    pub(crate) const APP: &str = "net.supertuxkart.SuperTuxKart";
+    pub(crate) const UNIT: &str = "ruya-app-ruya-p1-net.supertuxkart.SuperTuxKart.service";
+    pub(crate) const SCOPE: &str = "app-flatpak-net.supertuxkart.SuperTuxKart-4242.scope";
 
-    fn exited(code: i32) -> UnitEvent {
+    pub(crate) fn exited(code: i32) -> UnitEvent {
         UnitEvent::Exited {
             unit: UNIT.to_owned(),
             code,
@@ -598,7 +906,7 @@ mod tests {
         }
     }
 
-    fn unit_show(entered: i64, cpu: Option<u64>) -> ShowUnit {
+    pub(crate) fn unit_show(entered: i64, cpu: Option<u64>) -> ShowUnit {
         ShowUnit {
             id: UNIT.to_owned(),
             load_state: "loaded".to_owned(),
@@ -609,7 +917,7 @@ mod tests {
         }
     }
 
-    fn scope_show(name: &str, entered: i64, cpu: Option<u64>) -> ShowUnit {
+    pub(crate) fn scope_show(name: &str, entered: i64, cpu: Option<u64>) -> ShowUnit {
         ShowUnit {
             id: name.to_owned(),
             load_state: "loaded".to_owned(),
@@ -634,18 +942,18 @@ mod tests {
     ///
     /// It also answers `steam-probe` (RUY-1052): `games` is what the probe of each scope prints
     /// (a scope not in it prints nothing), `probed` the scopes it was asked about, in order.
-    struct FakeManager {
-        units: Vec<ShowUnit>,
-        down: bool,
-        asked: Vec<Query>,
+    pub(crate) struct FakeManager {
+        pub(crate) units: Vec<ShowUnit>,
+        pub(crate) down: bool,
+        pub(crate) asked: Vec<Query>,
         games: HashMap<String, String>,
         /// How many undecided verdicts a scope's probe gives before its answer.
         early: HashMap<String, u32>,
-        probed: Vec<String>,
+        pub(crate) probed: Vec<String>,
     }
 
     impl FakeManager {
-        fn new(units: Vec<ShowUnit>) -> Self {
+        pub(crate) fn new(units: Vec<ShowUnit>) -> Self {
             FakeManager {
                 units,
                 down: false,
@@ -657,21 +965,21 @@ mod tests {
         }
 
         /// A scope whose probe prints `appid` (a Steam game's scope).
-        fn game(&mut self, show: ShowUnit, appid: &str) {
+        pub(crate) fn game(&mut self, show: ShowUnit, appid: &str) {
             self.games.insert(show.id.clone(), appid.to_owned());
             self.set(show);
         }
 
-        fn gone(&mut self, name: &str) {
+        pub(crate) fn gone(&mut self, name: &str) {
             self.units.retain(|u| u.id != name);
         }
 
         /// The scope's probe is undecided `times` times first (its sandbox has not started).
-        fn early(&mut self, scope: &str, times: u32) {
+        pub(crate) fn early(&mut self, scope: &str, times: u32) {
             self.early.insert(scope.to_owned(), times);
         }
 
-        fn probe(&mut self, r: &ProbeRequest) -> Verdict {
+        pub(crate) fn probe(&mut self, r: &ProbeRequest) -> Verdict {
             self.probed.push(r.scope.clone());
             if let Some(n) = self.early.get_mut(&r.scope).filter(|n| **n > 0) {
                 *n -= 1;
@@ -683,12 +991,12 @@ mod tests {
             }
         }
 
-        fn set(&mut self, show: ShowUnit) {
+        pub(crate) fn set(&mut self, show: ShowUnit) {
             self.units.retain(|u| u.id != show.id);
             self.units.push(show);
         }
 
-        fn show(&mut self, q: &Query) -> Option<Vec<ShowUnit>> {
+        pub(crate) fn show(&mut self, q: &Query) -> Option<Vec<ShowUnit>> {
             self.asked.push(q.clone());
             if self.down {
                 return None;
@@ -717,7 +1025,7 @@ mod tests {
     /// released events and the children that started, in that order.
     fn round(scopes: &mut RunScopes, mgr: &mut FakeManager, now: Instant) -> Vec<UnitEvent> {
         let mut out = Vec::new();
-        for q in scopes.plan(now) {
+        if let Some(q) = scopes.plan(USER, now) {
             let shows = mgr.show(&q);
             out.extend(scopes.apply(&q.user, shows.as_deref(), now));
             for r in scopes.take_probes() {
@@ -1180,21 +1488,21 @@ mod tests {
 
     // Steam's games as child instances (ADR-041, RUY-1052).
 
-    const STEAM: &str = "com.valvesoftware.Steam";
-    const STEAM_UNIT: &str = "ruya-app-ruya-p1-com.valvesoftware.Steam.service";
+    pub(crate) const STEAM: &str = "com.valvesoftware.Steam";
+    pub(crate) const STEAM_UNIT: &str = "ruya-app-ruya-p1-com.valvesoftware.Steam.service";
     /// Steam's own sandbox (the run attaches it), its web helper's client scope, a game's scope,
     /// the same game's next scope (a launcher handing over), and UpdatingDRM's short scope.
-    const ATTACHED: &str = "app-flatpak-com.valvesoftware.Steam-2192235278.scope";
-    const CLIENT: &str = "app-flatpak-com.valvesoftware.Steam-3327064059.scope";
-    const GAME: &str = "app-flatpak-com.valvesoftware.Steam-1623993748.scope";
+    pub(crate) const ATTACHED: &str = "app-flatpak-com.valvesoftware.Steam-2192235278.scope";
+    pub(crate) const CLIENT: &str = "app-flatpak-com.valvesoftware.Steam-3327064059.scope";
+    pub(crate) const GAME: &str = "app-flatpak-com.valvesoftware.Steam-1623993748.scope";
     const GAME_NEXT: &str = "app-flatpak-com.valvesoftware.Steam-1700000000.scope";
     const DRM: &str = "app-flatpak-com.valvesoftware.Steam-1500000000.scope";
 
-    fn child() -> String {
+    pub(crate) fn child() -> String {
         child_name(STEAM_UNIT, "70")
     }
 
-    fn child_started(started: i64, frozen: bool) -> UnitEvent {
+    pub(crate) fn child_started(started: i64, frozen: bool) -> UnitEvent {
         UnitEvent::ChildStarted {
             parent: STEAM_UNIT.to_owned(),
             child: child(),
